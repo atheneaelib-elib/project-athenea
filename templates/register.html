@@ -1,22 +1,65 @@
 {% extends "base.html" %}
 
-{% block title %}Create an Account - Athenea{% endblock %}
+{% block title %}{{ t('auth.create_account') }} - Athenea{% endblock %}
 
 {% block header %}{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-center min-h-[75vh] py-12 px-4 sm:px-6 lg:px-8">
-  <div class="max-w-md w-full space-y-6 bg-slate-900/80 p-8 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur">
+  <div class="max-w-md w-full space-y-6 bg-slate-900/80 p-8 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur relative">
     
+    <!-- Top-Right Language Selector -->
+    <div class="absolute top-4 right-4">
+      <div class="relative inline-block text-left" id="lang-dropdown-wrapper">
+        <button 
+          type="button" 
+          onclick="toggleLangDropdown(event)" 
+          id="lang-menu-btn"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium transition-all cursor-pointer shadow-sm"
+          title="{{ t('navbar.select_language') }}"
+        >
+          <span>{{ get_current_lang_obj().flag }}</span>
+          <span class="font-mono uppercase font-bold text-[11px]">{{ get_current_lang() }}</span>
+          <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div 
+          id="lang-dropdown-menu" 
+          class="hidden absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
+        >
+          <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            {{ t('navbar.select_language') }}
+          </div>
+          <div class="py-1 max-h-60 overflow-y-auto">
+            {% for lang in SUPPORTED_LANGUAGES %}
+            <a 
+              href="/api/set-language?lang={{ lang.code }}&next={{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
+              class="flex items-center justify-between px-3 py-1.5 text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors {% if get_current_lang() == lang.code %}bg-indigo-600/30 text-indigo-300 font-semibold{% endif %}"
+            >
+              <span class="flex items-center gap-2">
+                <span class="text-sm leading-none">{{ lang.flag }}</span>
+                <span>{{ lang.native }}</span>
+              </span>
+              {% if get_current_lang() == lang.code %}
+              <svg class="w-3.5 h-3.5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+              {% endif %}
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Header -->
-    <div class="text-center">
+    <div class="text-center pt-2">
       <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
         </svg>
       </div>
-      <h2 class="text-2xl font-extrabold text-white tracking-tight">Create your account</h2>
-      <p class="text-xs text-slate-400 mt-1">Register to read eBooks online and sync your reading progress</p>
+      <h2 class="text-2xl font-extrabold text-white tracking-tight">{{ t('auth.register_title') }}</h2>
+      <p class="text-xs text-slate-400 mt-1">{{ t('auth.register_subtitle') }}</p>
     </div>
 
     <!-- Registration Pending Approval Success Card -->
@@ -28,12 +71,9 @@
         </svg>
       </div>
       <div>
-        <h3 class="text-base font-bold text-white">Registration Submitted!</h3>
+        <h3 class="text-base font-bold text-white">{{ t('auth.registration_pending_title') }}</h3>
         <p class="text-xs text-slate-300 mt-2 leading-relaxed">
-          Thank you, <strong class="text-amber-300 font-mono">{{ username }}</strong>! Your account has been registered and is currently <strong>awaiting administrator approval</strong>.
-        </p>
-        <p class="text-[11px] text-slate-400 mt-2">
-          An administrator will review and activate your account shortly. Once approved, you can log in with your chosen password.
+          {{ username }}: {{ t('auth.approval_required_notice') }}
         </p>
       </div>
       <div class="pt-2">
@@ -41,7 +81,7 @@
           href="/login" 
           class="inline-flex items-center justify-center w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
         >
-          Return to Sign In
+          {{ t('auth.return_to_sign_in') }}
         </a>
       </div>
     </div>
@@ -55,9 +95,9 @@
         </svg>
       </div>
       <div>
-        <h3 class="text-base font-bold text-white">Registration Closed</h3>
+        <h3 class="text-base font-bold text-white">{{ t('auth.registration_closed_title') }}</h3>
         <p class="text-xs text-slate-400 mt-2">
-          Public registration is currently disabled by the system administrator. Please contact your library admin to request an account.
+          {{ t('auth.registration_closed_desc') }}
         </p>
       </div>
       <div class="pt-2">
@@ -65,7 +105,7 @@
           href="/login" 
           class="inline-flex items-center justify-center w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
         >
-          Return to Sign In
+          {{ t('auth.return_to_sign_in') }}
         </a>
       </div>
     </div>
@@ -85,7 +125,7 @@
     {% if require_approval %}
     <div class="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-xs flex items-center gap-2.5">
       <svg class="w-4 h-4 flex-shrink-0 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-      <span><strong>Approval Required:</strong> New accounts require administrator approval before access is activated.</span>
+      <span>{{ t('auth.approval_required_notice') }}</span>
     </div>
     {% endif %}
 
@@ -93,7 +133,7 @@
       
       <!-- Username -->
       <div>
-        <label for="username" class="block text-xs font-semibold text-slate-300 mb-1">Username <span class="text-rose-400">*</span></label>
+        <label for="username" class="block text-xs font-semibold text-slate-300 mb-1">{{ t('auth.username') }} <span class="text-rose-400">*</span></label>
         <input 
           id="username" 
           name="username" 
@@ -104,30 +144,28 @@
           minlength="3"
           maxlength="30"
           value="{{ username | default('') }}"
-          placeholder="e.g. reader_jane" 
+          placeholder="{{ t('auth.username_placeholder') }}" 
           class="w-full bg-slate-800 text-sm text-white placeholder-slate-500 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner font-mono"
         />
-        <p class="text-[10px] text-slate-500 mt-1">3-30 characters (letters, numbers, underscores, hyphens).</p>
       </div>
 
       <!-- Email -->
       <div>
-        <label for="email" class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+        <label for="email" class="block text-xs font-semibold text-slate-300 mb-1">{{ t('auth.email') }}</label>
         <input 
           id="email" 
           name="email" 
           type="email" 
           autocomplete="email"
           value="{{ email | default('') }}"
-          placeholder="user@example.com (optional)" 
+          placeholder="{{ t('auth.email_placeholder') }}" 
           class="w-full bg-slate-800 text-sm text-white placeholder-slate-500 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner"
         />
-        <p class="text-[10px] text-slate-500 mt-1">Used for Kindle eBook delivery and notifications.</p>
       </div>
 
       <!-- Password -->
       <div>
-        <label for="password" class="block text-xs font-semibold text-slate-300 mb-1">Password <span class="text-rose-400">*</span></label>
+        <label for="password" class="block text-xs font-semibold text-slate-300 mb-1">{{ t('auth.create_password') }} <span class="text-rose-400">*</span></label>
         <div class="relative">
           <input 
             id="password" 
@@ -136,7 +174,7 @@
             required 
             minlength="6"
             autocomplete="new-password"
-            placeholder="At least 6 characters" 
+            placeholder="{{ t('auth.password_placeholder') }}" 
             class="w-full bg-slate-800 text-sm text-white placeholder-slate-500 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner pr-10 font-mono"
           />
           <button 
@@ -151,7 +189,7 @@
 
       <!-- Confirm Password -->
       <div>
-        <label for="confirm_password" class="block text-xs font-semibold text-slate-300 mb-1">Confirm Password <span class="text-rose-400">*</span></label>
+        <label for="confirm_password" class="block text-xs font-semibold text-slate-300 mb-1">{{ t('auth.confirm_password') }} <span class="text-rose-400">*</span></label>
         <div class="relative">
           <input 
             id="confirm_password" 
@@ -160,7 +198,7 @@
             required 
             minlength="6"
             autocomplete="new-password"
-            placeholder="Re-enter password" 
+            placeholder="{{ t('auth.confirm_password') }}" 
             class="w-full bg-slate-800 text-sm text-white placeholder-slate-500 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner pr-10 font-mono"
           />
           <button 
@@ -177,19 +215,22 @@
         type="submit" 
         class="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer mt-2"
       >
-        Create Account
+        {{ t('auth.register_button') }}
       </button>
 
     </form>
 
     <div class="text-center pt-2 border-t border-slate-800/80">
       <p class="text-xs text-slate-400">
-        Already have an account? 
-        <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign in here</a>
+        {{ t('auth.already_have_account') }} 
+        <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">{{ t('auth.sign_in_button') }}</a>
       </p>
     </div>
 
     {% endif %}
+
+  </div>
+</div>
 
   </div>
 </div>

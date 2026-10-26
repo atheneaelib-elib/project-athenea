@@ -9,6 +9,7 @@ from fastapi import FastAPI, Depends, Request, Response, HTTPException, Query, F
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import jinja2
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,6 +31,7 @@ try:
     from .services import opds as opds_service
     from .services import admin_settings as admin_settings_service
     from .services import setup as setup_service
+    from .services import i18n as i18n_service
 except (ImportError, ValueError):
     from settings import settings
     from db import get_db, SessionLocal
@@ -40,6 +42,7 @@ except (ImportError, ValueError):
     from services import opds as opds_service
     from services import admin_settings as admin_settings_service
     from services import setup as setup_service
+    from services import i18n as i18n_service
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -164,7 +167,32 @@ def get_library_total_books() -> str:
         return ""
 
 
+@jinja2.pass_context
+def jinja_t(context, key: str, **kwargs):
+    request = context.get("request")
+    lang = context.get("lang") or (i18n_service.get_request_language(request) if request else "en")
+    return i18n_service.t(key, lang=lang, **kwargs)
+
+
+@jinja2.pass_context
+def jinja_get_lang(context):
+    request = context.get("request")
+    return context.get("lang") or (i18n_service.get_request_language(request) if request else "en")
+
+
+@jinja2.pass_context
+def jinja_get_lang_obj(context):
+    request = context.get("request")
+    code = context.get("lang") or (i18n_service.get_request_language(request) if request else "en")
+    return i18n_service.get_language_meta(code)
+
+
 templates.env.globals["get_library_total_books"] = get_library_total_books
+templates.env.globals["t"] = jinja_t
+templates.env.globals["_"] = jinja_t
+templates.env.globals["get_current_lang"] = jinja_get_lang
+templates.env.globals["get_current_lang_obj"] = jinja_get_lang_obj
+templates.env.globals["SUPPORTED_LANGUAGES"] = i18n_service.SUPPORTED_LANGUAGES
 
 
 # ===================================================================
@@ -187,7 +215,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class RequireLoginMiddleware(BaseHTTPMiddleware):
     """Enforce login-wall, OPDS Basic Auth, and admin-only paths on every request."""
 
-    PUBLIC_PREFIXES    = ("/login", "/register", "/static", "/api/tts/audio", "/manifest.json", "/sw.js", "/cover/", "/thumbnail/", "/setup", "/health")
+    PUBLIC_PREFIXES    = ("/login", "/register", "/static", "/api/tts/audio", "/api/set-language", "/manifest.json", "/sw.js", "/cover/", "/thumbnail/", "/setup", "/health")
     ADMIN_ONLY_PATHS   = ("/docs", "/redoc", "/openapi.json", "/api/stats", "/admin")
 
     async def dispatch(self, request: Request, call_next):
@@ -363,11 +391,34 @@ def setup_page(request: Request):
     if setup_service.is_system_configured():
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
+    current_lang = i18n_service.get_request_language(request)
     return templates.TemplateResponse(
         request=request,
         name="setup.html",
-        context={"request": request}
+        context={
+            "request": request,
+            "current_lang": current_lang,
+            "translations_json": i18n_service.get_translations_json_for_client(),
+            "supported_languages": i18n_service.SUPPORTED_LANGUAGES,
+        }
     )
+
+
+@app.get("/api/set-language")
+def set_ui_language(lang: str = "en", next: str = "/"):
+    """Switch user interface language and persist preference in a 1-year cookie."""
+    valid_lang = lang.lower() if lang.lower() in i18n_service.SUPPORTED_CODES else i18n_service.DEFAULT_LANGUAGE
+    safe_next = next if (next and next.startswith("/") and not next.startswith("//")) else "/"
+    resp = RedirectResponse(url=safe_next, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key=i18n_service.COOKIE_NAME,
+        value=valid_lang,
+        max_age=365 * 24 * 3600,
+        httponly=False,
+        samesite="lax",
+        path="/"
+    )
+    return resp
 
 
 @app.post("/setup/test-db")

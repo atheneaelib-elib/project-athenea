@@ -266,7 +266,7 @@
             <a 
               href="/logout" 
               class="p-1.5 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors flex-shrink-0"
-              title="Sign Out"
+              title="{{ t('navbar.sign_out') }}"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
@@ -277,9 +277,50 @@
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
-            Sign In
+            {{ t('navbar.sign_in') }}
           </a>
           {% endif %}
+
+          <!-- UI Language Selector Dropdown -->
+          <div class="relative inline-block text-left" id="lang-dropdown-wrapper">
+            <button 
+              type="button" 
+              onclick="toggleLangDropdown(event)" 
+              id="lang-menu-btn"
+              class="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium transition-all cursor-pointer shadow-sm"
+              title="{{ t('navbar.select_language') }}"
+            >
+              <span>{{ get_current_lang_obj().flag }}</span>
+              <span class="font-mono uppercase font-bold text-[11px]">{{ get_current_lang() }}</span>
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div 
+              id="lang-dropdown-menu" 
+              class="hidden absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
+            >
+              <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                {{ t('navbar.select_language') }}
+              </div>
+              <div class="py-1 max-h-60 overflow-y-auto">
+                {% for lang in SUPPORTED_LANGUAGES %}
+                <a 
+                  href="/api/set-language?lang={{ lang.code }}&next={{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
+                  class="flex items-center justify-between px-3 py-1.5 text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors {% if get_current_lang() == lang.code %}bg-indigo-600/30 text-indigo-300 font-semibold{% endif %}"
+                >
+                  <span class="flex items-center gap-2">
+                    <span class="text-sm leading-none">{{ lang.flag }}</span>
+                    <span>{{ lang.native }}</span>
+                  </span>
+                  {% if get_current_lang() == lang.code %}
+                  <svg class="w-3.5 h-3.5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  {% endif %}
+                </a>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
 
           <!-- Mobile Filters Drawer Toggle Button -->
           <button 
@@ -380,6 +421,20 @@
   </footer>
 
   <script>
+    function toggleLangDropdown(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('lang-dropdown-menu');
+      if (menu) menu.classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+      const wrapper = document.getElementById('lang-dropdown-wrapper');
+      const menu = document.getElementById('lang-dropdown-menu');
+      if (wrapper && menu && !wrapper.contains(e.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
     function closeModal() {
       const modal = document.getElementById('book-modal');
       if (modal) modal.remove();

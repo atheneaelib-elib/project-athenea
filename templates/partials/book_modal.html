@@ -41,8 +41,8 @@
       {% if current_user and current_user.is_power_user %}
       <div class="w-full mt-2.5 pt-2 border-t border-slate-800/80 space-y-1 text-center">
         <div class="flex items-center justify-between gap-1.5">
-          <label class="cursor-pointer px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-semibold transition-colors flex-1 text-center border border-slate-700/80" title="Upload custom cover image from your device">
-            <span>Upload</span>
+          <label class="cursor-pointer px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-semibold transition-colors flex-1 text-center border border-slate-700/80" title="{{ t('modal.upload_cover') }}">
+            <span>{{ t('modal.upload_cover') }}</span>
             <input type="file" accept="image/*" class="hidden" onchange="uploadModalCover({{ book.id }}, this)" />
           </label>
           <button 
@@ -50,9 +50,9 @@
             onclick="fetchOpenLibraryCover({{ book.id }})" 
             id="fetch-ol-cover-btn"
             class="px-2 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white rounded-lg text-[10px] font-semibold transition-colors flex-1 text-center border border-indigo-500/30 cursor-pointer"
-            title="Auto-fetch high-resolution cover from Open Library"
+            title="{{ t('modal.fetch_cover') }}"
           >
-            Fetch Cover
+            {{ t('modal.fetch_cover') }}
           </button>
         </div>
         <div id="cover-action-status" class="hidden text-[10px] text-slate-400"></div>
@@ -72,12 +72,12 @@
         {% if current_user %}
         <div class="w-full bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 space-y-1">
           <div class="flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            <span>Reading Shelf</span>
+            <span>{{ t('modal.reading_shelf') }}</span>
             <span id="shelf-status-label" class="text-indigo-400 normal-case font-medium">
-              {% if book.reading_status == 'reading' %}Currently Reading
-              {% elif book.reading_status == 'plan_to_read' %}Want to Read
-              {% elif book.reading_status == 'finished' %}Finished
-              {% else %}Not shelved{% endif %}
+              {% if book.reading_status == 'reading' %}{{ t('modal.shelf_reading') }}
+              {% elif book.reading_status == 'plan_to_read' %}{{ t('modal.shelf_plan') }}
+              {% elif book.reading_status == 'finished' %}{{ t('modal.shelf_finished') }}
+              {% else %}{{ t('modal.shelf_not_shelved') }}{% endif %}
             </span>
           </div>
           <div class="grid grid-cols-3 gap-1">
@@ -86,27 +86,27 @@
               onclick="setModalShelf({{ book.id }}, 'plan_to_read')"
               id="shelf-btn-plan"
               class="px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center transition-all cursor-pointer {% if book.reading_status == 'plan_to_read' %}bg-sky-600 text-white shadow{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300{% endif %}"
-              title="Add to Want to Read"
+              title="{{ t('modal.shelf_plan') }}"
             >
-              Want
+              {{ t('modal.shelf_btn_want') }}
             </button>
             <button 
               type="button" 
               onclick="setModalShelf({{ book.id }}, 'reading')"
               id="shelf-btn-reading"
               class="px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center transition-all cursor-pointer {% if book.reading_status == 'reading' %}bg-amber-600 text-white shadow{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300{% endif %}"
-              title="Mark as Currently Reading"
+              title="{{ t('modal.shelf_reading') }}"
             >
-              Reading
+              {{ t('modal.shelf_btn_reading') }}
             </button>
             <button 
               type="button" 
               onclick="setModalShelf({{ book.id }}, 'finished')"
               id="shelf-btn-finished"
               class="px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center transition-all cursor-pointer {% if book.reading_status == 'finished' %}bg-emerald-600 text-white shadow{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300{% endif %}"
-              title="Mark as Finished"
+              title="{{ t('modal.shelf_finished') }}"
             >
-              Finished
+              {{ t('modal.shelf_btn_finished') }}
             </button>
           </div>
         </div>
@@ -139,7 +139,7 @@
           class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer mb-3"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          Read EPUB Online
+          {{ t('modal.read_online') }} (EPUB)
         </a>
         {% elif ns.has_pdf %}
         <a 
@@ -148,15 +148,15 @@
           class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 shadow-lg shadow-rose-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer mb-3"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          Read PDF Online
+          {{ t('modal.read_online') }} (PDF)
         </a>
         {% endif %}
 
-        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">Available Downloads</p>
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">{{ t('modal.download') }}</p>
         
         {% if current_user and current_user.can_download %}
           {% if book.formats|length == 0 %}
-            <p class="text-xs text-slate-400 text-center py-2">No files available</p>
+            <p class="text-xs text-slate-400 text-center py-2">{{ t('general.none') }}</p>
           {% else %}
             {% for fmt in book.formats %}
             <a 
@@ -175,7 +175,7 @@
             >
               <span class="flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Download {{ fmt.format }}
+                {{ t('modal.download_format', fmt=fmt.format) }}
               </span>
               <span class="text-[11px] opacity-80 font-mono">{{ fmt.size_formatted }}</span>
             </a>
@@ -189,10 +189,10 @@
                 class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
               >
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                Send to Kindle / Email
+                {{ t('modal.send_email_title') }}
               </button>
               <div id="send-email-box" class="hidden mt-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-                <p class="text-[11px] text-slate-400">Deliver this book directly to your Kindle or email address:</p>
+                <p class="text-[11px] text-slate-400">{{ t('modal.send_email_desc') }}</p>
                 <div class="flex gap-1.5">
                   <input 
                     type="email" 
@@ -207,7 +207,7 @@
                     onclick="submitSendEmail({{ book.id }})" 
                     class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer"
                   >
-                    Send
+                    {{ t('modal.send_email_btn') }}
                   </button>
                 </div>
                 <div id="send-email-status"></div>
@@ -217,18 +217,18 @@
         {% elif current_user %}
           <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
             <p class="text-xs text-slate-400">
-              Downloads restricted to <span class="text-emerald-400 font-semibold">Power Users</span> &amp; <span class="text-purple-400 font-semibold">Admins</span>.
+              {{ t('modal.download_restricted') }}
             </p>
-            <p class="text-[10px] text-slate-500 mt-1">You can read the entire book online above!</p>
+            <p class="text-[10px] text-slate-500 mt-1">{{ t('modal.read_online_notice') }}</p>
           </div>
         {% else %}
           <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
-            <p class="text-xs text-slate-400 mb-1.5">Sign in to download book files</p>
+            <p class="text-xs text-slate-400 mb-1.5">{{ t('modal.sign_in_to_download') }}</p>
             <a 
               href="/login" 
               class="inline-block px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow transition-colors"
             >
-              Sign In
+              {{ t('navbar.sign_in') }}
             </a>
           </div>
         {% endif %}
@@ -250,7 +250,7 @@
           title="Previous: {{ book.prev_series_book.title }}"
         >
           <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-          <span class="truncate max-w-[130px] sm:max-w-[180px]">Prev ({{ book.prev_series_book.series_index or 'Vol' }})</span>
+          <span class="truncate max-w-[130px] sm:max-w-[180px]">{{ t('modal.prev_volume') }} ({{ book.prev_series_book.series_index or 'Vol' }})</span>
         </button>
         {% else %}
         <div></div>
@@ -263,7 +263,7 @@
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700/80 cursor-pointer"
           title="Next: {{ book.next_series_book.title }}"
         >
-          <span class="truncate max-w-[130px] sm:max-w-[180px]">Next ({{ book.next_series_book.series_index or 'Vol' }})</span>
+          <span class="truncate max-w-[130px] sm:max-w-[180px]">{{ t('modal.next_volume') }} ({{ book.next_series_book.series_index or 'Vol' }})</span>
           <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
         {% endif %}
@@ -279,7 +279,7 @@
           class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-          Series: {{ book.series_name }} {{ book.series_index or '' }}
+          {{ t('grid.series') }}: {{ book.series_name }} {{ book.series_index or '' }}
         </a>
       </div>
       {% endif %}
@@ -291,7 +291,7 @@
 
       <!-- Authors -->
       <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
-        <span class="text-slate-400">By</span>
+        <span class="text-slate-400">{{ t('grid.by_author') }}</span>
         {% for author in book.authors %}
         <a 
           href="javascript:void(0)" 
@@ -308,7 +308,7 @@
       <!-- Quick Metadata Grid -->
       <div class="mt-4 grid grid-cols-2 gap-3 py-3 border-y border-slate-800 text-xs">
         <div>
-          <span class="text-slate-400">Language:</span>
+          <span class="text-slate-400">{{ t('modal.language') }}</span>
           {% if book.language_name and book.language_name != 'Unknown' %}
           <span class="text-slate-200 ml-1 font-medium inline-flex items-center gap-1.5">
             <span class="text-sm leading-none">{{ book.language_flag or '🌐' }}</span>
@@ -316,27 +316,27 @@
             <span>{{ book.language_name }}</span>
           </span>
           {% else %}
-          <span class="text-slate-400 ml-1 font-medium italic">Unknown</span>
+          <span class="text-slate-400 ml-1 font-medium italic">{{ t('general.unknown') }}</span>
           {% endif %}
         </div>
         <div>
-          <span class="text-slate-400">Published:</span>
-          <span class="text-slate-200 ml-1 font-medium">{{ book.pubdate or 'Unknown' }}</span>
+          <span class="text-slate-400">{{ t('modal.published') }}</span>
+          <span class="text-slate-200 ml-1 font-medium">{{ book.pubdate or t('general.unknown') }}</span>
         </div>
         {% if book.publisher %}
         <div>
-          <span class="text-slate-400">Publisher:</span>
+          <span class="text-slate-400">{{ t('modal.publisher') }}</span>
           <span class="text-slate-200 ml-1 font-medium">{{ book.publisher }}</span>
         </div>
         {% endif %}
         {% if book.isbn %}
         <div>
-          <span class="text-slate-400">ISBN:</span>
+          <span class="text-slate-400">{{ t('modal.isbn') }}</span>
           <span class="text-slate-200 ml-1 font-mono">{{ book.isbn }}</span>
         </div>
         {% endif %}
         <div>
-          <span class="text-slate-400">Book ID:</span>
+          <span class="text-slate-400">{{ t('modal.book_id') }}</span>
           <span class="text-slate-200 ml-1 font-mono">#{{ book.id }}</span>
         </div>
       </div>
@@ -344,7 +344,7 @@
       <!-- Tags / Genres -->
       {% if book.tags %}
       <div class="mt-4">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Genres &amp; Tags</p>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{{ t('modal.genres_tags') }}</p>
         <div class="flex flex-wrap gap-1.5">
           {% for tag in book.tags %}
           <a 
@@ -361,13 +361,13 @@
 
       <!-- Synopsis / Description -->
       <div class="mt-5">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Description</p>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{{ t('general.description', default='Description') }}</p>
         {% if book.description %}
         <div class="text-sm text-slate-300 leading-relaxed space-y-2 whitespace-pre-line bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 max-h-60 overflow-y-auto">
           {{ book.description }}
         </div>
         {% else %}
-        <p class="text-xs text-slate-400 italic">No description available for this book.</p>
+        <p class="text-xs text-slate-400 italic">{{ t('modal.no_description') }}</p>
         {% endif %}
       </div>
 
@@ -377,9 +377,9 @@
         <div class="flex items-center justify-between text-xs">
           <span class="font-bold text-slate-200 flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-            Series Reading Order: {{ book.series_name }}
+            {{ t('modal.series_reading_order') }} {{ book.series_name }}
           </span>
-          <span class="text-[10px] text-slate-400 font-mono">{{ book.series_books|length }} books</span>
+          <span class="text-[10px] text-slate-400 font-mono">{{ book.series_books|length }} {{ t('grid.series') }}</span>
         </div>
         <div class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-thin">
           {% for sb in book.series_books %}
@@ -401,7 +401,7 @@
               </span>
               {% if sb.is_current %}
               <span class="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[8px] font-bold bg-indigo-600 text-white uppercase tracking-wider shadow">
-                Current
+                {{ t('modal.current_volume') }}
               </span>
               {% endif %}
             </div>
@@ -418,7 +418,7 @@
         <div class="flex items-center justify-between text-xs">
           <span class="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-            More by this Author
+            {{ t('modal.more_by_author') }}
           </span>
           <span class="text-slate-500 text-[11px]">{{ book.author }}</span>
         </div>

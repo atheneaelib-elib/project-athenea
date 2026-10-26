@@ -59,10 +59,10 @@
       <a 
         href="/" 
         class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 flex-shrink-0"
-        title="Return to Library"
+        title="{{ t('reader.library') }}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-        <span class="hidden sm:inline">Library</span>
+        <span class="hidden sm:inline">{{ t('reader.library') }}</span>
       </a>
 
       {% if fmt == 'epub' %}
@@ -70,20 +70,20 @@
         type="button" 
         onclick="toggleToc()" 
         class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 flex-shrink-0"
-        title="Chapters &amp; Table of Contents"
+        title="{{ t('reader.table_of_contents') }}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
-        <span class="hidden sm:inline">Contents</span>
+        <span class="hidden sm:inline">{{ t('reader.contents') }}</span>
       </button>
 
       <button 
         type="button" 
         onclick="toggleBookmarksDrawer()" 
         class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 transition-colors border border-slate-700 flex-shrink-0 cursor-pointer"
-        title="Highlights, Notes &amp; Bookmarks"
+        title="{{ t('reader.notes_highlights') }}"
       >
         <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
-        <span class="hidden sm:inline">Notes</span>
+        <span class="hidden sm:inline">{{ t('reader.notes') }}</span>
       </button>
       {% endif %}
     </div>
@@ -160,11 +160,11 @@
         id="theme-select" 
         onchange="setTheme(this.value)" 
         class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-1.5 sm:px-2 py-1.5 focus:outline-none cursor-pointer"
-        title="Theme"
+        title="{{ t('reader.theme') }}"
       >
-        <option value="dark">🌙 Dark</option>
-        <option value="light">☀️ Light</option>
-        <option value="sepia">📜 Sepia</option>
+        <option value="dark">🌙 {{ t('reader.theme_dark') }}</option>
+        <option value="light">☀️ {{ t('reader.theme_light') }}</option>
+        <option value="sepia">📜 {{ t('reader.theme_sepia') }}</option>
       </select>
       {% endif %}
 
@@ -185,14 +185,14 @@
     <div class="p-4 border-b border-slate-800 flex items-center justify-between">
       <h2 class="text-sm font-bold text-white flex items-center gap-2">
         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
-        Table of Contents
+        {{ t('reader.table_of_contents') }}
       </h2>
       <button onclick="toggleToc()" class="p-1 rounded text-slate-400 hover:text-white">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
       </button>
     </div>
     <div id="toc-list" class="flex-1 overflow-y-auto p-3 space-y-1 text-xs">
-      <p class="text-slate-500 italic p-2">Loading chapters...</p>
+      <p class="text-slate-500 italic p-2">{{ t('general.loading') }}</p>
     </div>
   </aside>
 
@@ -207,7 +207,7 @@
           id="tab-btn-bookmarks"
           class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm cursor-pointer"
         >
-          Bookmarks
+          {{ t('reader.bookmarks') }}
         </button>
         <button 
           type="button" 
@@ -215,7 +215,7 @@
           id="tab-btn-notes"
           class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
         >
-          Highlights &amp; Notes
+          {{ t('reader.notes_highlights') }}
         </button>
       </div>
       <button onclick="toggleBookmarksDrawer(false)" class="p-1 rounded text-slate-400 hover:text-white" title="Close Drawer">

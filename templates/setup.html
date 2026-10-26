@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="{{ get_current_lang() }}" class="h-full bg-slate-950">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Setup Wizard - Athenea</title>
+  <title>{{ t('setup.wizard_title') }} - Athenea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @keyframes fadeIn {
@@ -19,12 +19,34 @@
 
   <div class="sm:mx-auto sm:w-full sm:max-w-2xl px-4">
     <!-- Athenea Brand Header -->
-    <div class="text-center mb-8">
+    <div class="text-center mb-6">
       <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 shadow-xl shadow-indigo-600/30 p-2.5 mb-3 border border-indigo-400/30">
         <img src="/static/athenea-icon.svg" alt="Athenea Logo" class="w-full h-full object-contain" />
       </div>
       <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Athenea</h1>
-      <p class="text-xs sm:text-sm text-slate-400 mt-1">First-Run Configuration &amp; Deployment Wizard</p>
+      <p data-i18n="setup.wizard_title" class="text-xs sm:text-sm text-slate-400 mt-1">{{ t('setup.wizard_title') }}</p>
+    </div>
+
+    <!-- Installation Language Selector Bar -->
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-2.5 mb-6 backdrop-blur-md">
+      <div class="flex items-center justify-center gap-1.5 flex-wrap">
+        <span data-i18n="setup.select_language" class="text-xs text-slate-400 font-medium mr-1.5 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+          <span>{{ t('setup.select_language') }}:</span>
+        </span>
+        {% for lang in supported_languages %}
+        <button 
+          type="button" 
+          onclick="switchSetupLanguage('{{ lang.code }}')"
+          id="setup-lang-btn-{{ lang.code }}"
+          class="setup-lang-btn px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer {% if get_current_lang() == lang.code %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80{% endif %}"
+          title="{{ lang.name }}"
+        >
+          <span class="text-sm leading-none">{{ lang.flag }}</span>
+          <span>{{ lang.native }}</span>
+        </button>
+        {% endfor %}
+      </div>
     </div>
 
     <!-- Main Card -->
@@ -34,7 +56,8 @@
       <div class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/25 flex items-start gap-3 text-xs text-indigo-200">
         <svg class="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         <div>
-          <span class="font-bold text-white">Welcome!</span> Athenea needs to connect to your PostgreSQL database, verify your storage directory, and create your master administrator account.
+          <span data-i18n="setup.welcome_title" class="font-bold text-white">{{ t('setup.welcome_title') }}</span>
+          <span data-i18n="setup.welcome_desc">{{ t('setup.welcome_desc') }}</span>
         </div>
       </div>
 
@@ -45,15 +68,16 @@
           <div class="flex items-center justify-between pb-2 border-b border-slate-800">
             <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">1</span>
-              PostgreSQL Database
+              <span data-i18n="setup.section_db">{{ t('setup.section_db') }}</span>
             </h2>
             <button 
               type="button" 
               onclick="testDatabaseConnection()" 
               id="test-db-btn"
+              data-i18n="setup.test_connection"
               class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
             >
-              Test Connection
+              {{ t('setup.test_connection') }}
             </button>
           </div>
 
@@ -61,23 +85,23 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Host</label>
+              <label data-i18n="setup.db_host" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_host') }}</label>
               <input type="text" id="db_host" name="db_host" value="localhost" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Port</label>
+              <label data-i18n="setup.db_port" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_port') }}</label>
               <input type="number" id="db_port" name="db_port" value="5432" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Database Name</label>
+              <label data-i18n="setup.db_name" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_name') }}</label>
               <input type="text" id="db_name" name="db_name" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Database User</label>
+              <label data-i18n="setup.db_user" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_user') }}</label>
               <input type="text" id="db_user" name="db_user" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-xs font-medium text-slate-300 mb-1">Database Password</label>
+              <label data-i18n="setup.db_password" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_password') }}</label>
               <input type="password" id="db_password" name="db_password" placeholder="Enter database password" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
           </div>
@@ -88,13 +112,13 @@
           <div class="pb-2 border-b border-slate-800">
             <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">2</span>
-              Library Storage Path
+              <span data-i18n="setup.section_storage">{{ t('setup.section_storage') }}</span>
             </h2>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Books Directory (<code class="text-indigo-400">LIBRARY_ROOT</code>)</label>
+            <label data-i18n="setup.storage_path" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.storage_path') }}</label>
             <input type="text" id="library_root" name="library_root" value="/data/books" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
-            <p class="text-[11px] text-slate-400 mt-1">Directory where your books (.epub, .fb2, .pdf, .mobi) will be scanned and stored.</p>
+            <p data-i18n="setup.storage_path_help" class="text-[11px] text-slate-400 mt-1">{{ t('setup.storage_path_help') }}</p>
           </div>
         </div>
 
@@ -103,24 +127,25 @@
           <div class="pb-2 border-b border-slate-800">
             <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">3</span>
-              Administrator Account
+              <span data-i18n="setup.section_admin">{{ t('setup.section_admin') }}</span>
             </h2>
           </div>
+          <p data-i18n="setup.admin_desc" class="text-[11px] text-slate-400 leading-snug">{{ t('setup.admin_desc') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Admin Username</label>
+              <label data-i18n="setup.admin_username" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.admin_username') }}</label>
               <input type="text" id="admin_username" name="admin_username" value="admin" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Admin Email (optional)</label>
+              <label data-i18n="setup.admin_email" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.admin_email') }}</label>
               <input type="email" id="admin_email" name="admin_email" placeholder="admin@example.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+              <label data-i18n="setup.admin_password" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.admin_password') }}</label>
               <input type="password" id="admin_password" name="admin_password" required minlength="8" placeholder="At least 8 characters" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Confirm Password</label>
+              <label data-i18n="setup.admin_password_confirm" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.admin_password_confirm') }}</label>
               <input type="password" id="admin_confirm_password" name="admin_confirm_password" required minlength="8" placeholder="Re-enter password" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
@@ -131,17 +156,23 @@
           <div class="pb-2 border-b border-slate-800">
             <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">4</span>
-              User Registration &amp; Mail (Optional)
+              <span data-i18n="setup.section_options">{{ t('setup.section_options') }}</span>
             </h2>
           </div>
           <div class="space-y-2 text-xs">
-            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input type="checkbox" id="allow_registration" name="allow_registration" checked class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>Allow public registration on <code class="text-indigo-400 font-mono">/register</code></span>
+            <label class="flex items-start gap-2.5 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="allow_registration" name="allow_registration" checked class="mt-0.5 rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
+              <div>
+                <span data-i18n="setup.allow_registration" class="font-medium text-white">{{ t('setup.allow_registration') }}</span>
+                <p data-i18n="setup.allow_registration_help" class="text-[11px] text-slate-400">{{ t('setup.allow_registration_help') }}</p>
+              </div>
             </label>
-            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input type="checkbox" id="require_approval" name="require_approval" checked class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
-              <span>Require administrator approval before new users can log in</span>
+            <label class="flex items-start gap-2.5 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="require_approval" name="require_approval" checked class="mt-0.5 rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
+              <div>
+                <span data-i18n="setup.require_approval" class="font-medium text-white">{{ t('setup.require_approval') }}</span>
+                <p data-i18n="setup.require_approval_help" class="text-[11px] text-slate-400">{{ t('setup.require_approval_help') }}</p>
+              </div>
             </label>
           </div>
         </div>
@@ -155,7 +186,7 @@
           id="submit-btn"
           class="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
         >
-          <span>Complete Setup &amp; Launch Athenea</span>
+          <span data-i18n="setup.run_setup_btn">{{ t('setup.run_setup_btn') }}</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
         </button>
 
@@ -169,6 +200,43 @@
   </div>
 
   <script>
+    // Embedded client-side translations dictionary for zero-lag instant switching
+    window.I18N_SETUP = {{ translations_json | safe }};
+    let currentSetupLang = "{{ get_current_lang() }}";
+
+    function switchSetupLanguage(langCode) {
+      if (!window.I18N_SETUP || !window.I18N_SETUP[langCode]) return;
+      currentSetupLang = langCode;
+
+      // Persist language cookie
+      document.cookie = "athenea_lang=" + langCode + ";path=/;max-age=31536000;SameSite=Lax";
+
+      // Translate all DOM elements tagged with data-i18n
+      const dict = window.I18N_SETUP[langCode];
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) {
+          el.innerText = dict[key];
+        }
+      });
+
+      // Update button styling
+      document.querySelectorAll('.setup-lang-btn').forEach(btn => {
+        btn.className = "setup-lang-btn px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80";
+      });
+      const activeBtn = document.getElementById('setup-lang-btn-' + langCode);
+      if (activeBtn) {
+        activeBtn.className = "setup-lang-btn px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40";
+      }
+    }
+
+    function getI18nString(key, defaultVal) {
+      if (window.I18N_SETUP && window.I18N_SETUP[currentSetupLang] && window.I18N_SETUP[currentSetupLang][key]) {
+        return window.I18N_SETUP[currentSetupLang][key];
+      }
+      return defaultVal;
+    }
+
     async function testDatabaseConnection() {
       const btn = document.getElementById('test-db-btn');
       const statusDiv = document.getElementById('db-test-status');
@@ -188,9 +256,9 @@
       }
 
       btn.disabled = true;
-      btn.innerText = "Testing...";
+      btn.innerText = getI18nString("setup.testing_db", "Testing...");
       statusDiv.className = "text-xs p-2.5 rounded-xl bg-slate-800 text-slate-300 block";
-      statusDiv.innerText = "Attempting connection to PostgreSQL...";
+      statusDiv.innerText = getI18nString("setup.testing_db", "Attempting connection to PostgreSQL...");
 
       try {
         const res = await fetch('/setup/test-db', {
@@ -201,17 +269,17 @@
         const data = await res.json();
         if (data.success) {
           statusDiv.className = "text-xs p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 block";
-          statusDiv.innerText = "✓ " + data.message;
+          statusDiv.innerText = "✓ " + (data.message || getI18nString("setup.db_success", "PostgreSQL connection successful!"));
         } else {
           statusDiv.className = "text-xs p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 block";
           statusDiv.innerText = "✗ " + data.message;
         }
       } catch (err) {
         statusDiv.className = "text-xs p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 block";
-        statusDiv.innerText = "Network error: " + err.message;
+        statusDiv.innerText = getI18nString("setup.db_failed", "Network error: ") + err.message;
       } finally {
         btn.disabled = false;
-        btn.innerText = "Test Connection";
+        btn.innerText = getI18nString("setup.test_connection", "Test Connection");
       }
     }
 
@@ -244,7 +312,7 @@
       };
 
       btn.disabled = true;
-      btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Initializing Athenea...</span>`;
+      btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>${getI18nString("setup.deploying", "Initializing Athenea...")}</span>`;
       errDiv.classList.add('hidden');
 
       try {
@@ -260,13 +328,13 @@
           errDiv.innerText = data.error || "Setup failed. Check database credentials.";
           errDiv.classList.remove('hidden');
           btn.disabled = false;
-          btn.innerHTML = `<span>Complete Setup &amp; Launch Athenea</span>`;
+          btn.innerHTML = `<span>${getI18nString("setup.run_setup_btn", "Complete Setup & Launch Athenea")}</span>`;
         }
       } catch (err) {
         errDiv.innerText = "Network error: " + err.message;
         errDiv.classList.remove('hidden');
         btn.disabled = false;
-        btn.innerHTML = `<span>Complete Setup &amp; Launch Athenea</span>`;
+        btn.innerHTML = `<span>${getI18nString("setup.run_setup_btn", "Complete Setup & Launch Athenea")}</span>`;
       }
     }
   </script>

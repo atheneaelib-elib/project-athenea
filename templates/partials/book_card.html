@@ -30,11 +30,11 @@
     <!-- Top Floating Badges (Language, Shelves & Formats) -->
     <div class="absolute top-2 right-2 flex flex-wrap justify-end gap-1 pointer-events-none">
       {% if book.reading_status == 'reading' %}
-      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/90 text-white shadow-sm backdrop-blur-sm" title="Currently Reading">READING</span>
+      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/90 text-white shadow-sm backdrop-blur-sm" title="{{ t('sidebar.shelf_reading') }}">{{ t('card.reading') }}</span>
       {% elif book.reading_status == 'finished' %}
-      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/90 text-white shadow-sm backdrop-blur-sm" title="Finished">FINISHED</span>
+      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/90 text-white shadow-sm backdrop-blur-sm" title="{{ t('sidebar.shelf_finished') }}">{{ t('card.finished') }}</span>
       {% elif book.reading_status == 'plan_to_read' %}
-      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-sky-500/90 text-white shadow-sm backdrop-blur-sm" title="Want to Read">WANT TO READ</span>
+      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-sky-500/90 text-white shadow-sm backdrop-blur-sm" title="{{ t('sidebar.shelf_plan') }}">{{ t('card.want_to_read') }}</span>
       {% endif %}
       {% if book.language_code %}
       <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-slate-950/85 text-indigo-300 border border-indigo-500/40 shadow-sm backdrop-blur-sm uppercase inline-flex items-center gap-1" title="Language: {{ book.language_name }}">
@@ -87,7 +87,7 @@
     <div class="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
       <span>#{{ book.id }}</span>
       <span class="group-hover:text-indigo-400 flex items-center gap-1 font-medium transition-colors">
-        Read &amp; Details
+        {{ t('card.read_and_details') }}
         <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
       </span>
     </div>
