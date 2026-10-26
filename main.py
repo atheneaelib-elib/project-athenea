@@ -1468,7 +1468,10 @@ async def process_book_upload(
                     res = importer_service.import_book_file(db, tmp_file, orig_filename)
                     imported.append(res)
                 except Exception as e:
-                    failed.append({"file": orig_filename, "error": str(e)})
+                    import traceback
+                    tb = traceback.format_exc()
+                    logger.exception(f"Error importing {orig_filename}: {e}\n{tb}")
+                    failed.append({"file": orig_filename, "error": f"{str(e)} (Traceback: {tb.strip().splitlines()[-2] if len(tb.strip().splitlines()) >= 2 else ''})"})
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1561,7 +1564,10 @@ async def api_upload_books(
                     res = importer_service.import_book_file(db, tmp_file, orig_filename)
                     imported.append(res)
                 except Exception as e:
-                    failed.append({"file": orig_filename, "error": str(e)})
+                    import traceback
+                    tb = traceback.format_exc()
+                    logger.exception(f"Error importing {orig_filename}: {e}\n{tb}")
+                    failed.append({"file": orig_filename, "error": f"{str(e)} (Traceback: {tb.strip().splitlines()[-2] if len(tb.strip().splitlines()) >= 2 else ''})"})
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
