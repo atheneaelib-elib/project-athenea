@@ -346,14 +346,17 @@ def parse_epub_metadata(epub_path: Path) -> dict:
 
 def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
     """Convert FB2 to standard EPUB using Calibre's ebook-convert."""
+    if not shutil.which("ebook-convert"):
+        return False
     try:
+        env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
         cmd = ["ebook-convert", str(fb2_path), str(output_epub_path)]
         if title:
             cmd.extend(["--title", title])
         if author:
             cmd.extend(["--authors", author])
 
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False)
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
         return output_epub_path.is_file() and output_epub_path.stat().st_size > 0
     except Exception as e:
         print(f"Error converting {fb2_path} to EPUB: {e}")
@@ -368,10 +371,11 @@ def get_book_metadata(file_path: Path, ext: str) -> dict:
     elif ext == "epub":
         meta = parse_epub_metadata(file_path)
 
-    if not meta.get("title") or not meta.get("author"):
+    if (not meta.get("title") or not meta.get("author")) and shutil.which("ebook-meta"):
         try:
+            env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
             cmd = ["ebook-meta", str(file_path)]
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", timeout=60, check=False)
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", timeout=60, check=False, env=env)
             for line in proc.stdout.splitlines():
                 if ":" not in line:
                     continue
@@ -401,11 +405,12 @@ def get_book_metadata(file_path: Path, ext: str) -> dict:
         except Exception:
             pass
 
-    if not meta.get("cover_bytes"):
+    if not meta.get("cover_bytes") and shutil.which("ebook-meta"):
         temp_cover = Path(tempfile.gettempdir()) / f"cov_{uuid.uuid4().hex}.jpg"
         try:
+            env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
             cmd = ["ebook-meta", str(file_path), f"--get-cover={temp_cover}"]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40, check=False)
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40, check=False, env=env)
             if temp_cover.is_file() and temp_cover.stat().st_size > 0:
                 meta["cover_bytes"] = temp_cover.read_bytes()
         except Exception:
@@ -622,6 +627,24 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
             formats_imported.append({
                 "format": "EPUB",
                 "size": epub_dest.stat().st_size,
+                "name": base_file_name
+            })
+            # Also preserve the original FB2 format file in the directory
+            fb2_dest = dest_dir / f"{base_file_name}.fb2"
+            if actual_file_to_process.resolve() != fb2_dest.resolve():
+                shutil.copy2(actual_file_to_process, fb2_dest)
+            formats_imported.append({
+                "format": "FB2",
+                "size": fb2_dest.stat().st_size,
+                "name": base_file_name
+            })
+        elif effective_ext in ("fb2", "fbz"):
+            fb2_dest = dest_dir / f"{base_file_name}.fb2"
+            if actual_file_to_process.resolve() != fb2_dest.resolve():
+                shutil.copy2(actual_file_to_process, fb2_dest)
+            formats_imported.append({
+                "format": "FB2",
+                "size": fb2_dest.stat().st_size,
                 "name": base_file_name
             })
         elif effective_ext in ("epub", "pdf", "mobi", "azw3"):

@@ -12,6 +12,9 @@ ExecStart=/opt/athenea/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --wo
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
+Environment=LANG=C.UTF-8
+Environment=LC_ALL=C.UTF-8
+Environment=PYTHONIOENCODING=utf-8
 EnvironmentFile=-/etc/athenea.env
 EnvironmentFile=-/opt/athenea/.env
 
