@@ -123,6 +123,19 @@ def complete_initial_setup(
     4. Create primary Administrator account
     5. Reinitialize live SQLAlchemy engine
     """
+    # If db_password was left blank in the web form, fallback to existing configuration
+    if not db_password or not db_password.strip():
+        if SYSTEM_ENV_PATH.exists():
+            try:
+                for line in SYSTEM_ENV_PATH.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("DB_PASSWORD="):
+                        db_password = line.split("=", 1)[1].strip()
+                        break
+            except Exception:
+                pass
+        if not db_password and settings.DB_PASSWORD:
+            db_password = settings.DB_PASSWORD
+
     # 1. Ensure target database exists
     try:
         # Try direct connection
