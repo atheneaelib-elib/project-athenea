@@ -210,20 +210,25 @@ def complete_initial_setup(
     )
     cur = conn.cursor()
 
-    cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'users';")
+    cur.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users';")
     has_users_table = bool(cur.fetchone())
 
-    if not has_users_table and SCHEMA_SQL_PATH.exists():
+    if not has_users_table:
+        if not SCHEMA_SQL_PATH.exists():
+            raise RuntimeError(f"schema.sql not found at {SCHEMA_SQL_PATH}")
         schema_text = SCHEMA_SQL_PATH.read_text(encoding="utf-8", errors="ignore")
+        clean_sql = "\n".join(l for l in schema_text.splitlines() if not l.strip().startswith("\\"))
         try:
-            cur.execute(schema_text)
+            cur.execute(clean_sql)
+            cur.execute("SET search_path = public;")
         except Exception as se:
-            logger.warning(f"Error executing schema.sql: {se}")
+            logger.error(f"Error executing schema.sql: {se}")
+            raise RuntimeError(f"Database schema initialization failed: {se}")
 
     # 4. Create primary Administrator user
     pwd_hash = auth_service.hash_password(admin_password)
     cur.execute("""
-        INSERT INTO users (username, password_hash, role, email, is_active, created_at)
+        INSERT INTO public.users (username, password_hash, role, email, is_active, created_at)
         VALUES (%s, %s, 'admin', %s, true, NOW())
         ON CONFLICT (username) 
         DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', is_active = true;

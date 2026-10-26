@@ -193,6 +193,12 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
+        # ── Setup Guard: Unconfigured instances direct all non-static traffic to /setup ──
+        if not setup_service.is_system_configured():
+            if path.startswith("/static") or path == "/favicon.ico" or path.startswith("/setup") or path == "/health":
+                return await call_next(request)
+            return RedirectResponse(url="/setup", status_code=302)
+
         # ── Tier 1: fully public ────────────────────────────────────
         if any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)

@@ -1,6 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .settings import settings
+try:
+    from .settings import settings
+except (ImportError, ValueError):
+    from settings import settings
 
 DATABASE_URL = (
     f"postgresql://"
