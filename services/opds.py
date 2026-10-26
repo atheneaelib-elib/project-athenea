@@ -35,8 +35,8 @@ def generate_opensearch_xml(base_url: str = "") -> str:
     search_url = f"{base_url}/opds/search?q={{searchTerms}}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-  <ShortName>eBook Library</ShortName>
-  <Description>Search eBook Library by Title, Author, or Keywords</Description>
+  <ShortName>Athenea</ShortName>
+  <Description>Search Athenea by Title, Author, or Keywords</Description>
   <InputEncoding>UTF-8</InputEncoding>
   <OutputEncoding>UTF-8</OutputEncoding>
   <Url type="application/atom+xml;profile=opds-catalog;kind=acquisition" template="{_escape(search_url)}" />
@@ -54,15 +54,15 @@ def generate_root_catalog(base_url: str = "", stats: dict | None = None) -> str:
 <feed xmlns="http://www.w3.org/2005/Atom"
       xmlns:opds="http://opds-spec.org/2010/catalog">
   <id>urn:opds:root</id>
-  <title>eBook Library</title>
+  <title>Athenea</title>
   <subtitle>Over {books_count:,} books catalog</subtitle>
   <updated>{updated}</updated>
   <author>
-    <name>eBook Library</name>
+    <name>Athenea</name>
   </author>
   <link rel="self" href="{base_url}/opds" type="{OPDS_MIME_NAVIGATION}" />
   <link rel="start" href="{base_url}/opds" type="{OPDS_MIME_NAVIGATION}" />
-  <link rel="search" href="{base_url}/opds/opensearch.xml" type="{OPENSEARCH_MIME}" title="Search eBook Library" />
+  <link rel="search" href="{base_url}/opds/opensearch.xml" type="{OPENSEARCH_MIME}" title="Search Athenea" />
 
   <entry>
     <title>Recently Added Books</title>
