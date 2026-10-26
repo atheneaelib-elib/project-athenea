@@ -37,7 +37,10 @@
       <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-sky-500/90 text-white shadow-sm backdrop-blur-sm" title="Want to Read">WANT TO READ</span>
       {% endif %}
       {% if book.language_code %}
-      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-slate-950/85 text-indigo-300 border border-indigo-500/40 shadow-sm backdrop-blur-sm uppercase" title="Language: {{ book.language_name }}">{{ book.language_code }}</span>
+      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-slate-950/85 text-indigo-300 border border-indigo-500/40 shadow-sm backdrop-blur-sm uppercase inline-flex items-center gap-1" title="Language: {{ book.language_name }}">
+        {% if book.language_flag %}<span>{{ book.language_flag }}</span>{% endif %}
+        <span>{{ book.language_code }}</span>
+      </span>
       {% endif %}
       {% for fmt in book.formats %}
         {% if fmt.format == 'EPUB' %}

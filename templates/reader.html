@@ -425,10 +425,10 @@
           class="w-full xs:w-auto flex-1 max-w-[200px] bg-slate-800 text-[11px] text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer truncate"
           title="Select Voice"
         >
-          <optgroup label="🇷🇺 Русские">
-            <option value="ru_irina">🇷🇺 Ирина ⭐</option>
-            <option value="ru_dmitri">🇷🇺 Дмитрий ⭐</option>
-            <option value="ru_ruslan">🇷🇺 Руслан</option>
+          <optgroup label="🇷🇺 Russian">
+            <option value="ru_irina">🇷🇺 Irina ⭐</option>
+            <option value="ru_dmitri">🇷🇺 Dmitri ⭐</option>
+            <option value="ru_ruslan">🇷🇺 Ruslan</option>
           </optgroup>
           <optgroup label="🇺🇸 English (US)">
             <option value="af_heart" selected>🇺🇸 Heart ⭐</option>
@@ -439,6 +439,16 @@
           <optgroup label="🇬🇧 English (UK)">
             <option value="bf_emma">🇬🇧 Emma ⭐</option>
             <option value="bm_george">🇬🇧 George</option>
+          </optgroup>
+          <optgroup label="🇪🇸 Spanish">
+            <option value="ef_dora">🇪🇸 Dora</option>
+            <option value="em_alex">🇪🇸 Alex</option>
+          </optgroup>
+          <optgroup label="🇫🇷 French">
+            <option value="ff_siwis">🇫🇷 Siwis</option>
+          </optgroup>
+          <optgroup label="🇮🇹 Italian">
+            <option value="if_sara">🇮🇹 Sara</option>
           </optgroup>
         </select>
       </div>
@@ -1029,10 +1039,17 @@
           select.innerHTML = "";
 
           const groups = [
-            { label: "🇷🇺 Русские голоса", filter: v => v.lang === "ru" },
+            { label: "🇷🇺 Russian Voices", filter: v => v.lang === "ru" },
             { label: "🇺🇸 English (US)", filter: v => v.lang === "en-us" },
             { label: "🇬🇧 English (UK)", filter: v => v.lang === "en-gb" },
-            { label: "🌍 Other Languages", filter: v => !["ru", "en-us", "en-gb"].includes(v.lang) }
+            { label: "🇪🇸 Spanish Voices", filter: v => v.lang === "es" || v.lang === "es-es" },
+            { label: "🇫🇷 French Voices", filter: v => v.lang === "fr" || v.lang === "fr-fr" },
+            { label: "🇮🇹 Italian Voices", filter: v => v.lang === "it" || v.lang === "it-it" },
+            { label: "🇩🇪 German Voices", filter: v => v.lang === "de" || v.lang === "de-de" },
+            { label: "🇵🇹 Portuguese Voices", filter: v => v.lang === "pt" || v.lang === "pt-pt" || v.lang === "pt-br" },
+            { label: "🇨🇳 Chinese Voices", filter: v => v.lang === "zh" || v.lang === "zh-cn" },
+            { label: "🇯🇵 Japanese Voices", filter: v => v.lang === "ja" || v.lang === "ja-jp" },
+            { label: "🌐 Other Languages", filter: v => !["ru", "en-us", "en-gb", "es", "es-es", "fr", "fr-fr", "it", "it-it", "de", "de-de", "pt", "pt-pt", "pt-br", "zh", "zh-cn", "ja", "ja-jp"].includes(v.lang) }
           ];
 
           groups.forEach(g => {

@@ -162,28 +162,63 @@
 
     <!-- Languages Filter -->
     <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
-        <span>Languages</span>
-      </h3>
-      <div class="space-y-1 max-h-56 overflow-y-auto pr-1">
+      <div class="flex items-center justify-between mb-2.5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Languages</h3>
+        <span class="text-[10px] text-slate-500 font-mono">{{ sidebar.languages|length }} Available</span>
+      </div>
+
+      <!-- Quick Language Selector Chips -->
+      <div class="flex flex-wrap gap-1.5 mb-3">
         <button 
           type="button" 
-          onclick="filterByLanguage('', 'All Languages')"
-          class="w-full flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group text-left"
+          onclick="filterByLanguage('', 'All Languages')" 
+          class="px-2 py-1 rounded-lg text-[11px] font-semibold transition-all bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 cursor-pointer"
+          title="All Languages"
         >
-          <span>All Languages</span>
+          All
         </button>
+        {% for lang in sidebar.languages %}
+          {% if lang.code in ['RUS', 'ENG', 'SPA', 'FRA', 'DEU', 'POL', 'ITA', 'POR'] %}
+          <button 
+            type="button" 
+            onclick="filterByLanguage({{ lang.id }}, '{{ lang.name|escape }}')"
+            class="px-2 py-1 rounded-lg text-[11px] font-medium transition-all bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/80 hover:border-indigo-500 cursor-pointer flex items-center gap-1 shadow-sm"
+            title="{{ lang.name }} ({{ lang.count }} books)"
+          >
+            <span>{{ lang.flag }}</span>
+            <span>{{ lang.name }}</span>
+          </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- Live Search in Languages -->
+      <div class="relative mb-2">
+        <input 
+          type="text" 
+          id="lang-search-filter" 
+          placeholder="Search languages..." 
+          oninput="searchLanguages(this.value)"
+          class="w-full bg-slate-950/70 text-slate-200 placeholder-slate-500 text-xs rounded-xl px-2.5 py-1.5 pl-7 border border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      </div>
+
+      <!-- Scrollable Full Language List -->
+      <div id="sidebar-lang-list" class="space-y-1 max-h-56 overflow-y-auto pr-1">
         {% for lang in sidebar.languages %}
         <a 
           href="javascript:void(0)"
           onclick="filterByLanguage({{ lang.id }}, '{{ lang.name|escape }}')"
-          class="flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group"
+          data-lang-search="{{ lang.name|lower }} {{ lang.code|lower }}"
+          class="lang-item flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group cursor-pointer"
         >
           <span class="truncate flex items-center gap-1.5">
+            <span class="text-sm leading-none">{{ lang.flag }}</span>
             <span class="px-1 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono">{{ lang.code }}</span>
             <span>{{ lang.name }}</span>
           </span>
-          <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300">{{ lang.count }}</span>
+          <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300 bg-slate-800/60 px-1.5 py-0.5 rounded-full">{{ lang.count }}</span>
         </a>
         {% endfor %}
       </div>
@@ -470,6 +505,15 @@
     document.getElementById('input-page').value = page;
     triggerGridUpdate();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function searchLanguages(val) {
+    const q = (val || '').toLowerCase().trim();
+    const items = document.querySelectorAll('#sidebar-lang-list .lang-item');
+    items.forEach(el => {
+      const text = el.getAttribute('data-lang-search') || '';
+      el.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+    });
   }
 
   function resetSearchAndFilters() {

@@ -19,76 +19,145 @@ def invalidate_caches():
 
 
 LANGUAGE_NAMES = {
-    "rus": "Russian",
-    "ru": "Russian",
-    "eng": "English",
-    "en": "English",
-    "ukr": "Ukrainian",
-    "uk": "Ukrainian",
-    "bul": "Bulgarian",
-    "bg": "Bulgarian",
-    "spa": "Spanish",
-    "es": "Spanish",
-    "fra": "French",
-    "fr": "French",
-    "deu": "German",
-    "de": "German",
-    "pol": "Polish",
-    "pl": "Polish",
-    "bel": "Belarusian",
-    "be": "Belarusian",
-    "ita": "Italian",
-    "it": "Italian",
-    "lav": "Latvian",
-    "lv": "Latvian",
-    "epo": "Esperanto",
-    "ces": "Czech",
-    "cs": "Czech",
-    "nld": "Dutch",
-    "nl": "Dutch",
-    "por": "Portuguese",
-    "pt": "Portuguese",
-    "hun": "Hungarian",
-    "hu": "Hungarian",
-    "ron": "Romanian",
-    "ro": "Romanian",
-    "lit": "Lithuanian",
-    "lt": "Lithuanian",
-    "ell": "Greek",
-    "el": "Greek",
-    "zho": "Chinese",
-    "zh": "Chinese",
-    "jpn": "Japanese",
-    "ja": "Japanese",
-    "kor": "Korean",
-    "ko": "Korean",
-    "lat": "Latin",
-    "fin": "Finnish",
-    "fi": "Finnish",
-    "swe": "Swedish",
-    "sv": "Swedish",
-    "nor": "Norwegian",
-    "no": "Norwegian",
-    "dan": "Danish",
-    "da": "Danish",
-    "heb": "Hebrew",
-    "he": "Hebrew",
-    "ara": "Arabic",
-    "ar": "Arabic",
-    "tur": "Turkish",
-    "tr": "Turkish",
-    "kaz": "Kazakh",
-    "kk": "Kazakh",
-    "tat": "Tatar",
-    "tt": "Tatar",
-    "aze": "Azerbaijani",
-    "az": "Azerbaijani",
-    "kat": "Georgian",
-    "ka": "Georgian",
-    "arm": "Armenian",
-    "hy": "Armenian",
-    "mon": "Mongolian",
-    "mn": "Mongolian",
+    "rus": "Russian", "ru": "Russian",
+    "eng": "English", "en": "English",
+    "spa": "Spanish", "es": "Spanish",
+    "fra": "French", "fr": "French", "frm": "Middle French",
+    "deu": "German", "de": "German",
+    "pol": "Polish", "pl": "Polish",
+    "ita": "Italian", "it": "Italian",
+    "por": "Portuguese", "pt": "Portuguese",
+    "ukr": "Ukrainian", "uk": "Ukrainian",
+    "bul": "Bulgarian", "bg": "Bulgarian",
+    "bel": "Belarusian", "be": "Belarusian",
+    "ces": "Czech", "cs": "Czech",
+    "nld": "Dutch", "nl": "Dutch",
+    "lav": "Latvian", "lv": "Latvian",
+    "lit": "Lithuanian", "lt": "Lithuanian",
+    "est": "Estonian", "et": "Estonian",
+    "hun": "Hungarian", "hu": "Hungarian",
+    "ron": "Romanian", "ro": "Romanian",
+    "ell": "Greek", "el": "Greek",
+    "zho": "Chinese", "zh": "Chinese",
+    "jpn": "Japanese", "ja": "Japanese",
+    "kor": "Korean", "ko": "Korean",
+    "ara": "Arabic", "ar": "Arabic",
+    "tur": "Turkish", "tr": "Turkish",
+    "swe": "Swedish", "sv": "Swedish",
+    "nor": "Norwegian", "no": "Norwegian",
+    "dan": "Danish", "da": "Danish",
+    "fin": "Finnish", "fi": "Finnish",
+    "srp": "Serbian", "sr": "Serbian",
+    "hrv": "Croatian", "hr": "Croatian",
+    "slk": "Slovak", "sk": "Slovak",
+    "slv": "Slovenian", "sl": "Slovenian",
+    "heb": "Hebrew", "he": "Hebrew",
+    "hin": "Hindi", "hi": "Hindi",
+    "ind": "Indonesian", "id": "Indonesian",
+    "vie": "Vietnamese", "vi": "Vietnamese",
+    "kat": "Georgian", "ka": "Georgian",
+    "kaz": "Kazakh", "kk": "Kazakh",
+    "uzb": "Uzbek", "uz": "Uzbek",
+    "aze": "Azerbaijani", "az": "Azerbaijani",
+    "tat": "Tatar", "tt": "Tatar",
+    "mon": "Mongolian", "mn": "Mongolian",
+    "arm": "Armenian", "hy": "Armenian",
+    "epo": "Esperanto", "eo": "Esperanto",
+    "lat": "Latin", "la": "Latin",
+    "fas": "Persian", "fa": "Persian",
+    "isl": "Icelandic", "is": "Icelandic",
+    "cat": "Catalan", "ca": "Catalan",
+    "eus": "Basque", "eu": "Basque",
+    "gle": "Irish", "ga": "Irish",
+    "sqi": "Albanian", "sq": "Albanian",
+    "mkd": "Macedonian", "mk": "Macedonian",
+    "bre": "Breton", "br": "Breton",
+    "ang": "Old English",
+    "chu": "Old Church Slavonic",
+    "hbs": "Serbo-Croatian",
+    "chv": "Chuvash",
+    "bak": "Bashkir",
+    "tgk": "Tajik",
+    "abk": "Abkhazian",
+    "sme": "Northern Sami",
+    "ido": "Ido",
+    "asm": "Assamese",
+    "que": "Quechua",
+    "tuk": "Turkmen",
+    "kas": "Kashmiri",
+    "ile": "Interlingue",
+    "uig": "Uyghur",
+}
+
+LANGUAGE_FLAGS = {
+    "rus": "🇷🇺", "ru": "🇷🇺",
+    "eng": "🇬🇧", "en": "🇬🇧",
+    "spa": "🇪🇸", "es": "🇪🇸",
+    "fra": "🇫🇷", "fr": "🇫🇷", "frm": "🇫🇷",
+    "deu": "🇩🇪", "de": "🇩🇪",
+    "pol": "🇵🇱", "pl": "🇵🇱",
+    "ita": "🇮🇹", "it": "🇮🇹",
+    "por": "🇵🇹", "pt": "🇵🇹",
+    "ukr": "🇺🇦", "uk": "🇺🇦",
+    "bul": "🇧🇬", "bg": "🇧🇬",
+    "bel": "🇧🇾", "be": "🇧🇾",
+    "ces": "🇨🇿", "cs": "🇨🇿",
+    "nld": "🇳🇱", "nl": "🇳🇱",
+    "lav": "🇱🇻", "lv": "🇱🇻",
+    "lit": "🇱🇹", "lt": "🇱🇹",
+    "est": "🇪🇪", "et": "🇪🇪",
+    "hun": "🇭🇺", "hu": "🇭🇺",
+    "ron": "🇷🇴", "ro": "🇷🇴",
+    "ell": "🇬🇷", "el": "🇬🇷",
+    "zho": "🇨🇳", "zh": "🇨🇳",
+    "jpn": "🇯🇵", "ja": "🇯🇵",
+    "kor": "🇰🇷", "ko": "🇰🇷",
+    "ara": "🇸🇦", "ar": "🇸🇦",
+    "tur": "🇹🇷", "tr": "🇹🇷",
+    "swe": "🇸🇪", "sv": "🇸🇪",
+    "nor": "🇳🇴", "no": "🇳🇴",
+    "dan": "🇩🇰", "da": "🇩🇰",
+    "fin": "🇫🇮", "fi": "🇫🇮",
+    "srp": "🇷🇸", "sr": "🇷🇸",
+    "hrv": "🇭🇷", "hr": "🇭🇷",
+    "slk": "🇸🇰", "sk": "🇸🇰",
+    "slv": "🇸🇮", "sl": "🇸🇮",
+    "heb": "🇮🇱", "he": "🇮🇱",
+    "hin": "🇮🇳", "hi": "🇮🇳",
+    "ind": "🇮🇩", "id": "🇮🇩",
+    "vie": "🇻🇳", "vi": "🇻🇳",
+    "kat": "🇬🇪", "ka": "🇬🇪",
+    "kaz": "🇰🇿", "kk": "🇰🇿",
+    "uzb": "🇺🇿", "uz": "🇺🇿",
+    "aze": "🇦🇿", "az": "🇦🇿",
+    "tat": "🇷🇺", "tt": "🇷🇺",
+    "mon": "🇲🇳", "mn": "🇲🇳",
+    "arm": "🇦🇲", "hy": "🇦🇲",
+    "epo": "🌐", "eo": "🌐",
+    "lat": "🏛️", "la": "🏛️",
+    "fas": "🇮🇷", "fa": "🇮🇷",
+    "isl": "🇮🇸", "is": "🇮🇸",
+    "cat": "🇪🇸", "ca": "🇪🇸",
+    "eus": "🇪🇸", "eu": "🇪🇸",
+    "gle": "🇮🇪", "ga": "🇮🇪",
+    "sqi": "🇦🇱", "sq": "🇦🇱",
+    "mkd": "🇲🇰", "mk": "🇲🇰",
+    "bre": "🇫🇷", "br": "🇫🇷",
+    "ang": "📜",
+    "chu": "⛪",
+    "hbs": "🌐",
+    "chv": "🇷🇺",
+    "bak": "🇷🇺",
+    "tgk": "🇹🇯",
+    "abk": "🇬🇪",
+    "sme": "🌐",
+    "ido": "🌐",
+    "asm": "🇮🇳",
+    "que": "🇵🇪",
+    "tuk": "🇹🇲",
+    "kas": "🇮🇳",
+    "ile": "🌐",
+    "uig": "🇨🇳",
 }
 
 
@@ -97,6 +166,13 @@ def format_language_name(code: str | None) -> str:
         return "Unknown"
     clean = code.strip().lower()
     return LANGUAGE_NAMES.get(clean, clean.upper())
+
+
+def get_language_flag(code: str | None) -> str:
+    if not code:
+        return "🌐"
+    clean = code.strip().lower()
+    return LANGUAGE_FLAGS.get(clean, "🌐")
 
 
 def format_file_size(size_bytes: int | None) -> str:
@@ -315,7 +391,7 @@ def get_sidebar_data(db, force_refresh: bool = False):
         JOIN book_languages bl ON l.id = bl.language_id
         GROUP BY l.id, l.lang_code
         ORDER BY count DESC
-        LIMIT 10
+        LIMIT 50
     """)).fetchall()
 
     data = {
@@ -327,6 +403,7 @@ def get_sidebar_data(db, force_refresh: bool = False):
                 "id": r.id,
                 "code": r.lang_code.upper() if r.lang_code else "",
                 "name": format_language_name(r.lang_code),
+                "flag": get_language_flag(r.lang_code),
                 "count": r.count
             }
             for r in top_languages
@@ -639,6 +716,7 @@ def get_books(
 
         lang_code = r.lang_code.upper() if r.lang_code else None
         lang_name = format_language_name(r.lang_code) if r.lang_code else None
+        lang_flag = get_language_flag(r.lang_code) if r.lang_code else None
 
         books.append({
             "id": r.id,
@@ -655,6 +733,7 @@ def get_books(
             "series_index_num": s_idx_num,
             "language_code": lang_code,
             "language_name": lang_name,
+            "language_flag": lang_flag,
             "formats": book_formats,
             "is_favorite": (r.id in fav_set),
             "reading_percentage": prog_map.get(r.id),
@@ -740,12 +819,14 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         {
             "id": l.id,
             "code": l.lang_code.upper() if l.lang_code else "",
-            "name": format_language_name(l.lang_code)
+            "name": format_language_name(l.lang_code),
+            "flag": get_language_flag(l.lang_code)
         }
         for l in lang_rows
     ]
     primary_lang_code = languages[0]["code"] if languages else None
     primary_lang_name = languages[0]["name"] if languages else None
+    primary_lang_flag = languages[0]["flag"] if languages else None
 
     # Formats
     formats_rows = db.execute(text("""
@@ -853,6 +934,7 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         "pubdate": pubdate_str,
         "language_code": primary_lang_code,
         "language_name": primary_lang_name,
+        "language_flag": primary_lang_flag,
         "languages": languages,
         "description": row.comment_text,
         "tags": tags,
