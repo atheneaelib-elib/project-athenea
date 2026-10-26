@@ -98,6 +98,7 @@ chmod 775 "$LIBRARY_DIR" "$CACHE_DIR" "$BACKUP_DIR"
 msg_ok "Storage directories provisioned at $DATA_DIR"
 
 msg_info "Cloning Athenea repository..."
+git config --global --add safe.directory "$INSTALL_DIR" || true
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 if [ -n "$GITHUB_TOKEN" ]; then
     CLONE_URL="https://${GITHUB_TOKEN}@github.com/atheneaelib-elib/project-athenea.git"

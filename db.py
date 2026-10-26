@@ -6,7 +6,7 @@ except (ImportError, ValueError):
     from settings import settings
 
 DATABASE_URL = (
-    f"postgresql://"
+    f"postgresql+psycopg2://"
     f"{settings.DB_USER}:"
     f"{settings.DB_PASSWORD}@"
     f"{settings.DB_HOST}:"
@@ -37,7 +37,7 @@ def reinit_engine(db_user=None, db_password=None, db_host=None, db_port=None, db
     port = db_port if db_port is not None else settings.DB_PORT
     name = db_name if db_name is not None else settings.DB_NAME
 
-    DATABASE_URL = f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    DATABASE_URL = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
     engine = create_engine(
         DATABASE_URL,
         pool_size=20,
