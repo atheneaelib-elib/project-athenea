@@ -1643,8 +1643,12 @@ def get_cover(book_id: int, db: Session = Depends(get_db)):
 
 @app.get("/thumbnail/{book_id}")
 def get_thumbnail(book_id: int, db: Session = Depends(get_db)):
-    thumb_dir = Path(settings.THUMB_CACHE_DIR)
-    thumb_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        thumb_dir = Path(settings.THUMB_CACHE_DIR)
+        thumb_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        thumb_dir = BASE_DIR / "cache" / "thumbs"
+        thumb_dir.mkdir(parents=True, exist_ok=True)
     thumb_file = thumb_dir / f"{book_id}.webp"
 
     if thumb_file.is_file():

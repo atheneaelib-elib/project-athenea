@@ -381,20 +381,32 @@
           </span>
           <span class="text-[10px] text-slate-400 font-mono">{{ book.series_books|length }} books</span>
         </div>
-        <div class="flex gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+        <div class="flex gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-thin">
           {% for sb in book.series_books %}
-          <button 
-            type="button" 
+          <div 
             onclick="openBookModal({{ sb.id }})" 
-            class="flex-shrink-0 text-left p-2 rounded-lg border transition-all cursor-pointer {% if sb.is_current %}bg-indigo-950/80 border-indigo-500 text-white shadow-md shadow-indigo-500/20{% else %}bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700{% endif %}"
-            style="min-width: 140px; max-width: 170px;"
+            class="flex-shrink-0 group cursor-pointer p-1.5 rounded-xl transition-all flex flex-col {% if sb.is_current %}bg-indigo-950/80 border-2 border-indigo-500 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500/40{% else %}bg-slate-950/50 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/60{% endif %}"
+            style="width: 105px;"
             title="{{ sb.title }}"
           >
-            <div class="text-[10px] font-mono font-bold {% if sb.is_current %}text-indigo-400{% else %}text-slate-500{% endif %}">
-              {{ sb.series_index or 'Vol' }} {% if sb.is_current %}• Active{% endif %}
+            <div class="aspect-[2/3] w-full rounded-lg overflow-hidden bg-slate-900 border border-slate-800/80 shadow relative">
+              <img 
+                src="{% if sb.has_cover %}{{ sb.thumbnail_url }}{% else %}/static/placeholder.svg{% endif %}" 
+                alt="{{ sb.title }}" 
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                onerror="this.onerror=null; this.src='/static/placeholder.svg';"
+              />
+              <span class="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono {% if sb.is_current %}bg-indigo-600 text-white shadow{% else %}bg-slate-950/85 text-indigo-300 border border-indigo-500/30{% endif %}">
+                {{ sb.series_index or 'Vol' }}
+              </span>
+              {% if sb.is_current %}
+              <span class="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[8px] font-bold bg-indigo-600 text-white uppercase tracking-wider shadow">
+                Current
+              </span>
+              {% endif %}
             </div>
-            <div class="text-xs font-semibold truncate mt-0.5 text-slate-200">{{ sb.title }}</div>
-          </button>
+            <p class="text-[11px] font-semibold {% if sb.is_current %}text-indigo-200{% else %}text-slate-300 group-hover:text-white{% endif %} truncate mt-1.5 leading-tight">{{ sb.title }}</p>
+          </div>
           {% endfor %}
         </div>
       </div>
@@ -414,20 +426,25 @@
           {% for mb in book.more_by_author %}
           <div 
             onclick="openBookModal({{ mb.id }})" 
-            class="group cursor-pointer p-1.5 rounded-xl bg-slate-950/40 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/40 transition-all flex flex-col"
+            class="group cursor-pointer p-1.5 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/60 transition-all flex flex-col"
             title="{{ mb.title }}"
           >
             <div class="aspect-[2/3] w-full rounded-lg overflow-hidden bg-slate-900 border border-slate-800 shadow relative">
               <img 
-                src="{{ mb.thumbnail_url }}" 
+                src="{% if mb.has_cover %}{{ mb.thumbnail_url }}{% else %}/static/placeholder.svg{% endif %}" 
                 alt="{{ mb.title }}" 
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                 onerror="this.onerror=null; this.src='/static/placeholder.svg';"
               />
+              {% if mb.series_index %}
+              <span class="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-slate-950/85 text-indigo-300 border border-indigo-500/30">
+                {{ mb.series_index }}
+              </span>
+              {% endif %}
             </div>
             <p class="text-[11px] font-semibold text-slate-300 group-hover:text-white truncate mt-1.5 leading-tight">{{ mb.title }}</p>
             {% if mb.series_name %}
-            <p class="text-[9px] text-indigo-400 truncate font-mono mt-0.5">{{ mb.series_name }} {{ mb.series_index or '' }}</p>
+            <p class="text-[9px] text-indigo-400 truncate font-mono mt-0.5">{{ mb.series_name }}</p>
             {% endif %}
           </div>
           {% endfor %}
@@ -440,6 +457,24 @@
   </div>
 
   <script>
+    function openBookModal(bookId) {
+      if (!bookId) return;
+      if (window.htmx) {
+        htmx.ajax('GET', `/book/${bookId}/modal`, {
+          target: '#modal-container',
+          swap: 'innerHTML'
+        });
+      } else {
+        fetch(`/book/${bookId}/modal`)
+          .then(res => res.text())
+          .then(html => {
+            const container = document.getElementById('modal-container');
+            if (container) container.innerHTML = html;
+          });
+      }
+    }
+    window.openBookModal = openBookModal;
+
     function toggleSendEmailBox() {
       const box = document.getElementById('send-email-box');
       if (box) box.classList.toggle('hidden');

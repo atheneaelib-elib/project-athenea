@@ -385,6 +385,24 @@
       if (modal) modal.remove();
     }
 
+    function openBookModal(bookId) {
+      if (!bookId) return;
+      if (window.htmx) {
+        htmx.ajax('GET', `/book/${bookId}/modal`, {
+          target: '#modal-container',
+          swap: 'innerHTML'
+        });
+      } else {
+        fetch(`/book/${bookId}/modal`)
+          .then(res => res.text())
+          .then(html => {
+            const container = document.getElementById('modal-container');
+            if (container) container.innerHTML = html;
+          });
+      }
+    }
+    window.openBookModal = openBookModal;
+
     function closeUploadModal() {
       const modal = document.getElementById('upload-modal');
       if (modal) modal.remove();
