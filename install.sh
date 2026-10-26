@@ -177,7 +177,7 @@ fi
 # 6. Create Dedicated System User
 if ! id "$APP_USER" &>/dev/null; then
     info "Creating system user '$APP_USER'..."
-    useradd --system --shell /bin/bash --home-dir "$INSTALL_DIR" --create-home "$APP_USER"
+    useradd --system --shell /bin/bash --home-dir "$INSTALL_DIR" --no-create-home "$APP_USER"
     success "Created system user: $APP_USER"
 else
     info "System user '$APP_USER' already exists."
@@ -193,6 +193,7 @@ success "Storage paths ready at $DATA_DIR"
 # 8. Clone or Update Application Repository
 if [ ! -d "$INSTALL_DIR/.git" ]; then
     info "Cloning Athenea repository to $INSTALL_DIR..."
+    rm -rf "$INSTALL_DIR"
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR" && git remote set-url origin https://github.com/atheneaelib-elib/project-athenea.git
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"

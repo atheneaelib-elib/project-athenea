@@ -81,7 +81,7 @@ fi
 
 msg_info "Creating system user '$APP_USER'..."
 if ! id "$APP_USER" &>/dev/null; then
-    useradd --system --shell /bin/bash --home-dir "$INSTALL_DIR" --create-home "$APP_USER"
+    useradd --system --shell /bin/bash --home-dir "$INSTALL_DIR" --no-create-home "$APP_USER"
     msg_ok "Created user $APP_USER"
 fi
 
@@ -100,6 +100,7 @@ else
 fi
 
 if [ ! -d "$INSTALL_DIR/.git" ]; then
+    rm -rf "$INSTALL_DIR"
     git clone "$CLONE_URL" "$INSTALL_DIR"
     # Reset origin URL so token is not left stored in config
     cd "$INSTALL_DIR"
