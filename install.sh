@@ -157,11 +157,11 @@ info "Configuring PostgreSQL user and database..."
 # Check if database user already exists
 USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" || echo "0")
 if [ "$USER_EXISTS" != "1" ]; then
-    sudo -u postgres psql -c "CREATE USER $DB_USER WITH ENCRYPTED PASSWORD '$DB_PASS';"
+    sudo -u postgres psql -c "CREATE USER $DB_USER WITH ENCRYPTED PASSWORD '$DB_PASS' SUPERUSER;"
     success "Created PostgreSQL user: $DB_USER"
 else
-    info "PostgreSQL user '$DB_USER' already exists."
-    # If user exists, retain existing or update password
+    sudo -u postgres psql -c "ALTER USER $DB_USER WITH SUPERUSER;"
+    info "PostgreSQL user '$DB_USER' already exists; granted superuser."
 fi
 
 # Check if database already exists
@@ -170,9 +170,11 @@ if [ "$DB_EXISTS" != "1" ]; then
     sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
     sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
     success "Created PostgreSQL database: $DB_NAME"
-else
-    info "PostgreSQL database '$DB_NAME' already exists."
 fi
+
+sudo -u postgres psql -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
+sudo -u postgres psql -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS unaccent;" || true
+sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL ON SCHEMA public TO $DB_USER;" || true
 
 # 6. Create Dedicated System User
 if ! id "$APP_USER" &>/dev/null; then

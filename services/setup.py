@@ -215,7 +215,7 @@ def complete_initial_setup(
 
     if not has_users_table:
         if not SCHEMA_SQL_PATH.exists():
-            raise RuntimeError(f"schema.sql not found at {SCHEMA_SQL_PATH}")
+            return False, f"schema.sql not found at {SCHEMA_SQL_PATH}"
         schema_text = SCHEMA_SQL_PATH.read_text(encoding="utf-8", errors="ignore")
         clean_sql = "\n".join(l for l in schema_text.splitlines() if not l.strip().startswith("\\"))
         try:
@@ -223,16 +223,32 @@ def complete_initial_setup(
             cur.execute("SET search_path = public;")
         except Exception as se:
             logger.error(f"Error executing schema.sql: {se}")
-            raise RuntimeError(f"Database schema initialization failed: {se}")
+            # If failed on extension creation, attempt executing without CREATE EXTENSION
+            try:
+                fallback_sql = "\n".join(
+                    l for l in clean_sql.splitlines() 
+                    if not l.strip().upper().startswith("CREATE EXTENSION") and not l.strip().upper().startswith("COMMENT ON EXTENSION")
+                )
+                cur.execute(fallback_sql)
+                cur.execute("SET search_path = public;")
+            except Exception as fe:
+                cur.close()
+                conn.close()
+                return False, f"Database schema initialization failed: {fe}"
 
     # 4. Create primary Administrator user
-    pwd_hash = auth_service.hash_password(admin_password)
-    cur.execute("""
-        INSERT INTO public.users (username, password_hash, role, email, is_active, created_at)
-        VALUES (%s, %s, 'admin', %s, true, NOW())
-        ON CONFLICT (username) 
-        DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', is_active = true;
-    """, (admin_username.strip(), pwd_hash, (admin_email or "").strip()))
+    try:
+        pwd_hash = auth_service.hash_password(admin_password)
+        cur.execute("""
+            INSERT INTO public.users (username, password_hash, role, email, is_active, created_at)
+            VALUES (%s, %s, 'admin', %s, true, NOW())
+            ON CONFLICT (username) 
+            DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', is_active = true;
+        """, (admin_username.strip(), pwd_hash, (admin_email or "").strip()))
+    except Exception as ue:
+        cur.close()
+        conn.close()
+        return False, f"Failed to create admin user: {ue}"
 
     cur.close()
     conn.close()

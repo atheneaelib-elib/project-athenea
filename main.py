@@ -441,23 +441,27 @@ def setup_complete(req: CompleteSetupRequest):
     if setup_service.is_system_configured():
         raise HTTPException(status_code=403, detail="System is already configured")
 
-    success, msg = setup_service.complete_initial_setup(
-        db_host=req.db_host,
-        db_port=req.db_port,
-        db_name=req.db_name,
-        db_user=req.db_user,
-        db_password=req.db_password,
-        library_root=req.library_root,
-        admin_username=req.admin_username,
-        admin_password=req.admin_password,
-        admin_email=req.admin_email,
-        allow_registration=req.allow_registration,
-        require_approval=req.require_approval
-    )
-    if not success:
-        return {"success": False, "error": msg}
+    try:
+        success, msg = setup_service.complete_initial_setup(
+            db_host=req.db_host,
+            db_port=req.db_port,
+            db_name=req.db_name,
+            db_user=req.db_user,
+            db_password=req.db_password,
+            library_root=req.library_root,
+            admin_username=req.admin_username,
+            admin_password=req.admin_password,
+            admin_email=req.admin_email,
+            allow_registration=req.allow_registration,
+            require_approval=req.require_approval
+        )
+        if not success:
+            return {"success": False, "error": msg}
 
-    return {"success": True, "message": msg, "redirect": "/login?setup=success"}
+        return {"success": True, "message": msg, "redirect": "/login?setup=success"}
+    except Exception as exc:
+        logger.exception("Setup completion failed with unhandled exception")
+        return {"success": False, "error": f"Setup error: {str(exc)}"}
 
 
 @app.get("/health")
