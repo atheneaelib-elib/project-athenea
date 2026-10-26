@@ -89,7 +89,12 @@ DATA_DIR="/data"
 LIBRARY_DIR="/data/books"
 CACHE_DIR="/data/cache/thumbs"
 BACKUP_DIR="/data/backups"
-REPO_URL="https://github.com/atheneaelib-elib/project-athenea.git"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+if [ -n "$GITHUB_TOKEN" ]; then
+    REPO_URL="https://${GITHUB_TOKEN}@github.com/atheneaelib-elib/project-athenea.git"
+else
+    REPO_URL="https://github.com/atheneaelib-elib/project-athenea.git"
+fi
 
 # 4. Install Prerequisites
 info "Updating system package repositories..."
@@ -189,6 +194,7 @@ success "Storage paths ready at $DATA_DIR"
 if [ ! -d "$INSTALL_DIR/.git" ]; then
     info "Cloning Athenea repository to $INSTALL_DIR..."
     git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR" && git remote set-url origin https://github.com/atheneaelib-elib/project-athenea.git
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
     success "Cloned Athenea repository."
 else

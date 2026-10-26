@@ -92,8 +92,18 @@ chmod 775 "$LIBRARY_DIR" "$CACHE_DIR" "$BACKUP_DIR"
 msg_ok "Storage directories provisioned at $DATA_DIR"
 
 msg_info "Cloning Athenea repository..."
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+if [ -n "$GITHUB_TOKEN" ]; then
+    CLONE_URL="https://${GITHUB_TOKEN}@github.com/atheneaelib-elib/project-athenea.git"
+else
+    CLONE_URL="https://github.com/atheneaelib-elib/project-athenea.git"
+fi
+
 if [ ! -d "$INSTALL_DIR/.git" ]; then
-    git clone https://github.com/atheneaelib-elib/project-athenea.git "$INSTALL_DIR"
+    git clone "$CLONE_URL" "$INSTALL_DIR"
+    # Reset origin URL so token is not left stored in config
+    cd "$INSTALL_DIR"
+    git remote set-url origin https://github.com/atheneaelib-elib/project-athenea.git
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
     msg_ok "Repository cloned to $INSTALL_DIR"
 else

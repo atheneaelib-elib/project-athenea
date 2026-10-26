@@ -212,13 +212,24 @@ else
     msg_ok "Container acquired IP address: $CT_IP"
 fi
 
+# Check for GitHub token (for private repositories)
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+
 # 7. Provision Athenea inside Container
 msg_info "Executing Athenea provisioning inside container $CT_ID..."
-INSTALL_SCRIPT=$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh || true)
-if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
-    msg_err "Failed to download provisioning script from GitHub (received 404). Please ensure the repository https://github.com/atheneaelib-elib/project-athenea is set to PUBLIC in GitHub settings."
+INSTALL_SCRIPT=""
+if [ -n "$GITHUB_TOKEN" ]; then
+    msg_info "Using GitHub Token for authenticated private repository access..."
+    INSTALL_SCRIPT=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3.raw" https://api.github.com/repos/atheneaelib-elib/project-athenea/contents/install/athenea-install.sh || true)
+else
+    INSTALL_SCRIPT=$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh 2>/dev/null || curl -fsSL https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh 2>/dev/null || true)
 fi
-pct exec "$CT_ID" -- bash -c "$INSTALL_SCRIPT"
+
+if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
+    msg_err "Failed to download provisioning script from GitHub.\nIf the repository is private, supply your token: export GITHUB_TOKEN='ghp_...'\nOr make https://github.com/atheneaelib-elib/project-athenea Public."
+fi
+
+pct exec "$CT_ID" -- env GITHUB_TOKEN="$GITHUB_TOKEN" bash -c "$INSTALL_SCRIPT"
 
 # Verify service is running on port 8000 inside the container
 msg_info "Verifying Athenea service on port 8000..."
