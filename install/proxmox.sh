@@ -214,7 +214,18 @@ fi
 
 # 7. Provision Athenea inside Container
 msg_info "Executing Athenea provisioning inside container $CT_ID..."
-pct exec "$CT_ID" -- bash -c "$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh)"
+INSTALL_SCRIPT=$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh || true)
+if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
+    msg_err "Failed to download provisioning script from GitHub (received 404). Please ensure the repository https://github.com/atheneaelib-elib/project-athenea is set to PUBLIC in GitHub settings."
+fi
+pct exec "$CT_ID" -- bash -c "$INSTALL_SCRIPT"
+
+# Verify service is running on port 8000 inside the container
+msg_info "Verifying Athenea service on port 8000..."
+sleep 3
+if ! pct exec "$CT_ID" -- ss -tulpn | grep -q ":8000"; then
+    msg_warn "Athenea service is still starting up or encountered an issue. Check logs with: pct exec $CT_ID -- journalctl -u athenea -n 50"
+fi
 
 # 8. Success Output
 msg_ok "Athenea has been successfully installed in Container $CT_ID!"
