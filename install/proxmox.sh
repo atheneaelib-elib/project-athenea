@@ -225,8 +225,21 @@ else
     INSTALL_SCRIPT=$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh 2>/dev/null || curl -fsSL https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/athenea-install.sh 2>/dev/null || true)
 fi
 
+# If public download returned 404 or empty, prompt interactively for GitHub token
 if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
-    msg_err "Failed to download provisioning script from GitHub.\nIf the repository is private, supply your token: export GITHUB_TOKEN='ghp_...'\nOr make https://github.com/atheneaelib-elib/project-athenea Public."
+    msg_warn "Public download returned 404 (private repository detected)."
+    GITHUB_TOKEN=$(whiptail --backtitle "Proxmox VE - Athenea Installer" \
+        --title "GitHub Private Repository Token" \
+        --passwordbox "The repository appears to be Private.\n\nPlease enter your GitHub Personal Access Token (ghp_...):" 11 68 3>&1 1>&2 2>&3 || true)
+    
+    if [ -n "$GITHUB_TOKEN" ]; then
+        msg_info "Retrying provisioning download with provided token..."
+        INSTALL_SCRIPT=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3.raw" https://api.github.com/repos/atheneaelib-elib/project-athenea/contents/install/athenea-install.sh || true)
+    fi
+fi
+
+if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
+    msg_err "Failed to download provisioning script from GitHub.\nIf the repository is private, supply a valid token with 'repo' scope, or make the repository Public."
 fi
 
 pct exec "$CT_ID" -- env GITHUB_TOKEN="$GITHUB_TOKEN" bash -c "$INSTALL_SCRIPT"
