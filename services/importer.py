@@ -356,10 +356,12 @@ def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | Non
         if author:
             cmd.extend(["--authors", author])
 
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
+        # Pre-encode all arguments to raw utf-8 bytes on POSIX to prevent ASCII filesystem encoding errors
+        byte_cmd = [a.encode("utf-8") if isinstance(a, str) else bytes(a) for a in cmd]
+        subprocess.run(byte_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
         return output_epub_path.is_file() and output_epub_path.stat().st_size > 0
     except Exception as e:
-        print(f"Error converting {fb2_path} to EPUB: {e}")
+        logger.warning(f"Error converting {fb2_path.name} to EPUB: {e}")
         return False
 
 
@@ -572,12 +574,15 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
             author_hint = meta.get("author") or "Unknown Author"
 
             target_epub = work_dir / f"{actual_fb2.stem}.epub"
-            if convert_fb2_to_epub(actual_fb2, target_epub, title=title_hint, author=author_hint):
-                epub_converted_path = target_epub
-                converted_from_fb2 = True
-                epub_meta = parse_epub_metadata(target_epub)
-                if epub_meta.get("cover_bytes") and not meta.get("cover_bytes"):
-                    meta["cover_bytes"] = epub_meta["cover_bytes"]
+            try:
+                if convert_fb2_to_epub(actual_fb2, target_epub, title=title_hint, author=author_hint):
+                    epub_converted_path = target_epub
+                    converted_from_fb2 = True
+                    epub_meta = parse_epub_metadata(target_epub)
+                    if epub_meta.get("cover_bytes") and not meta.get("cover_bytes"):
+                        meta["cover_bytes"] = epub_meta["cover_bytes"]
+            except Exception as ce:
+                logger.warning(f"Error during FB2 to EPUB conversion for {orig_name}: {ce}")
         else:
             meta = get_book_metadata(actual_file_to_process, effective_ext)
 

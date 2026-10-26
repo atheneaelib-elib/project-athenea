@@ -1,4 +1,7 @@
 import os
+os.environ.setdefault("LANG", "C.UTF-8")
+os.environ.setdefault("LC_ALL", "C.UTF-8")
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 import json
 import urllib.parse
 import logging
