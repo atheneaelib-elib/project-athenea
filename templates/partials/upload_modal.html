@@ -13,8 +13,8 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
         </div>
         <div>
-          <h2 class="text-base font-bold text-white">Add Books to Library</h2>
-          <p class="text-[11px] text-slate-400">Upload single files, multiple books, or an entire folder (supports 2,000+ files)</p>
+          <h2 class="text-base font-bold text-white">{{ t('upload.title') }}</h2>
+          <p class="text-[11px] text-slate-400">{{ t('upload.subtitle') }}</p>
         </div>
       </div>
       <button 
@@ -37,8 +37,8 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
         </div>
         <div class="text-xs">
-          <p class="font-semibold text-emerald-300">Automatic FB2 &rarr; EPUB Conversion</p>
-          <p class="text-slate-400 text-[11px]">Books in <span class="font-mono text-emerald-400">.fb2</span> or <span class="font-mono text-emerald-400">.fb2.zip</span> format are automatically converted to EPUB with extracted covers for instant online reading.</p>
+          <p class="font-semibold text-emerald-300">{{ t('upload.conversion_title') }}</p>
+          <p class="text-slate-400 text-[11px]">{{ t('upload.conversion_desc') }}</p>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
           id="tab-btn-folder" 
           class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm transition-colors cursor-pointer"
         >
-          📁 Select Folder
+          {{ t('upload.tab_folder') }}
         </button>
         <button 
           type="button" 
@@ -58,7 +58,7 @@
           id="tab-btn-files" 
           class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
         >
-          📄 Select Files
+          {{ t('upload.tab_files') }}
         </button>
         <button 
           type="button" 
@@ -66,7 +66,7 @@
           id="tab-btn-server" 
           class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
         >
-          🖥️ Server Path
+          {{ t('upload.tab_server') }}
         </button>
       </div>
 
@@ -95,8 +95,8 @@
               <div id="drop-zone-folder-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-800 group-hover:bg-indigo-600/20 text-slate-400 group-hover:text-indigo-400 flex items-center justify-center transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
               </div>
-              <p id="drop-zone-folder-title" class="text-sm font-semibold text-slate-200">Click to choose a folder from your computer</p>
-              <p id="drop-zone-folder-sub" class="text-xs text-slate-500 mt-1">Or drag &amp; drop a folder here. Handles thousands of books in nested subfolders</p>
+              <p id="drop-zone-folder-title" class="text-sm font-semibold text-slate-200">{{ t('upload.folder_prompt') }}</p>
+              <p id="drop-zone-folder-sub" class="text-xs text-slate-500 mt-1">{{ t('upload.folder_sub') }}</p>
             </div>
           </div>
         </div>
@@ -223,7 +223,7 @@
           class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-          <span>Start Import</span>
+          <span>{{ t('upload.start_import') }}</span>
         </button>
       </div>
 
@@ -324,7 +324,7 @@
       titleEl.className = "text-sm font-bold text-emerald-300";
     }
     if (subEl) {
-      subEl.textContent = `Click "Start Import" below to proceed. (${totalFound.toLocaleString()} total files scanned)`;
+      subEl.textContent = `Click "{{ t('upload.start_import') }}" below to proceed. (${totalFound.toLocaleString()} total files scanned)`;
       subEl.className = "text-xs text-slate-400 mt-1";
     }
 
@@ -369,7 +369,7 @@
       const iconEl = document.getElementById(boxId + '-icon');
       if (dropBox) dropBox.className = "relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-900/60 group overflow-hidden cursor-pointer";
       if (titleEl) {
-        titleEl.textContent = (boxId === 'drop-zone-files') ? "Click to choose individual or multiple ebook files" : "Click to choose a folder from your computer";
+        titleEl.textContent = (boxId === 'drop-zone-files') ? "Click to choose individual or multiple ebook files" : "{{ t('upload.folder_prompt') }}";
         titleEl.className = "text-sm font-semibold text-slate-200";
       }
       if (subEl) {

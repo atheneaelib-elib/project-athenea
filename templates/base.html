@@ -81,7 +81,7 @@
           </div>
           <div>
             <h1 class="text-sm sm:text-base font-bold bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent leading-tight tracking-tight">Athenea</h1>
-            <p class="text-[10px] sm:text-xs text-slate-400 font-mono leading-none">{{ total_books_count | default(get_library_total_books(), true) }} books</p>
+            <p class="text-[10px] sm:text-xs text-slate-400 font-mono leading-none">{{ total_books_count | default(get_library_total_books(), true) }} {{ t('general.books') }}</p>
           </div>
         </a>
 
@@ -96,10 +96,10 @@
             hx-target="#modal-container"
             hx-swap="innerHTML"
             class="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 hover:text-white border border-purple-500/30 whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 flex-shrink-0 cursor-pointer"
-            title="Discover a random book from the library"
+            title="{{ t('navbar.surprise_me_title') }}"
           >
             <svg class="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-            <span class="whitespace-nowrap">Surprise Me</span>
+            <span class="whitespace-nowrap">{{ t('navbar.surprise_me') }}</span>
           </button>
 
           <!-- Favorites Button -->
@@ -108,12 +108,12 @@
             id="nav-favorites-btn"
             onclick="toggleFavoritesFilter()"
             class="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer {% if current_favorites_only %}bg-rose-600 text-white shadow-md shadow-rose-600/30{% else %}bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500/40{% endif %}"
-            title="My Favorites"
+            title="{{ t('navbar.favorites_title') }}"
           >
             <svg class="w-3.5 h-3.5 flex-shrink-0 {% if current_favorites_only %}fill-current text-white{% else %}fill-current text-rose-400{% endif %}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
-            <span class="whitespace-nowrap">Favorites</span>
+            <span class="whitespace-nowrap">{{ t('navbar.favorites') }}</span>
             <span id="fav-count-badge" class="px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none {% if current_favorites_only %}bg-rose-700 text-white{% else %}bg-slate-700 text-rose-300{% endif %}">
               {{ favorites_count | default(0) }}
             </span>
@@ -127,10 +127,10 @@
             hx-target="#upload-container" 
             hx-swap="innerHTML"
             class="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/25 whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer"
-            title="Add Books (Single file or Folder)"
+            title="{{ t('navbar.add_title') }}"
           >
             <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            <span class="whitespace-nowrap">Add</span>
+            <span class="whitespace-nowrap">{{ t('navbar.add') }}</span>
           </button>
           {% endif %}
 
@@ -138,10 +138,10 @@
           <a 
             href="/admin/settings" 
             class="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-500/30 whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-colors flex-shrink-0"
-            title="Admin Control Center & Settings"
+            title="{{ t('navbar.settings_title') }}"
           >
             <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            <span class="whitespace-nowrap">Settings</span>
+            <span class="whitespace-nowrap">{{ t('navbar.settings') }}</span>
           </a>
           {% endif %}
 
@@ -152,10 +152,10 @@
             hx-target="#profile-modal-container" 
             hx-swap="innerHTML"
             class="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer"
-            title="My Reading Activity &amp; Stats"
+            title="{{ t('navbar.reading_activity_title') }}"
           >
             <svg class="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-            <span class="whitespace-nowrap">My Activity</span>
+            <span class="whitespace-nowrap">{{ t('navbar.reading_activity') }}</span>
           </button>
 
           <!-- User Pill & Self Change Password Button -->
@@ -165,7 +165,7 @@
             hx-target="#profile-modal-container" 
             hx-swap="innerHTML"
             class="h-9 px-2.5 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-xs text-white whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer group" 
-            title="Click to Change Password ({{ current_user.username }})"
+            title="{{ t('navbar.change_password_title', username=current_user.username) }}"
           >
             <span class="w-2 h-2 rounded-full flex-shrink-0 {% if current_user.role == 'admin' %}bg-purple-400{% elif current_user.role == 'power_user' %}bg-emerald-400{% else %}bg-slate-400{% endif %}"></span>
             <span class="font-medium max-w-[80px] sm:max-w-[120px] truncate">{{ current_user.username }}</span>
@@ -241,7 +241,7 @@
             <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
             </svg>
-            <span class="text-xs font-medium hidden xs:inline">Filter</span>
+            <span class="text-xs font-medium hidden xs:inline">{{ t('navbar.filter') }}</span>
           </button>
 
         </div>
@@ -262,7 +262,7 @@
               name="q" 
               id="search-input"
               value="{{ current_q | default('') }}"
-              placeholder="Search books by title, author, or series..."
+              placeholder="{{ t('navbar.search_placeholder') }}"
               autocomplete="off"
               class="w-full h-10 bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-900 text-sm text-slate-100 placeholder-slate-400 rounded-xl pl-11 pr-24 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner"
               hx-get="/books/grid"
@@ -290,7 +290,7 @@
                 type="submit" 
                 class="h-7 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-sm cursor-pointer whitespace-nowrap"
               >
-                Search
+                {{ t('navbar.search_button') }}
               </button>
             </div>
           </div>
@@ -305,7 +305,7 @@
               class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
               onchange="triggerGridUpdate()"
             />
-            <span class="whitespace-nowrap">In blurbs</span>
+            <span class="whitespace-nowrap">{{ t('navbar.in_blurbs') }}</span>
           </label>
         </form>
 
@@ -320,11 +320,11 @@
             hx-include="#filter-inputs, #search-input"
             hx-indicator="#search-spinner"
           >
-            <option value="recent">Recently Added</option>
-            <option value="title_asc">Title (A-Z)</option>
-            <option value="title_desc">Title (Z-A)</option>
-            <option value="author_asc">Author (A-Z)</option>
-            <option value="pubdate_desc">Year (Newest)</option>
+            <option value="recent">{{ t('sort.recent') }}</option>
+            <option value="title_asc">{{ t('sort.title_asc') }}</option>
+            <option value="title_desc">{{ t('sort.title_desc') }}</option>
+            <option value="author_asc">{{ t('sort.author_asc') }}</option>
+            <option value="pubdate_desc">{{ t('sort.pubdate_desc') }}</option>
           </select>
           <div class="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none text-slate-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>

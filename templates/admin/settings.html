@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Control Center - Settings & Users{% endblock %}
+{% block title %}{{ t('admin.page_title') }}{% endblock %}
 
 {% block content %}
 <div class="space-y-6 max-w-7xl mx-auto pb-12">
@@ -9,25 +9,25 @@
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
     <div>
       <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
-        <a href="/" class="hover:text-white transition-colors">Library</a>
+        <a href="/" class="hover:text-white transition-colors">{{ t('admin.library_nav') }}</a>
         <span>&rsaquo;</span>
-        <span class="text-indigo-400 font-medium">Administration</span>
+        <span class="text-indigo-400 font-medium">{{ t('admin.admin_nav') }}</span>
       </div>
       <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
         <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
         </svg>
-        Admin Control Center
+        {{ t('admin.center_title') }}
       </h1>
-      <p class="text-xs text-slate-400 mt-1">Manage user accounts, configure Kindle & SMTP delivery, trigger database backups, and inspect server health.</p>
+      <p class="text-xs text-slate-400 mt-1">{{ t('admin.center_desc') }}</p>
     </div>
 
     <!-- Quick Server Status Pill -->
     <div class="flex items-center gap-3">
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
         <span class="w-2.5 h-2.5 rounded-full {% if smtp_configured %}bg-emerald-400 animate-pulse{% else %}bg-amber-400{% endif %}"></span>
-        <span class="text-slate-300 font-medium">SMTP: {% if smtp_configured %}Active{% else %}Needs Setup{% endif %}</span>
+        <span class="text-slate-300 font-medium">{{ t('admin.smtp_status') }} {% if smtp_configured %}{{ t('admin.smtp_active') }}{% else %}{{ t('admin.smtp_needs_setup') }}{% endif %}</span>
       </div>
       <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
@@ -45,11 +45,11 @@
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] text-slate-400">CPU Load</span>
+          <span class="text-[11px] text-slate-400">{{ t('admin.cpu_load') }}</span>
           <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
         </div>
         <p class="text-sm font-bold text-white font-mono mt-0.5 truncate">{{ system_info.host.cpu_load }}</p>
-        <p class="text-[10px] text-slate-500 font-mono">1m, 5m, 15m load</p>
+        <p class="text-[10px] text-slate-500 font-mono">{{ t('admin.cpu_sub') }}</p>
       </div>
     </div>
 
@@ -58,7 +58,7 @@
       <div class="flex items-center justify-between text-[11px]">
         <span class="text-slate-400 flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-          Memory (RAM)
+          {{ t('admin.memory') }}
         </span>
         <span class="font-bold text-indigo-300 font-mono">{{ system_info.host.ram.percent }}%</span>
       </div>
@@ -67,8 +67,8 @@
           <div class="bg-gradient-to-r from-indigo-500 to-cyan-400 h-2 rounded-full" style="width: {{ system_info.host.ram.percent }}%"></div>
         </div>
         <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-          <span>Used: {{ system_info.host.ram.used }}</span>
-          <span>Total: {{ system_info.host.ram.total }}</span>
+          <span>{{ t('admin.used', used=system_info.host.ram.used) }}</span>
+          <span>{{ t('admin.total', total=system_info.host.ram.total) }}</span>
         </div>
       </div>
     </div>
@@ -78,7 +78,7 @@
       <div class="flex items-center justify-between text-[11px]">
         <span class="text-slate-400 flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-          Storage (ZFS)
+          {{ t('admin.storage') }}
         </span>
         <span class="font-bold text-amber-300 font-mono">{{ system_info.storage.percent }}%</span>
       </div>
@@ -87,7 +87,7 @@
           <div class="bg-gradient-to-r from-amber-500 to-emerald-400 h-2 rounded-full" style="width: {{ system_info.storage.percent }}%"></div>
         </div>
         <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-          <span>Free: {{ system_info.storage.free }}</span>
+          <span>{{ t('admin.free', free=system_info.storage.free) }}</span>
           <span>Total: {{ system_info.storage.total }}</span>
         </div>
       </div>
@@ -120,7 +120,7 @@
       class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-shrink-0"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-      <span>User Accounts</span>
+      <span>{{ t('admin.tab_users') }}</span>
       <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700">{{ user_stats.total }}</span>
     </button>
 
@@ -132,7 +132,7 @@
       class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-      <span>Email & Kindle</span>
+      <span>{{ t('admin.tab_smtp') }}</span>
       {% if not smtp_configured %}
       <span class="w-2 h-2 rounded-full bg-amber-400"></span>
       {% endif %}
@@ -146,7 +146,7 @@
       class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7M4 7c0-2 1.5-3 3.5-3h9c2 0 3.5 1 3.5 3M4 7c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3"></path></svg>
-      <span>Storage & Resources</span>
+      <span>{{ t('admin.tab_system') }}</span>
     </button>
 
     <!-- Tab: Backups & Database -->
@@ -157,7 +157,7 @@
       class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-      <span>Backups & DB</span>
+      <span>{{ t('admin.tab_backups') }}</span>
       <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700">{{ system_info.backup.count }}</span>
     </button>
 
@@ -169,7 +169,7 @@
       class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-      <span>Security & Fail2ban</span>
+      <span>{{ t('admin.tab_security') }}</span>
       {% if system_info.fail2ban.banned_current > 0 %}
       <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-950 text-rose-300 border border-rose-500/30">{{ system_info.fail2ban.banned_current }} banned</span>
       {% endif %}
@@ -189,26 +189,26 @@
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20">
         <div class="flex items-center justify-between">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">Admin</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">{{ t('admin.role_admin') }}</span>
           <span class="text-lg font-bold text-white">{{ user_stats.admins }}</span>
         </div>
-        <p class="text-xs text-slate-400 mt-2">Full system settings, user management, backup triggers, online reading, and downloads.</p>
+        <p class="text-xs text-slate-400 mt-2">{{ t('admin.role_admin_desc') }}</p>
       </div>
 
       <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
         <div class="flex items-center justify-between">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Power User</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">{{ t('admin.role_power') }}</span>
           <span class="text-lg font-bold text-white">{{ user_stats.power_users }}</span>
         </div>
-        <p class="text-xs text-slate-400 mt-2">Full library browsing, eBook ingestion, online reading, and unlimited downloads.</p>
+        <p class="text-xs text-slate-400 mt-2">{{ t('admin.role_power_desc') }}</p>
       </div>
 
       <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60">
         <div class="flex items-center justify-between">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-slate-700 text-slate-300 border border-slate-600">Standard User</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-slate-700 text-slate-300 border border-slate-600">{{ t('admin.role_user') }}</span>
           <span class="text-lg font-bold text-white">{{ user_stats.standard_users }}</span>
         </div>
-        <p class="text-xs text-slate-400 mt-2">Search, library browsing, and online eBook reading (direct file downloads restricted).</p>
+        <p class="text-xs text-slate-400 mt-2">{{ t('admin.role_user_desc') }}</p>
       </div>
     </div>
 
@@ -217,9 +217,9 @@
       <div>
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
-          Public Self-Registration Policy
+          {{ t('admin.reg_policy_title') }}
         </h3>
-        <p class="text-xs text-slate-400 mt-0.5">Control whether new readers can sign up on <code class="text-indigo-300">/register</code>, and whether accounts require admin approval.</p>
+        <p class="text-xs text-slate-400 mt-0.5">{{ t('admin.reg_policy_desc') }}</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
@@ -232,7 +232,7 @@
             onchange="saveRegistrationSettings()"
             class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
           />
-          <span class="text-xs text-white font-medium">Allow Self-Registration</span>
+          <span class="text-xs text-white font-medium">{{ t('admin.allow_reg') }}</span>
         </label>
 
         <!-- Require Admin Approval Toggle -->
@@ -244,7 +244,7 @@
             onchange="saveRegistrationSettings()"
             class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
           />
-          <span class="text-xs text-white font-medium">Require Admin Approval</span>
+          <span class="text-xs text-white font-medium">{{ t('admin.require_approval') }}</span>
         </label>
       </div>
     </div>
@@ -256,7 +256,7 @@
           type="text" 
           id="user-search" 
           oninput="filterUsersTable()" 
-          placeholder="Filter users by username or email..." 
+          placeholder="{{ t('admin.filter_users_placeholder') }}" 
           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
         />
         <svg class="w-4 h-4 text-slate-500 absolute right-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -268,7 +268,7 @@
         class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex-shrink-0"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-        Add New User
+        {{ t('admin.add_new_user') }}
       </button>
     </div>
 
@@ -278,12 +278,12 @@
         <table class="w-full text-left text-xs text-slate-300" id="users-table">
           <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
             <tr>
-              <th class="py-3.5 px-4 font-semibold">User</th>
-              <th class="py-3.5 px-4 font-semibold">Role</th>
-              <th class="py-3.5 px-4 font-semibold">Status</th>
-              <th class="py-3.5 px-4 font-semibold">Last Login</th>
-              <th class="py-3.5 px-4 font-semibold">Created</th>
-              <th class="py-3.5 px-4 font-semibold text-right">Actions</th>
+              <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_user') }}</th>
+              <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_role') }}</th>
+              <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_status') }}</th>
+              <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_last_login') }}</th>
+              <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_created') }}</th>
+              <th class="py-3.5 px-4 font-semibold text-right">{{ t('admin.th_actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/80 font-normal">
@@ -318,18 +318,18 @@
               <td class="py-3 px-4">
                 {% if u.is_active %}
                 <span class="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Active
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> {{ t('admin.status_active') }}
                 </span>
                 {% else %}
                 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Pending Approval
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> {{ t('admin.status_pending') }}
                 </span>
                 {% endif %}
               </td>
 
               <!-- Last Login -->
               <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">
-                {{ u.last_login[:16] if u.last_login else 'Never' }}
+                {{ u.last_login[:16] if u.last_login else t('admin.never') }}
               </td>
 
               <!-- Created -->
@@ -348,7 +348,7 @@
                     title="Approve & Activate Account"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    <span>Approve</span>
+                    <span>{{ t('admin.approve_btn') }}</span>
                   </button>
                   {% endif %}
 
@@ -396,9 +396,9 @@
           <div>
             <h2 class="text-base font-bold text-white flex items-center gap-2">
               <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-              SMTP Mail Delivery ("Send to Kindle")
+              {{ t('admin.smtp_title') }}
             </h2>
-            <p class="text-xs text-slate-400 mt-0.5">Allows library users to deliver eBooks straight to their Kindle or personal email inbox.</p>
+            <p class="text-xs text-slate-400 mt-0.5">{{ t('admin.smtp_desc') }}</p>
           </div>
 
           <div class="hidden sm:flex items-center gap-1.5">
@@ -412,7 +412,7 @@
         <form id="smtp-form" onsubmit="saveSMTPSettings(event)" class="space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="sm:col-span-2">
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5">SMTP Host / Server <span class="text-rose-400">*</span></label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('admin.smtp_host') }} <span class="text-rose-400">*</span></label>
               <input 
                 type="text" 
                 id="smtp_host" 
@@ -423,7 +423,7 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Port <span class="text-rose-400">*</span></label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('admin.smtp_port') }} <span class="text-rose-400">*</span></label>
               <input 
                 type="number" 
                 id="smtp_port" 
@@ -437,7 +437,7 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Sender Email Address (<code class="text-indigo-300">From:</code>) <span class="text-rose-400">*</span></label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('admin.smtp_from') }} <span class="text-rose-400">*</span></label>
               <input 
                 type="email" 
                 id="smtp_from" 
@@ -448,7 +448,7 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5">SMTP Username / Login</label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('admin.smtp_user') }}</label>
               <input 
                 type="text" 
                 id="smtp_user" 
@@ -462,7 +462,7 @@
 
           <div>
             <div class="flex items-center justify-between mb-1.5">
-              <label class="text-xs font-semibold text-slate-300">SMTP Password / App Password</label>
+              <label class="text-xs font-semibold text-slate-300">{{ t('admin.smtp_pass') }}</label>
               {% if smtp_password_set %}
               <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">Password Saved</span>
               {% endif %}
@@ -522,7 +522,7 @@
               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Save Settings</span>
+              <span>{{ t('admin.smtp_save_btn') }}</span>
             </button>
           </div>
         </form>
@@ -554,7 +554,7 @@
               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-              <span>Send Test Email</span>
+              <span>{{ t('admin.smtp_test_btn') }}</span>
             </button>
 
             <div id="test-result" class="hidden p-3.5 rounded-xl text-xs font-mono transition-all"></div>
@@ -589,7 +589,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h3 class="text-sm font-bold text-white flex items-center gap-2">
             <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-            Books Library Path & Storage
+            {{ t('admin.storage_title') }}
           </h3>
           <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 w-fit">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -635,7 +635,7 @@
                   class="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                 >
                   <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  <span>Verify Path</span>
+                  <span>{{ t('admin.verify_path') }}</span>
                 </button>
                 <button 
                   type="button" 
@@ -644,7 +644,7 @@
                   class="px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                  <span>Save Path</span>
+                  <span>{{ t('admin.save_path') }}</span>
                 </button>
               </div>
             </div>
@@ -906,7 +906,7 @@
       <div>
         <h2 class="text-base font-bold text-white flex items-center gap-2">
           <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-          PostgreSQL Database & Automated Backups
+          {{ t('admin.backup_title') }}
         </h2>
         <p class="text-xs text-slate-400 mt-1">
           Scheduled daily at <strong>03:00 AM</strong> with accelerated parallel <code class="text-emerald-300">pigz</code> compression. Retention policy: 7-day daily rolling backups + 30-day Sunday historical archives.
@@ -930,7 +930,7 @@
           class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-          <span>Create Backup Now</span>
+          <span>{{ t('admin.create_backup_btn') }}</span>
         </button>
       </div>
     </div>
@@ -1033,7 +1033,7 @@
     <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
         <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-        Fail2ban Banned IP Addresses
+        {{ t('admin.security_title') }}
       </h3>
       <p class="text-xs text-slate-400">
         IP addresses that repeatedly failed authentication against the BookServer are automatically banned. You can manually unban any IP below.
@@ -1049,7 +1049,7 @@
             onclick="unbanIP('{{ ip }}')" 
             class="px-3 py-1 rounded-lg text-xs font-semibold bg-rose-950/60 hover:bg-rose-900 text-rose-200 border border-rose-500/30 transition-colors"
           >
-            Unban IP
+            {{ t('admin.unban_btn') }}
           </button>
         </div>
         {% endfor %}
