@@ -6,11 +6,15 @@ import zipfile
 import uuid
 import base64
 import subprocess
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+import logging
+
+logger = logging.getLogger("athenea.importer")
 
 try:
     from ..settings import settings
@@ -23,20 +27,29 @@ CYRILLIC_TO_LATIN = {
     'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
     'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
     'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'iu', 'я': 'ia',
+    'і': 'i', 'ї': 'yi', 'є': 'ye', 'ґ': 'g',
     'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
     'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'К': 'K', 'Л': 'L', 'М': 'M',
     'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
     'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
-    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Iu', 'Я': 'Ia'
+    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Iu', 'Я': 'Ia',
+    'І': 'I', 'Ї': 'Yi', 'Є': 'Ye', 'Ґ': 'G',
+    '«': '', '»': '', '“': '', '”': '', '’': "'", '`': "'", '—': '-', '–': '-',
+    '№': 'No'
 }
 
 
 def transliterate(text_str: str) -> str:
-    """Transliterate Cyrillic characters to Latin for Calibre-compatible paths."""
+    """Transliterate Cyrillic, Ukrainian and accented characters to safe ASCII for Calibre filesystem paths."""
     res = []
-    for ch in text_str:
+    for ch in str(text_str or ""):
         res.append(CYRILLIC_TO_LATIN.get(ch, ch))
-    return "".join(res)
+    text = "".join(res)
+    # Decompose accents and special unicode marks (é -> e, ñ -> n)
+    normalized = unicodedata.normalize('NFKD', text)
+    # Guarantee 100% pure ASCII for filesystem safety across any OS locale
+    safe_ascii = "".join(c for c in normalized if ord(c) < 128)
+    return safe_ascii
 
 
 def sanitize_filename(name: str, max_len: int = 96) -> str:
