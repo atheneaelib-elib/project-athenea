@@ -17,12 +17,13 @@
   <strong>Engineered for Massive Scale (500,000+ Books) &bull; In-Browser Reading &bull; Neural TTS Narration &bull; OPDS 1.2 Feed &bull; Send to Kindle</strong>
 </p>
 
-[Quick Start](#-quick-start-with-docker-compose) •
+[Proxmox VE LXC](#-proxmox-ve-community-installer) •
+[Linux One-Liner](#-universal-linux-automated-install) •
+[Docker Compose](#-quick-start-with-docker-compose) •
 [Features](#-features) •
 [Setup Wizard](#-first-run-setup-wizard) •
 [OPDS Support](#-opds-catalog-support) •
-[Environment Variables](#-configuration--environment-variables) •
-[Documentation](#-systemd--native-installation)
+[Manual Setup](#-manual-native-installation)
 
 </div>
 
@@ -69,7 +70,39 @@
 
 ---
 
-## 🚀 Quick Start with Docker Compose
+## 🚀 Easy Installation Options
+
+Choose the installation method that fits your environment:
+
+### 📦 Proxmox VE Community Installer (LXC)
+Run this command in the **Proxmox VE Node Shell** to automatically provision a dedicated Debian 12 LXC container:
+```bash
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/ct/athenea.sh)"
+```
+*Alternatively, you can also use `https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install/proxmox.sh`.*
+
+- ⚡ **Interactive Menu**: Choose Default (2 Cores, 2GB RAM, 16GB Disk) or Advanced settings.
+- 🔒 **Secure**: Sets up an unprivileged container with nesting and keyctl enabled.
+- 📦 **Automated**: Automatically provisions PostgreSQL, Python 3 virtual environment, storage directories (`/data/books`), and systemd daemon.
+
+---
+
+### 🐧 Universal Linux Automated Install
+Run this one-liner on any fresh **Debian 11/12**, **Ubuntu 20.04/22.04/24.04**, or compatible Linux host:
+```bash
+curl -fsSL https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/install.sh | sudo bash
+```
+What this script does:
+1. Installs PostgreSQL, Python 3, build tools, and media processing libraries.
+2. Creates system user `athenea` and sets up `/data/books` library storage.
+3. Generates secure credentials and initializes the database.
+4. Clones the repository to `/opt/athenea` and installs Python dependencies.
+5. Deploys and starts the `athenea.service` systemd unit.
+6. Opens port `8000` with the First-Run Setup Wizard ready at `http://<IP>:8000/setup`.
+
+---
+
+## 🐳 Quick Start with Docker Compose
 
 The easiest and recommended way to run Athenea is using Docker Compose:
 
@@ -161,7 +194,7 @@ All settings can be configured via environment variables or a `.env` file:
 
 ---
 
-## 🐧 Systemd & Native Installation
+## 🐧 Manual Native Installation
 
 For bare-metal Linux servers (Ubuntu/Debian):
 
