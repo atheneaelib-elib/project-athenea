@@ -400,6 +400,12 @@ def setup_page(request: Request):
             "current_lang": current_lang,
             "translations_json": i18n_service.get_translations_json_for_client(),
             "supported_languages": i18n_service.SUPPORTED_LANGUAGES,
+            "default_db_host": settings.DB_HOST or "localhost",
+            "default_db_port": settings.DB_PORT or 5432,
+            "default_db_name": settings.DB_NAME or "athenea",
+            "default_db_user": settings.DB_USER or "athenea",
+            "default_db_password": settings.DB_PASSWORD or "",
+            "default_library_root": settings.LIBRARY_ROOT or "/data/books",
         }
     )
 
