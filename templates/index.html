@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row gap-6 relative">
+
+  <!-- Mobile Drawer Backdrop Overlay -->
+  <div 
+    id="sidebar-backdrop" 
+    onclick="toggleSidebar(false)" 
+    class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 transition-opacity duration-300 md:hidden"
+  ></div>
+
+  <!-- Sidebar Filters (Slide-over Drawer on Mobile, Column on Desktop) -->
+  <aside 
+    id="sidebar" 
+    class="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-900 border-r border-slate-800 shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col p-4 overflow-y-auto space-y-5 md:static md:w-64 md:translate-x-0 md:bg-transparent md:border-0 md:shadow-none md:z-auto md:p-0 md:transform-none md:flex flex-shrink-0"
+  >
+    <!-- Mobile Drawer Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800 md:hidden flex-shrink-0">
+      <h2 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+        Filters &amp; Categories
+      </h2>
+      <button 
+        type="button" 
+        onclick="toggleSidebar(false)" 
+        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+        title="Close Drawer"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    
+    <!-- Favorites & Reading Shelves Section in Sidebar -->
+    <div class="bg-gradient-to-br from-slate-900 to-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-2">
+      <div class="flex items-center justify-between pb-1">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">My Collection</h3>
+        <span class="text-[10px] text-indigo-400 font-medium">Personal</span>
+      </div>
+
+      <!-- Favorites -->
+      <button 
+        type="button" 
+        id="sidebar-favorites-btn"
+        onclick="filterByFavorites()"
+        class="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-all group cursor-pointer {% if current_favorites_only %}bg-rose-600 text-white shadow-lg shadow-rose-600/30{% else %}bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-rose-500/50{% endif %}"
+      >
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 {% if current_favorites_only %}text-white fill-current{% else %}text-rose-400 fill-current group-hover:scale-110 transition-transform{% endif %}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+          <span>My Favorites</span>
+        </div>
+        <span id="sidebar-fav-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono {% if current_favorites_only %}bg-rose-700 text-white{% else %}bg-slate-900 text-rose-300 border border-slate-700/80{% endif %}">
+          {{ favorites_count | default(0) }}
+        </span>
+      </button>
+
+      <!-- Currently Reading -->
+      <button 
+        type="button" 
+        onclick="filterByShelf('reading', 'Currently Reading')"
+        class="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-all group cursor-pointer {% if current_shelf == 'reading' %}bg-amber-600 text-white shadow-lg shadow-amber-600/30{% else %}bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-amber-500/50{% endif %}"
+      >
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 {% if current_shelf == 'reading' %}text-white{% else %}text-amber-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+          <span>Currently Reading</span>
+        </div>
+        <span id="sidebar-reading-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono {% if current_shelf == 'reading' %}bg-amber-700 text-white{% else %}bg-slate-900 text-amber-300 border border-slate-700/80{% endif %}">
+          {{ shelf_counts.reading if shelf_counts else 0 }}
+        </span>
+      </button>
+
+      <!-- Want to Read -->
+      <button 
+        type="button" 
+        onclick="filterByShelf('plan_to_read', 'Want to Read')"
+        class="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-all group cursor-pointer {% if current_shelf == 'plan_to_read' %}bg-sky-600 text-white shadow-lg shadow-sky-600/30{% else %}bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-sky-500/50{% endif %}"
+      >
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 {% if current_shelf == 'plan_to_read' %}text-white{% else %}text-sky-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+          <span>Want to Read</span>
+        </div>
+        <span id="sidebar-plan-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono {% if current_shelf == 'plan_to_read' %}bg-sky-700 text-white{% else %}bg-slate-900 text-sky-300 border border-slate-700/80{% endif %}">
+          {{ shelf_counts.plan_to_read if shelf_counts else 0 }}
+        </span>
+      </button>
+
+      <!-- Finished -->
+      <button 
+        type="button" 
+        onclick="filterByShelf('finished', 'Finished Books')"
+        class="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-all group cursor-pointer {% if current_shelf == 'finished' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-emerald-500/50{% endif %}"
+      >
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 {% if current_shelf == 'finished' %}text-white{% else %}text-emerald-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>Finished</span>
+        </div>
+        <span id="sidebar-finished-count" class="px-2 py-0.5 rounded-full text-[10px] font-mono {% if current_shelf == 'finished' %}bg-emerald-700 text-white{% else %}bg-slate-900 text-emerald-300 border border-slate-700/80{% endif %}">
+          {{ shelf_counts.finished if shelf_counts else 0 }}
+        </span>
+      </button>
+
+      {% if current_user and current_user.is_power_user %}
+      <div class="pt-2 border-t border-slate-800/80">
+        <button 
+          type="button" 
+          hx-get="/upload/modal" 
+          hx-target="#upload-container" 
+          hx-swap="innerHTML"
+          class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span>Add Books</span>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Active Filter Card (when filter is set) -->
+    <div id="active-filter-card" class="{% if not active_filter_label %}hidden{% endif %} bg-indigo-950/40 border border-indigo-500/30 p-3.5 rounded-xl">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-indigo-300">Filtered by:</span>
+        <button type="button" onclick="clearFilter()" class="text-xs text-indigo-400 hover:text-white font-medium underline">Clear</button>
+      </div>
+      <p id="active-filter-text" class="text-xs text-white font-bold mt-1 truncate">{{ active_filter_label }}</p>
+    </div>
+
+    <!-- Formats Filter -->
+    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+        <span>File Formats</span>
+      </h3>
+      <div class="flex flex-wrap gap-1.5">
+        <button 
+          type="button" 
+          onclick="filterByFormat('')"
+          class="px-2.5 py-1 text-xs rounded-lg font-medium transition-colors bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+        >
+          All
+        </button>
+        {% for fmt in sidebar.formats %}
+        <button 
+          type="button" 
+          onclick="filterByFormat('{{ fmt.format }}')"
+          class="px-2.5 py-1 text-xs rounded-lg font-medium transition-colors
+            {% if fmt.format == 'EPUB' %}
+              bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-800/60
+            {% elif fmt.format == 'PDF' %}
+              bg-rose-950/60 hover:bg-rose-900/80 text-rose-400 border border-rose-800/60
+            {% elif fmt.format == 'MOBI' %}
+              bg-amber-950/60 hover:bg-amber-900/80 text-amber-400 border border-amber-800/60
+            {% else %}
+              bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700
+            {% endif %}"
+        >
+          {{ fmt.format }} <span class="opacity-70 text-[10px]">({{ fmt.count }})</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Languages Filter -->
+    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+        <span>Languages</span>
+      </h3>
+      <div class="space-y-1 max-h-56 overflow-y-auto pr-1">
+        <button 
+          type="button" 
+          onclick="filterByLanguage('', 'All Languages')"
+          class="w-full flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group text-left"
+        >
+          <span>All Languages</span>
+        </button>
+        {% for lang in sidebar.languages %}
+        <a 
+          href="javascript:void(0)"
+          onclick="filterByLanguage({{ lang.id }}, '{{ lang.name|escape }}')"
+          class="flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group"
+        >
+          <span class="truncate flex items-center gap-1.5">
+            <span class="px-1 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono">{{ lang.code }}</span>
+            <span>{{ lang.name }}</span>
+          </span>
+          <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300">{{ lang.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Top Genres / Tags -->
+    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+        Popular Genres
+      </h3>
+      <div class="space-y-1 max-h-64 overflow-y-auto pr-1">
+        {% for tag in sidebar.tags %}
+        <a 
+          href="javascript:void(0)"
+          onclick="filterByTag({{ tag.id }}, '{{ tag.name|escape }}')"
+          class="flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group"
+        >
+          <span class="truncate">{{ tag.name }}</span>
+          <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300">{{ tag.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Top Series -->
+    <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+        Popular Series
+      </h3>
+      <div class="space-y-1 max-h-64 overflow-y-auto pr-1">
+        {% for s in sidebar.series %}
+        <a 
+          href="javascript:void(0)"
+          onclick="filterBySeries({{ s.id }}, '{{ s.name|escape }}')"
+          class="flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group"
+        >
+          <span class="truncate">{{ s.name }}</span>
+          <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300">{{ s.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- OPDS e-Reader Catalog Card -->
+    <div class="bg-indigo-950/30 p-3.5 rounded-2xl border border-indigo-500/20 text-xs space-y-1.5">
+      <div class="flex items-center gap-1.5 text-indigo-300 font-semibold text-[11px] uppercase tracking-wider">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+        <span>OPDS Reader Feed</span>
+      </div>
+      <p class="text-[11px] text-slate-400 leading-snug">Connect Moon+, FBReader, KOReader or Apple Books via OPDS:</p>
+      <div class="bg-slate-950/60 p-1.5 rounded-lg border border-slate-800 font-mono text-[10px] text-indigo-300 break-all select-all">
+        /opds
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Main Content: Book Grid -->
+  <section class="flex-1 min-w-0">
+    <div id="book-grid">
+      {% include 'partials/book_grid.html' %}
+    </div>
+  </section>
+
+</div>
+
+<!-- Client-side navigation & filter state triggers -->
+<script>
+  function toggleSidebar(open) {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar) return;
+    const isClosed = sidebar.classList.contains('-translate-x-full');
+    const shouldOpen = open !== undefined ? open : isClosed;
+    if (shouldOpen) {
+      sidebar.classList.remove('-translate-x-full');
+      if (backdrop) backdrop.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden', 'md:overflow-auto');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+      if (backdrop) backdrop.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden', 'md:overflow-auto');
+    }
+  }
+  window.toggleSidebar = toggleSidebar;
+
+  function updateFavoritesButtonUI(isActive) {
+    const navBtn = document.getElementById('nav-favorites-btn');
+    const sideBtn = document.getElementById('sidebar-favorites-btn');
+    if (navBtn) {
+      if (isActive) {
+        navBtn.className = "inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-rose-600 text-white shadow-md shadow-rose-600/30";
+      } else {
+        navBtn.className = "inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500/40";
+      }
+    }
+    if (sideBtn) {
+      if (isActive) {
+        sideBtn.className = "w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold transition-all group cursor-pointer bg-rose-600 text-white shadow-lg shadow-rose-600/30";
+      } else {
+        sideBtn.className = "w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold transition-all group cursor-pointer bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-rose-500/50";
+      }
+    }
+  }
+
+  function triggerGridUpdate() {
+    const qVal = document.getElementById('search-input') ? document.getElementById('search-input').value : '';
+    const sortVal = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
+    const favVal = document.getElementById('input-favorites-only') ? document.getElementById('input-favorites-only').value : '';
+    const shelfVal = document.getElementById('input-shelf') ? document.getElementById('input-shelf').value : '';
+    const searchDescCheck = document.getElementById('search-desc-check');
+    const searchDescVal = searchDescCheck && searchDescCheck.checked ? '1' : '';
+    const authorVal = document.getElementById('input-author-id') ? document.getElementById('input-author-id').value : '';
+    const seriesVal = document.getElementById('input-series-id') ? document.getElementById('input-series-id').value : '';
+    const tagVal = document.getElementById('input-tag-id') ? document.getElementById('input-tag-id').value : '';
+    const formatVal = document.getElementById('input-format-name') ? document.getElementById('input-format-name').value : '';
+    const languageVal = document.getElementById('input-language-id') ? document.getElementById('input-language-id').value : '';
+    const viewVal = document.getElementById('input-view-mode') ? document.getElementById('input-view-mode').value : '';
+    const pageVal = document.getElementById('input-page') ? document.getElementById('input-page').value : '1';
+
+    const params = {
+      q: qVal,
+      sort_by: sortVal,
+      page: pageVal,
+    };
+    if (favVal) params.favorites = favVal;
+    if (shelfVal) params.shelf = shelfVal;
+    if (searchDescVal) params.search_desc = searchDescVal;
+    if (authorVal) params.author_id = authorVal;
+    if (seriesVal) params.series_id = seriesVal;
+    if (tagVal) params.tag_id = tagVal;
+    if (formatVal) params.format_name = formatVal;
+    if (languageVal) params.language_id = languageVal;
+    if (viewVal) params.view_mode = viewVal;
+
+    htmx.ajax('GET', '/books/grid', {
+      target: '#book-grid',
+      swap: 'innerHTML',
+      values: params
+    });
+
+    if (window.innerWidth < 768) {
+      toggleSidebar(false);
+    }
+  }
+
+  function setViewMode(mode) {
+    const input = document.getElementById('input-view-mode');
+    if (input) input.value = mode;
+    triggerGridUpdate();
+  }
+  window.setViewMode = setViewMode;
+
+  function setFilterUI(label) {
+    const card = document.getElementById('active-filter-card');
+    const text = document.getElementById('active-filter-text');
+    if (label) {
+      text.innerText = label;
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+    }
+  }
+
+  function filterByFavorites() {
+    const favInput = document.getElementById('input-favorites-only');
+    if (favInput && favInput.value === '1') {
+      favInput.value = '';
+      updateFavoritesButtonUI(false);
+      setFilterUI('');
+    } else {
+      if (favInput) favInput.value = '1';
+      if (document.getElementById('input-shelf')) document.getElementById('input-shelf').value = '';
+      document.getElementById('input-author-id').value = '';
+      document.getElementById('input-series-id').value = '';
+      document.getElementById('input-tag-id').value = '';
+      document.getElementById('input-language-id').value = '';
+      document.getElementById('input-page').value = '1';
+      updateFavoritesButtonUI(true);
+      setFilterUI('Favorites: My Saved Books');
+    }
+    triggerGridUpdate();
+  }
+  window.filterByFavorites = filterByFavorites;
+
+  function filterByShelf(shelfName, label) {
+    const shelfInput = document.getElementById('input-shelf');
+    if (shelfInput && shelfInput.value === shelfName) {
+      shelfInput.value = '';
+      setFilterUI('');
+    } else {
+      if (shelfInput) shelfInput.value = shelfName;
+      if (document.getElementById('input-favorites-only')) {
+        document.getElementById('input-favorites-only').value = '';
+        updateFavoritesButtonUI(false);
+      }
+      document.getElementById('input-author-id').value = '';
+      document.getElementById('input-series-id').value = '';
+      document.getElementById('input-tag-id').value = '';
+      document.getElementById('input-language-id').value = '';
+      document.getElementById('input-page').value = '1';
+      setFilterUI('Shelf: ' + label);
+    }
+    triggerGridUpdate();
+  }
+  window.filterByShelf = filterByShelf;
+
+  function filterByAuthor(id, name) {
+    document.getElementById('input-author-id').value = id;
+    document.getElementById('input-series-id').value = '';
+    document.getElementById('input-tag-id').value = '';
+    document.getElementById('input-language-id').value = '';
+    document.getElementById('input-page').value = '1';
+    setFilterUI('Author: ' + name);
+    triggerGridUpdate();
+  }
+
+  function filterBySeries(id, name) {
+    document.getElementById('input-series-id').value = id;
+    document.getElementById('input-author-id').value = '';
+    document.getElementById('input-tag-id').value = '';
+    document.getElementById('input-language-id').value = '';
+    document.getElementById('input-page').value = '1';
+    setFilterUI('Series: ' + name);
+    triggerGridUpdate();
+  }
+
+  function filterByTag(id, name) {
+    document.getElementById('input-tag-id').value = id;
+    document.getElementById('input-author-id').value = '';
+    document.getElementById('input-series-id').value = '';
+    document.getElementById('input-language-id').value = '';
+    document.getElementById('input-page').value = '1';
+    setFilterUI('Genre: ' + name);
+    triggerGridUpdate();
+  }
+
+  function filterByLanguage(id, name) {
+    document.getElementById('input-language-id').value = id;
+    document.getElementById('input-author-id').value = '';
+    document.getElementById('input-series-id').value = '';
+    document.getElementById('input-tag-id').value = '';
+    document.getElementById('input-page').value = '1';
+    if (id) {
+      setFilterUI('Language: ' + name);
+    } else {
+      clearFilter();
+      return;
+    }
+    triggerGridUpdate();
+  }
+
+  function filterByFormat(format) {
+    document.getElementById('input-format-name').value = format;
+    document.getElementById('input-page').value = '1';
+    if (format) {
+      setFilterUI('Format: ' + format);
+    } else {
+      clearFilter();
+      return;
+    }
+    triggerGridUpdate();
+  }
+
+  function clearFilter() {
+    if (document.getElementById('input-favorites-only')) {
+      document.getElementById('input-favorites-only').value = '';
+      updateFavoritesButtonUI(false);
+    }
+    if (document.getElementById('input-shelf')) {
+      document.getElementById('input-shelf').value = '';
+    }
+    document.getElementById('input-author-id').value = '';
+    document.getElementById('input-series-id').value = '';
+    document.getElementById('input-tag-id').value = '';
+    document.getElementById('input-format-name').value = '';
+    document.getElementById('input-language-id').value = '';
+    document.getElementById('input-page').value = '1';
+    setFilterUI('');
+    triggerGridUpdate();
+  }
+
+  function goToPage(page) {
+    document.getElementById('input-page').value = page;
+    triggerGridUpdate();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetSearchAndFilters() {
+    if (document.getElementById('search-input')) document.getElementById('search-input').value = '';
+    if (document.getElementById('mobile-search-input')) document.getElementById('mobile-search-input').value = '';
+    if (document.getElementById('input-view-mode')) document.getElementById('input-view-mode').value = '';
+    clearFilter();
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Athenea{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/athenea-icon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(e => console.warn('PWA SW:', e));
+      });
+    }
+  </script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Smooth transitions & custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .htmx-indicator {
+      opacity: 0;
+      transition: opacity 200ms ease-in;
+    }
+    .htmx-request .htmx-indicator {
+      opacity: 1;
+    }
+    .htmx-request.htmx-indicator {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  {% block header %}
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      
+      <!-- Primary Nav Row -->
+      <div class="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
+        
+        <!-- Brand / Logo -->
+        <a href="/" class="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform flex-shrink-0 border border-indigo-500/30">
+            <img src="/static/athenea-icon.svg" alt="Athenea Logo" class="w-full h-full object-cover" />
+          </div>
+          <div>
+            <h1 class="text-sm sm:text-base font-bold bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent leading-tight tracking-tight">Athenea</h1>
+            <p class="text-[10px] sm:text-xs text-slate-400 font-mono leading-none">{{ total_books_count | default(get_library_total_books(), true) }} books</p>
+          </div>
+        </a>
+
+        <!-- Desktop Instant Search Bar (Only visible md and up) -->
+        {% if current_user %}
+        <div class="hidden md:block flex-1 max-w-2xl relative">
+          <form id="search-form" 
+                class="relative flex items-center gap-2.5" 
+                action="javascript:void(0);"
+                onsubmit="onSearchSubmit(event)"
+          >
+            <div class="relative flex-1">
+              <input 
+                type="search" 
+                name="q" 
+                id="search-input"
+                value="{{ current_q | default('') }}"
+                placeholder="Search books by title, author, or series..."
+                autocomplete="off"
+                class="w-full bg-slate-800/80 text-sm text-slate-100 placeholder-slate-400 rounded-xl pl-11 pr-24 py-2 border border-slate-700/80 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all shadow-inner"
+                hx-get="/books/grid"
+                hx-trigger="input changed delay:300ms, search"
+                hx-target="#book-grid"
+                hx-include="#filter-inputs, #sort-select"
+                hx-indicator="#search-spinner"
+                oninput="syncSearchInputs(this.value);"
+              />
+              <!-- Search icon -->
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+              </div>
+              <!-- Right side: Spinner & Search button -->
+              <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1.5">
+                <div id="search-spinner" class="htmx-indicator">
+                  <svg class="animate-spin h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <button 
+                  type="submit" 
+                  class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-sm cursor-pointer"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+
+            <!-- Include descriptions checkbox -->
+            <label class="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-200 select-none flex-shrink-0 cursor-pointer" title="Include book annotations and descriptions in search">
+              <input 
+                type="checkbox" 
+                id="search-desc-check" 
+                name="search_desc" 
+                value="1"
+                class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                onchange="triggerGridUpdate()"
+              />
+              <span>In blurbs</span>
+            </label>
+          </form>
+        </div>
+        {% else %}
+        <div class="flex-1"></div>
+        {% endif %}
+
+        <!-- Navigation Controls & User Actions -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          
+          <!-- Sort dropdown (Desktop) -->
+          <div class="relative hidden sm:block">
+            <select 
+              id="sort-select"
+              name="sort_by" 
+              class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 pr-7 focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer"
+              hx-get="/books/grid"
+              hx-target="#book-grid"
+              hx-include="#filter-inputs, #search-input"
+              hx-indicator="#search-spinner"
+            >
+              <option value="recent">Recently Added</option>
+              <option value="title_asc">Title (A-Z)</option>
+              <option value="title_desc">Title (Z-A)</option>
+              <option value="author_asc">Author (A-Z)</option>
+              <option value="pubdate_desc">Year (Newest)</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-400">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
+
+          <!-- User / Auth Actions -->
+          {% if current_user %}
+          <div class="flex items-center gap-1 sm:gap-2">
+            
+            <!-- Surprise Me (Random Book) Button -->
+            <button 
+              type="button" 
+              hx-get="/books/random/modal"
+              hx-target="#modal-container"
+              hx-swap="innerHTML"
+              class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 hover:text-white border border-purple-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Discover a random book from the library"
+            >
+              <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+              <span class="hidden md:inline">Surprise Me</span>
+            </button>
+
+            <!-- Favorites Button -->
+            <button 
+              type="button" 
+              id="nav-favorites-btn"
+              onclick="toggleFavoritesFilter()"
+              class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer {% if current_favorites_only %}bg-rose-600 text-white shadow-md shadow-rose-600/30{% else %}bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500/40{% endif %}"
+              title="My Favorites"
+            >
+              <svg class="w-3.5 h-3.5 {% if current_favorites_only %}fill-current text-white{% else %}fill-current text-rose-400{% endif %}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              <span class="hidden sm:inline">Favorites</span>
+              <span id="fav-count-badge" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono {% if current_favorites_only %}bg-rose-700 text-white{% else %}bg-slate-700 text-rose-300{% endif %}">
+                {{ favorites_count | default(0) }}
+              </span>
+            </button>
+
+            <!-- Add Books Button (Power Users & Admins) -->
+            {% if current_user.is_power_user %}
+            <button 
+              type="button" 
+              hx-get="/upload/modal" 
+              hx-target="#upload-container" 
+              hx-swap="innerHTML"
+              class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+              title="Add Books (Single file or Folder)"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              <span class="hidden sm:inline">Add</span>
+            </button>
+            {% endif %}
+
+            {% if current_user.is_admin %}
+            <a 
+              href="/admin/settings" 
+              class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-500/30 transition-colors"
+              title="Admin Control Center & Settings"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              Settings
+            </a>
+            {% endif %}
+
+            <!-- My Reading Activity Stats Button -->
+            <button 
+              type="button" 
+              hx-get="/profile/stats-modal" 
+              hx-target="#profile-modal-container" 
+              hx-swap="innerHTML"
+              class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+              title="My Reading Activity &amp; Stats"
+            >
+              <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              <span class="hidden md:inline">My Activity</span>
+            </button>
+
+            <!-- User Pill & Self Change Password Button -->
+            <button 
+              type="button" 
+              hx-get="/profile/password-modal" 
+              hx-target="#profile-modal-container" 
+              hx-swap="innerHTML"
+              class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 py-1.5 px-2 sm:px-2.5 rounded-lg border border-slate-700 hover:border-slate-600 text-xs text-white transition-all cursor-pointer group" 
+              title="Click to Change Password ({{ current_user.username }})"
+            >
+              <span class="w-2 h-2 rounded-full {% if current_user.role == 'admin' %}bg-purple-400{% elif current_user.role == 'power_user' %}bg-emerald-400{% else %}bg-slate-400{% endif %}"></span>
+              <span class="font-medium max-w-[65px] xs:max-w-[90px] sm:max-w-[120px] truncate">{{ current_user.username }}</span>
+              <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+            </button>
+
+            <!-- Logout -->
+            <a 
+              href="/logout" 
+              class="p-1.5 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors flex-shrink-0"
+              title="Sign Out"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </a>
+          </div>
+          {% else %}
+          <a 
+            href="/login" 
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+            Sign In
+          </a>
+          {% endif %}
+
+          <!-- Mobile Filters Drawer Toggle Button -->
+          <button 
+            type="button" 
+            onclick="toggleSidebar(true)"
+            class="md:hidden inline-flex items-center gap-1 p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 flex-shrink-0 cursor-pointer ml-0.5"
+            title="Open Filters"
+          >
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+            </svg>
+            <span class="text-xs font-medium hidden xs:inline">Filter</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Mobile Search Sub-Bar (Full width below on phones) -->
+      {% if current_user %}
+      <div class="md:hidden pb-2.5 pt-0.5 flex items-center gap-2">
+        <form class="flex-1 relative" action="javascript:void(0);" onsubmit="onSearchSubmit(event)">
+          <div class="relative w-full">
+            <input 
+              type="search" 
+              id="mobile-search-input"
+              value="{{ current_q | default('') }}"
+              placeholder="Search books by title, author, or series..."
+              autocomplete="off"
+              class="w-full bg-slate-800/90 text-xs text-slate-100 placeholder-slate-400 rounded-xl pl-9 pr-16 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-all"
+              hx-get="/books/grid"
+              hx-trigger="input changed delay:300ms, search"
+              hx-target="#book-grid"
+              hx-include="#filter-inputs, #sort-select"
+              hx-indicator="#search-spinner"
+              oninput="syncSearchInputs(this.value);"
+            />
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            <button 
+              type="submit" 
+              class="absolute inset-y-1 right-1 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-medium transition-colors"
+            >
+              Search
+            </button>
+          </div>
+        </form>
+
+        <!-- Compact Sort on Mobile -->
+        <select 
+          onchange="document.getElementById('sort-select').value=this.value; htmx.trigger('#sort-select', 'change');"
+          class="sm:hidden bg-slate-800 text-[11px] text-slate-300 border border-slate-700 rounded-xl px-2 py-2 focus:outline-none cursor-pointer"
+        >
+          <option value="recent">Recent</option>
+          <option value="title_asc">A-Z</option>
+          <option value="pubdate_desc">Year</option>
+        </select>
+      </div>
+      {% endif %}
+
+    </div>
+  </header>
+  {% endblock %}
+
+  <!-- Hidden Filter State Inputs for HTMX Form Inclusion -->
+  <div id="filter-inputs">
+    <input type="hidden" name="favorites" id="input-favorites-only" value="{{ '1' if current_favorites_only else '' }}">
+    <input type="hidden" name="shelf" id="input-shelf" value="{{ current_shelf | default('') }}">
+    <input type="hidden" name="search_desc" id="input-search-desc" value="{{ '1' if search_desc else '' }}">
+    <input type="hidden" name="author_id" id="input-author-id" value="{{ current_author_id | default('') }}">
+    <input type="hidden" name="series_id" id="input-series-id" value="{{ current_series_id | default('') }}">
+    <input type="hidden" name="tag_id" id="input-tag-id" value="{{ current_tag_id | default('') }}">
+    <input type="hidden" name="format_name" id="input-format-name" value="{{ current_format_name | default('') }}">
+    <input type="hidden" name="language_id" id="input-language-id" value="{{ current_language_id | default('') }}">
+    <input type="hidden" name="view_mode" id="input-view-mode" value="{{ current_view_mode | default('') }}">
+    <input type="hidden" name="page" id="input-page" value="{{ current_page | default('1') }}">
+  </div>
+
+  <!-- Main Body Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Modal Container for Book Details -->
+  <div id="modal-container"></div>
+
+  <!-- Modal Container for Uploading Books -->
+  <div id="upload-container"></div>
+
+  <!-- Modal Container for Self Change Password -->
+  <div id="profile-modal-container"></div>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>Athenea &bull; &copy; 2026 eBook Library</p>
+    </div>
+  </footer>
+
+  <script>
+    function closeModal() {
+      const modal = document.getElementById('book-modal');
+      if (modal) modal.remove();
+    }
+
+    function closeUploadModal() {
+      const modal = document.getElementById('upload-modal');
+      if (modal) modal.remove();
+    }
+
+    function closePasswordModal() {
+      const modal = document.getElementById('password-modal');
+      if (modal) modal.remove();
+      const container = document.getElementById('profile-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    function closeProfileModal() {
+      const statsModal = document.getElementById('reading-stats-modal');
+      if (statsModal) statsModal.remove();
+      const pwdModal = document.getElementById('password-modal');
+      if (pwdModal) pwdModal.remove();
+      const container = document.getElementById('profile-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    // Close modal on Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeUploadModal();
+        closePasswordModal();
+        closeProfileModal();
+      }
+    });
+
+    function syncSearchInputs(val) {
+      const d = document.getElementById('search-input');
+      const m = document.getElementById('mobile-search-input');
+      if (d && d.value !== val) d.value = val;
+      if (m && m.value !== val) m.value = val;
+      const pageInput = document.getElementById('input-page');
+      if (pageInput) pageInput.value = '1';
+    }
+
+    function onSearchSubmit(e) {
+      if (e) e.preventDefault();
+      const pageInput = document.getElementById('input-page');
+      if (pageInput) pageInput.value = '1';
+      if (window.triggerGridUpdate) {
+        window.triggerGridUpdate();
+      } else {
+        htmx.trigger('#search-input', 'search');
+      }
+    }
+
+    function toggleFavoritesFilter() {
+      if (typeof window.filterByFavorites === 'function') {
+        window.filterByFavorites();
+      } else {
+        window.location.href = '/?favorites=1';
+      }
+    }
+  </script>
+</body>
+</html>

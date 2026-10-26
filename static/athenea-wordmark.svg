@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 128" width="100%" height="100%">
+  <defs>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#c7d2fe" />
+    </linearGradient>
+    <linearGradient id="goldTextGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+  </defs>
+
+  <!-- Nested Athenea Owl Icon scaled into 96x96 box on the left -->
+  <g transform="translate(16, 16) scale(0.1875)">
+    <!-- Athena's Crown / Olive Laurel Arch -->
+    <path d="M 200 130 C 220 115 240 110 256 110 C 272 110 292 115 312 130" fill="none" stroke="#eab308" stroke-width="8" stroke-linecap="round" />
+    <polygon points="256,92 260,104 272,106 263,114 266,126 256,119 246,126 249,114 240,106 252,104" fill="#fde047" />
+    
+    <!-- Forehead crest -->
+    <path d="M 210 148 Q 256 175 302 148 L 292 185 Q 256 195 220 185 Z" fill="#6366f1" />
+    <path d="M 180 180 C 210 160 250 175 256 205 C 262 175 302 160 332 180 C 342 205 330 240 300 255 C 275 268 260 255 256 250 C 252 255 237 268 212 255 C 182 240 170 205 180 180 Z" fill="#1e1b4b" stroke="#818cf8" stroke-width="6" />
+
+    <!-- Eyes -->
+    <circle cx="222" cy="216" r="30" fill="#090d16" stroke="#eab308" stroke-width="5" />
+    <circle cx="222" cy="216" r="18" fill="#fde047" />
+    <circle cx="222" cy="216" r="10" fill="#0f172a" />
+    <circle cx="226" cy="212" r="4" fill="#ffffff" />
+
+    <circle cx="290" cy="216" r="30" fill="#090d16" stroke="#eab308" stroke-width="5" />
+    <circle cx="290" cy="216" r="18" fill="#fde047" />
+    <circle cx="290" cy="216" r="10" fill="#0f172a" />
+    <circle cx="294" cy="212" r="4" fill="#ffffff" />
+
+    <polygon points="256,224 264,248 256,262 248,248" fill="#fde047" />
+
+    <!-- Wings / Open Book -->
+    <path d="M 252 292 C 205 292 140 310 98 355 C 93 361 100 372 108 370 C 148 358 206 342 252 332 Z" fill="#c7d2fe" />
+    <path d="M 252 315 C 200 315 136 335 102 385 C 98 392 105 402 114 400 C 158 388 214 372 252 360 Z" fill="#ffffff" />
+    <path d="M 252 342 C 210 345 155 368 124 415 C 120 422 128 430 136 427 C 172 414 218 398 252 388 Z" fill="#eab308" />
+
+    <path d="M 260 292 C 307 292 372 310 414 355 C 419 361 412 372 404 370 C 364 358 306 342 260 332 Z" fill="#c7d2fe" />
+    <path d="M 260 315 C 312 315 376 335 410 385 C 414 392 407 402 398 400 C 354 388 298 372 260 360 Z" fill="#ffffff" />
+    <path d="M 260 342 C 302 345 357 368 388 415 C 392 422 384 430 376 427 C 340 414 294 398 260 388 Z" fill="#eab308" />
+
+    <path d="M 253 268 L 259 268 L 258 410 L 254 410 Z" fill="#fde047" />
+  </g>
+
+  <!-- Typography -->
+  <text x="136" y="66" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="44" letter-spacing="3" fill="url(#textGrad)">
+    ATHENEA
+  </text>
+  
+  <text x="138" y="96" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="13" letter-spacing="4" fill="#a5b4fc">
+    SANCTUARY OF KNOWLEDGE &bull; 500K+ BOOKS
+  </text>
+</svg>

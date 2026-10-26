@@ -1,0 +1,593 @@
+<div id="upload-modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+  
+  <!-- Backdrop Click Area -->
+  <div class="fixed inset-0" onclick="closeUploadModal()"></div>
+
+  <!-- Modal Dialog Card -->
+  <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden z-10 flex flex-col max-h-[90vh]">
+    
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50 flex-shrink-0">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-white">Add Books to Library</h2>
+          <p class="text-[11px] text-slate-400">Upload single files, multiple books, or an entire folder (supports 2,000+ files)</p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        id="modal-close-x-btn"
+        onclick="closeUploadModal()" 
+        class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+        title="Close (Esc)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- Content Area -->
+    <div id="upload-modal-content" class="p-6 overflow-y-auto space-y-5 flex-1">
+      
+      <!-- Auto Conversion Notice Banner -->
+      <div class="p-3 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-indigo-950/40 rounded-xl border border-emerald-500/30 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </div>
+        <div class="text-xs">
+          <p class="font-semibold text-emerald-300">Automatic FB2 &rarr; EPUB Conversion</p>
+          <p class="text-slate-400 text-[11px]">Books in <span class="font-mono text-emerald-400">.fb2</span> or <span class="font-mono text-emerald-400">.fb2.zip</span> format are automatically converted to EPUB with extracted covers for instant online reading.</p>
+        </div>
+      </div>
+
+      <!-- Mode Selector Tabs -->
+      <div id="upload-tabs-bar" class="flex items-center gap-2 border-b border-slate-800 pb-3">
+        <button 
+          type="button" 
+          onclick="setUploadMode('folder')" 
+          id="tab-btn-folder" 
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm transition-colors cursor-pointer"
+        >
+          📁 Select Folder
+        </button>
+        <button 
+          type="button" 
+          onclick="setUploadMode('files')" 
+          id="tab-btn-files" 
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+        >
+          📄 Select Files
+        </button>
+        <button 
+          type="button" 
+          onclick="setUploadMode('server')" 
+          id="tab-btn-server" 
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+        >
+          🖥️ Server Path
+        </button>
+      </div>
+
+      <!-- Main Controls Area -->
+      <div id="upload-controls-container" class="space-y-4">
+
+        <!-- Mode 1: Folder Selection (Default) -->
+        <div id="mode-folder-panel" class="space-y-4">
+          <div 
+            id="drop-zone-folder"
+            class="relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-900/60 group overflow-hidden cursor-pointer"
+          >
+            <!-- Native invisible file input covering entire dashed box for 100% click & drop reliability -->
+            <input 
+              type="file" 
+              id="file-input-folder" 
+              webkitdirectory 
+              directory 
+              multiple 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+              onclick="this.value=null"
+              onchange="handleRawFilesList(this.files, 'folder')"
+            />
+            
+            <div id="drop-zone-folder-content" class="pointer-events-none relative z-10">
+              <div id="drop-zone-folder-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-800 group-hover:bg-indigo-600/20 text-slate-400 group-hover:text-indigo-400 flex items-center justify-center transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+              </div>
+              <p id="drop-zone-folder-title" class="text-sm font-semibold text-slate-200">Click to choose a folder from your computer</p>
+              <p id="drop-zone-folder-sub" class="text-xs text-slate-500 mt-1">Or drag &amp; drop a folder here. Handles thousands of books in nested subfolders</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 2: Files Selection -->
+        <div id="mode-files-panel" class="hidden space-y-4">
+          <div 
+            id="drop-zone-files"
+            class="relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-900/60 group overflow-hidden cursor-pointer"
+          >
+            <input 
+              type="file" 
+              id="file-input-files" 
+              multiple 
+              accept=".epub,.fb2,.fbz,.pdf,.mobi,.azw3,.azw,.zip,.djvu,.djv,.txt" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+              onclick="this.value=null"
+              onchange="handleRawFilesList(this.files, 'files')"
+            />
+            <div id="drop-zone-files-content" class="pointer-events-none relative z-10">
+              <div id="drop-zone-files-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-800 group-hover:bg-indigo-600/20 text-slate-400 group-hover:text-indigo-400 flex items-center justify-center transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+              </div>
+              <p id="drop-zone-files-title" class="text-sm font-semibold text-slate-200">Click to choose individual or multiple ebook files</p>
+              <p id="drop-zone-files-sub" class="text-xs text-slate-500 mt-1">Supports EPUB, FB2, FB2.ZIP, PDF, MOBI, AZW3, ZIP</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 3: Server Path Scanning -->
+        <div id="mode-server-panel" class="hidden space-y-3">
+          <label class="block text-xs font-semibold text-slate-300">Server Directory Path</label>
+          <input 
+            type="text" 
+            id="server-path-input"
+            placeholder="/data/books/incoming" 
+            class="w-full bg-slate-800 text-sm text-white placeholder-slate-500 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:outline-none"
+          />
+          <p class="text-[11px] text-slate-400">Scan an existing directory directly on the host server filesystem (e.g. from an internal drive or mounted storage).</p>
+        </div>
+
+        <!-- Selected Files List Preview -->
+        <div id="selected-files-preview" class="hidden mt-4 space-y-2">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+            <span id="selected-files-count" class="text-indigo-300">0 ebook files ready to import</span>
+            <button type="button" onclick="clearSelectedFiles()" class="text-rose-400 hover:underline cursor-pointer">Clear</button>
+          </div>
+          <div id="selected-files-list" class="max-h-36 overflow-y-auto space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-slate-300">
+          </div>
+        </div>
+
+        <!-- Error Message Notice (Hidden by default) -->
+        <div id="upload-error-banner" class="hidden p-3 bg-rose-950/50 border border-rose-500/40 rounded-xl text-xs text-rose-300">
+          <p id="upload-error-text"></p>
+        </div>
+
+      </div>
+
+      <!-- Active Batch Progress Bar (Hidden by default, shown during upload) -->
+      <div id="batch-progress-container" class="hidden space-y-3.5 py-4 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 shadow-xl">
+        
+        <!-- Header row above bar -->
+        <div class="flex items-center justify-between text-xs font-semibold">
+          <span class="text-white flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="batch-main-label" class="font-bold text-slate-200">Importing books into Library...</span>
+          </span>
+          <span id="batch-percent-text" class="font-mono text-indigo-400 font-bold text-sm">0%</span>
+        </div>
+
+        <!-- Progress Bar with Counter DIRECTLY INSIDE IT -->
+        <div class="relative w-full bg-slate-800/90 h-7 rounded-xl overflow-hidden border border-slate-700/80 shadow-inner">
+          <!-- Animated gradient bar fill -->
+          <div 
+            id="batch-progress-bar" 
+            class="bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-500 h-full w-0 transition-all duration-300 relative shadow-md shadow-indigo-600/30"
+          ></div>
+          <!-- Centered Counter Label directly in the progress bar -->
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span id="batch-bar-counter-text" class="text-xs font-bold font-mono text-white tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              0 / 0 books added (0%)
+            </span>
+          </div>
+        </div>
+
+        <!-- Detail breakdown pills below bar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono pt-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="batch-stats-imported" class="px-2.5 py-0.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-semibold">
+              📚 0 books added
+            </span>
+            <span id="batch-stats-failed" class="px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400">
+              ⚠️ 0 skipped
+            </span>
+          </div>
+          <span id="batch-current-batch" class="text-slate-400 font-sans text-xs">Batch 0 of 0</span>
+        </div>
+
+        <!-- Currently processing file name -->
+        <div class="pt-1 border-t border-slate-800/80">
+          <p id="batch-current-file" class="text-xs text-slate-400 italic truncate font-sans">
+            Ready to import...
+          </p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div id="upload-actions-bar" class="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+        <button 
+          type="button" 
+          id="upload-cancel-btn"
+          onclick="closeUploadModal()" 
+          class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          id="upload-submit-btn"
+          onclick="startChunkedImport()"
+          class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          <span>Start Import</span>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let currentUploadMode = 'folder';
+  let collectedEbookFiles = [];
+  let isUploading = false;
+  let uploadCancelled = false;
+
+  const SUPPORTED_EXTENSIONS = [
+    '.epub', '.fb2', '.fbz', '.pdf', '.mobi', '.azw3', '.azw', '.zip', '.djvu', '.djv', '.txt', '.cbr', '.cbz'
+  ];
+
+  function isEbookFile(filename) {
+    if (!filename) return false;
+    const lower = filename.trim().toLowerCase();
+    return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext));
+  }
+
+  function setUploadMode(mode) {
+    if (isUploading) return;
+    currentUploadMode = mode;
+    ['folder', 'files', 'server'].forEach(m => {
+      const panel = document.getElementById('mode-' + m + '-panel');
+      const btn = document.getElementById('tab-btn-' + m);
+      if (panel) panel.classList.toggle('hidden', m !== mode);
+      if (btn) {
+        if (m === mode) {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm transition-colors cursor-pointer";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer";
+        }
+      }
+    });
+    hideError();
+  }
+
+  function showError(msg) {
+    const banner = document.getElementById('upload-error-banner');
+    const text = document.getElementById('upload-error-text');
+    if (banner && text) {
+      text.textContent = msg;
+      banner.classList.remove('hidden');
+    }
+  }
+
+  function hideError() {
+    const banner = document.getElementById('upload-error-banner');
+    if (banner) banner.classList.add('hidden');
+  }
+
+  function handleRawFilesList(fileList, mode) {
+    if (!fileList || fileList.length === 0) return;
+    hideError();
+    const rawArray = Array.from(fileList);
+    collectedEbookFiles = rawArray.filter(f => isEbookFile(f.name));
+
+    renderSelectedFilesPreview(rawArray, collectedEbookFiles.length, mode);
+  }
+
+  function renderSelectedFilesPreview(rawArray, validEbooksCount, mode) {
+    const totalFound = rawArray.length;
+    const preview = document.getElementById('selected-files-preview');
+    const countSpan = document.getElementById('selected-files-count');
+    const list = document.getElementById('selected-files-list');
+    
+    // Update Drop Box visual state
+    const boxId = (mode === 'files') ? 'drop-zone-files' : 'drop-zone-folder';
+    const dropBox = document.getElementById(boxId);
+    const titleEl = document.getElementById(boxId + '-title');
+    const subEl = document.getElementById(boxId + '-sub');
+    const iconEl = document.getElementById(boxId + '-icon');
+
+    if (validEbooksCount === 0) {
+      const sampleNames = rawArray.slice(0, 3).map(f => f.name).join(', ');
+      showError(`Found ${totalFound.toLocaleString()} files, but none ended with a supported ebook extension (.epub, .fb2, .pdf, .mobi, .azw3, .zip). First files detected: ${sampleNames}`);
+      if (preview) preview.classList.add('hidden');
+      if (dropBox) {
+        dropBox.className = "relative border-2 border-amber-500 bg-amber-950/20 rounded-2xl p-8 text-center transition-all group overflow-hidden cursor-pointer";
+      }
+      return;
+    }
+
+    if (dropBox) {
+      dropBox.className = "relative border-2 border-emerald-500 bg-emerald-950/20 rounded-2xl p-8 text-center transition-all group overflow-hidden cursor-pointer";
+    }
+    if (iconEl) {
+      iconEl.className = "w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center";
+      iconEl.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+    }
+    if (titleEl) {
+      titleEl.textContent = `✅ ${validEbooksCount.toLocaleString()} ebook book(s) ready to import`;
+      titleEl.className = "text-sm font-bold text-emerald-300";
+    }
+    if (subEl) {
+      subEl.textContent = `Click "Start Import" below to proceed. (${totalFound.toLocaleString()} total files scanned)`;
+      subEl.className = "text-xs text-slate-400 mt-1";
+    }
+
+    if (countSpan) {
+      countSpan.textContent = `${validEbooksCount.toLocaleString()} ebook file(s) ready to import (from ${totalFound.toLocaleString()} total files):`;
+    }
+    if (list) {
+      list.innerHTML = '';
+      for (let i = 0; i < Math.min(collectedEbookFiles.length, 50); i++) {
+        const f = collectedEbookFiles[i];
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between py-0.5 truncate';
+        item.innerHTML = `<span class="truncate">${f.name}</span><span class="text-slate-500 text-[10px] ml-2 flex-shrink-0">${(f.size / (1024*1024)).toFixed(2)} MB</span>`;
+        list.appendChild(item);
+      }
+      if (collectedEbookFiles.length > 50) {
+        const more = document.createElement('div');
+        more.className = 'text-[11px] text-indigo-400 font-semibold pt-1';
+        more.textContent = `... and ${(collectedEbookFiles.length - 50).toLocaleString()} more ebook file(s)`;
+        list.appendChild(more);
+      }
+    }
+    if (preview) preview.classList.remove('hidden');
+  }
+
+  function clearSelectedFiles() {
+    if (isUploading) return;
+    collectedEbookFiles = [];
+    const f1 = document.getElementById('file-input-files');
+    const f2 = document.getElementById('file-input-folder');
+    if (f1) f1.value = '';
+    if (f2) f2.value = '';
+    const preview = document.getElementById('selected-files-preview');
+    if (preview) preview.classList.add('hidden');
+    hideError();
+
+    // Reset Drop Box UI
+    ['drop-zone-folder', 'drop-zone-files'].forEach(boxId => {
+      const dropBox = document.getElementById(boxId);
+      const titleEl = document.getElementById(boxId + '-title');
+      const subEl = document.getElementById(boxId + '-sub');
+      const iconEl = document.getElementById(boxId + '-icon');
+      if (dropBox) dropBox.className = "relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-900/60 group overflow-hidden cursor-pointer";
+      if (titleEl) {
+        titleEl.textContent = (boxId === 'drop-zone-files') ? "Click to choose individual or multiple ebook files" : "Click to choose a folder from your computer";
+        titleEl.className = "text-sm font-semibold text-slate-200";
+      }
+      if (subEl) {
+        subEl.textContent = (boxId === 'drop-zone-files') ? "Supports EPUB, FB2, FB2.ZIP, PDF, MOBI, AZW3, ZIP" : "Or drag & drop a folder here. Handles thousands of books in nested subfolders";
+        subEl.className = "text-xs text-slate-500 mt-1";
+      }
+    });
+  }
+
+  // Chunked Upload Engine
+  async function startChunkedImport() {
+    hideError();
+
+    // Mode 3: Server Path
+    if (currentUploadMode === 'server') {
+      const serverInput = document.getElementById('server-path-input');
+      const pathVal = serverInput ? serverInput.value.trim() : '';
+      if (!pathVal) {
+        showError('Please enter a server directory path to scan (e.g. /data/books/... or an existing folder on the server).');
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('server_path', pathVal);
+      
+      setUploadingUI(true, 'Scanning server directory and importing books...');
+      try {
+        const resp = await fetch('/upload/process', { method: 'POST', body: formData });
+        const html = await resp.text();
+        document.getElementById('upload-modal-content').innerHTML = html;
+        if (typeof triggerGridUpdate === 'function') triggerGridUpdate();
+      } catch (err) {
+        setUploadingUI(false);
+        showError('Server import request failed: ' + err.message);
+      }
+      return;
+    }
+
+    // Check if files exist in the input elements if array was not populated yet
+    if (!collectedEbookFiles || collectedEbookFiles.length === 0) {
+      const folderInput = document.getElementById('file-input-folder');
+      const filesInput = document.getElementById('file-input-files');
+      if (currentUploadMode === 'folder' && folderInput && folderInput.files && folderInput.files.length > 0) {
+        handleRawFilesList(folderInput.files, 'folder');
+      } else if (currentUploadMode === 'files' && filesInput && filesInput.files && filesInput.files.length > 0) {
+        handleRawFilesList(filesInput.files, 'files');
+      } else if (folderInput && folderInput.files && folderInput.files.length > 0) {
+        handleRawFilesList(folderInput.files, 'folder');
+      } else if (filesInput && filesInput.files && filesInput.files.length > 0) {
+        handleRawFilesList(filesInput.files, 'files');
+      }
+    }
+
+    // Mode 1 & 2: Browser Upload
+    if (!collectedEbookFiles || collectedEbookFiles.length === 0) {
+      showError('Please click the folder box above to select your folder of books first.');
+      return;
+    }
+
+    const totalFiles = collectedEbookFiles.length;
+    const CHUNK_SIZE = 25; // 25 books per batch for rock-solid reliability
+    const totalBatches = Math.ceil(totalFiles / CHUNK_SIZE);
+
+    let allImported = [];
+    let allFailed = [];
+    let processedFilesCount = 0;
+
+    setUploadingUI(true, `Starting import of ${totalFiles.toLocaleString()} books...`);
+
+    updateProgressDisplay({
+      percent: 0,
+      current: 0,
+      total: totalFiles,
+      batchNum: 1,
+      totalBatches: totalBatches,
+      importedCount: 0,
+      failedCount: 0,
+      currentFile: 'Preparing first batch...'
+    });
+
+    for (let b = 0; b < totalBatches; b++) {
+      if (uploadCancelled) break;
+
+      const startIdx = b * CHUNK_SIZE;
+      const endIdx = Math.min(startIdx + CHUNK_SIZE, totalFiles);
+      const batchFiles = collectedEbookFiles.slice(startIdx, endIdx);
+
+      const batchFormData = new FormData();
+      for (const file of batchFiles) {
+        batchFormData.append('files', file);
+      }
+
+      try {
+        const resp = await fetch('/api/books/upload', {
+          method: 'POST',
+          body: batchFormData
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server returned HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        if (data.imported) allImported.push(...data.imported);
+        if (data.failed) allFailed.push(...data.failed);
+      } catch (err) {
+        for (const file of batchFiles) {
+          allFailed.push({ file: file.name, error: err.message });
+        }
+      }
+
+      processedFilesCount = endIdx;
+      const batchPct = Math.round((processedFilesCount / totalFiles) * 100);
+      updateProgressDisplay({
+        percent: batchPct,
+        current: processedFilesCount,
+        total: totalFiles,
+        batchNum: b + 1,
+        totalBatches: totalBatches,
+        importedCount: allImported.length,
+        failedCount: allFailed.length,
+        currentFile: batchFiles[batchFiles.length - 1].name
+      });
+    }
+
+    // Final 100% progress
+    updateProgressDisplay({
+      percent: 100,
+      current: totalFiles,
+      total: totalFiles,
+      batchNum: totalBatches,
+      totalBatches: totalBatches,
+      importedCount: allImported.length,
+      failedCount: allFailed.length,
+      currentFile: 'Finalizing library records...'
+    });
+
+    // Render final summary through /upload/summary
+    try {
+      const summaryResp = await fetch('/upload/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imported: allImported, failed: allFailed })
+      });
+      const summaryHtml = await summaryResp.text();
+      document.getElementById('upload-modal-content').innerHTML = summaryHtml;
+      if (typeof triggerGridUpdate === 'function') triggerGridUpdate();
+    } catch (err) {
+      showError('Failed to display summary: ' + err.message);
+      setUploadingUI(false);
+    }
+  }
+
+  function setUploadingUI(active, label) {
+    isUploading = active;
+    const controls = document.getElementById('upload-controls-container');
+    const tabs = document.getElementById('upload-tabs-bar');
+    const progress = document.getElementById('batch-progress-container');
+    const submitBtn = document.getElementById('upload-submit-btn');
+    const cancelBtn = document.getElementById('upload-cancel-btn');
+    const closeX = document.getElementById('modal-close-x-btn');
+
+    if (active) {
+      if (controls) controls.classList.add('hidden');
+      if (tabs) tabs.classList.add('hidden');
+      if (progress) progress.classList.remove('hidden');
+      if (submitBtn) submitBtn.classList.add('hidden');
+      if (cancelBtn) {
+        cancelBtn.textContent = 'Cancel Import';
+        cancelBtn.onclick = () => { uploadCancelled = true; };
+      }
+      if (closeX) closeX.classList.add('hidden');
+      if (label) {
+        const mainLabel = document.getElementById('batch-main-label');
+        if (mainLabel) mainLabel.textContent = label;
+      }
+    } else {
+      if (controls) controls.classList.remove('hidden');
+      if (tabs) tabs.classList.remove('hidden');
+      if (progress) progress.classList.add('hidden');
+      if (submitBtn) submitBtn.classList.remove('hidden');
+      if (cancelBtn) {
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = closeUploadModal;
+      }
+      if (closeX) closeX.classList.remove('hidden');
+    }
+  }
+
+  function updateProgressDisplay(info) {
+    const bar = document.getElementById('batch-progress-bar');
+    const pct = document.getElementById('batch-percent-text');
+    const barCounter = document.getElementById('batch-bar-counter-text');
+    const mainLabel = document.getElementById('batch-main-label');
+    const imp = document.getElementById('batch-stats-imported');
+    const fail = document.getElementById('batch-stats-failed');
+    const curBatch = document.getElementById('batch-current-batch');
+    const curFile = document.getElementById('batch-current-file');
+
+    if (bar) bar.style.width = info.percent + '%';
+    if (pct) pct.textContent = info.percent + '%';
+    if (barCounter) {
+      barCounter.textContent = `${info.importedCount.toLocaleString()} / ${info.total.toLocaleString()} books added (${info.percent}%)`;
+    }
+    if (mainLabel) {
+      mainLabel.textContent = info.percent >= 100 
+        ? 'Finalizing import...' 
+        : `Importing books (${info.importedCount.toLocaleString()} added so far)...`;
+    }
+    if (imp) imp.textContent = `📚 ${info.importedCount.toLocaleString()} books added`;
+    if (fail) {
+      fail.textContent = `⚠️ ${info.failedCount.toLocaleString()} skipped`;
+      if (info.failedCount > 0) {
+        fail.className = 'px-2.5 py-0.5 rounded-lg bg-amber-950/60 border border-amber-500/30 text-amber-400 font-semibold';
+      }
+    }
+    if (curBatch) curBatch.textContent = `Batch ${info.batchNum} of ${info.totalBatches}`;
+    if (curFile) curFile.textContent = info.currentFile ? `Current: ${info.currentFile}` : '';
+  }
+</script>

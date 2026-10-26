@@ -1,0 +1,1890 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Control Center - Settings & Users{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto pb-12">
+
+  <!-- Header & Breadcrumbs -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+    <div>
+      <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+        <a href="/" class="hover:text-white transition-colors">Library</a>
+        <span>&rsaquo;</span>
+        <span class="text-indigo-400 font-medium">Administration</span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+        <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+        Admin Control Center
+      </h1>
+      <p class="text-xs text-slate-400 mt-1">Manage user accounts, configure Kindle & SMTP delivery, trigger database backups, and inspect server health.</p>
+    </div>
+
+    <!-- Quick Server Status Pill -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
+        <span class="w-2.5 h-2.5 rounded-full {% if smtp_configured %}bg-emerald-400 animate-pulse{% else %}bg-amber-400{% endif %}"></span>
+        <span class="text-slate-300 font-medium">SMTP: {% if smtp_configured %}Active{% else %}Needs Setup{% endif %}</span>
+      </div>
+      <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="text-slate-300 font-medium">DB: {{ system_info.db_size }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Resource Monitoring Overview (Visible Across All Tabs) -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <!-- CPU Load -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-400">CPU Load</span>
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        </div>
+        <p class="text-sm font-bold text-white font-mono mt-0.5 truncate">{{ system_info.host.cpu_load }}</p>
+        <p class="text-[10px] text-slate-500 font-mono">1m, 5m, 15m load</p>
+      </div>
+    </div>
+
+    <!-- RAM Usage -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+      <div class="flex items-center justify-between text-[11px]">
+        <span class="text-slate-400 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          Memory (RAM)
+        </span>
+        <span class="font-bold text-indigo-300 font-mono">{{ system_info.host.ram.percent }}%</span>
+      </div>
+      <div class="mt-2">
+        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div class="bg-gradient-to-r from-indigo-500 to-cyan-400 h-2 rounded-full" style="width: {{ system_info.host.ram.percent }}%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+          <span>Used: {{ system_info.host.ram.used }}</span>
+          <span>Total: {{ system_info.host.ram.total }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Storage Pool -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+      <div class="flex items-center justify-between text-[11px]">
+        <span class="text-slate-400 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+          Storage (ZFS)
+        </span>
+        <span class="font-bold text-amber-300 font-mono">{{ system_info.storage.percent }}%</span>
+      </div>
+      <div class="mt-2">
+        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div class="bg-gradient-to-r from-amber-500 to-emerald-400 h-2 rounded-full" style="width: {{ system_info.storage.percent }}%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+          <span>Free: {{ system_info.storage.free }}</span>
+          <span>Total: {{ system_info.storage.total }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Server Uptime & Database -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-400">Uptime & DB</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-bold uppercase">Online</span>
+        </div>
+        <p class="text-sm font-bold text-white font-mono mt-0.5 truncate">{{ system_info.host.uptime }}</p>
+        <p class="text-[10px] text-slate-400 font-mono truncate">DB: {{ system_info.db_size }} ({{ system_info.total_books_formatted | default(system_info.total_books) }} books)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unified Navigation Tabs -->
+  <div class="flex items-center gap-2 border-b border-slate-800 pb-3 overflow-x-auto scrollbar-none">
+    
+    <!-- Tab: Users -->
+    <button 
+      type="button" 
+      onclick="switchTab('users')" 
+      id="tab-btn-users"
+      class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-shrink-0"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span>User Accounts</span>
+      <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700">{{ user_stats.total }}</span>
+    </button>
+
+    <!-- Tab: SMTP / Email -->
+    <button 
+      type="button" 
+      onclick="switchTab('smtp')" 
+      id="tab-btn-smtp"
+      class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+      <span>Email & Kindle</span>
+      {% if not smtp_configured %}
+      <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+      {% endif %}
+    </button>
+
+    <!-- Tab: Storage & Resources -->
+    <button 
+      type="button" 
+      onclick="switchTab('system')" 
+      id="tab-btn-system"
+      class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7M4 7c0-2 1.5-3 3.5-3h9c2 0 3.5 1 3.5 3M4 7c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3"></path></svg>
+      <span>Storage & Resources</span>
+    </button>
+
+    <!-- Tab: Backups & Database -->
+    <button 
+      type="button" 
+      onclick="switchTab('backups')" 
+      id="tab-btn-backups"
+      class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+      <span>Backups & DB</span>
+      <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700">{{ system_info.backup.count }}</span>
+    </button>
+
+    <!-- Tab: Security & Protection -->
+    <button 
+      type="button" 
+      onclick="switchTab('security')" 
+      id="tab-btn-security"
+      class="tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex-shrink-0"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+      <span>Security & Fail2ban</span>
+      {% if system_info.fail2ban.banned_current > 0 %}
+      <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-950 text-rose-300 border border-rose-500/30">{{ system_info.fail2ban.banned_current }} banned</span>
+      {% endif %}
+    </button>
+
+  </div>
+
+  <!-- Notification Alert Banner -->
+  <div id="admin-alert" class="hidden transition-all duration-300"></div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 1: USER MANAGEMENT                                                -->
+  <!-- ===================================================================== -->
+  <div id="tab-content-users" class="tab-pane space-y-6">
+
+    <!-- Role Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20">
+        <div class="flex items-center justify-between">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">Admin</span>
+          <span class="text-lg font-bold text-white">{{ user_stats.admins }}</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Full system settings, user management, backup triggers, online reading, and downloads.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
+        <div class="flex items-center justify-between">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Power User</span>
+          <span class="text-lg font-bold text-white">{{ user_stats.power_users }}</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Full library browsing, eBook ingestion, online reading, and unlimited downloads.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60">
+        <div class="flex items-center justify-between">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-slate-700 text-slate-300 border border-slate-600">Standard User</span>
+          <span class="text-lg font-bold text-white">{{ user_stats.standard_users }}</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Search, library browsing, and online eBook reading (direct file downloads restricted).</p>
+      </div>
+    </div>
+
+    <!-- Registration Policy Card -->
+    <div class="bg-slate-900/60 p-4 sm:p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+          Public Self-Registration Policy
+        </h3>
+        <p class="text-xs text-slate-400 mt-0.5">Control whether new readers can sign up on <code class="text-indigo-300">/register</code>, and whether accounts require admin approval.</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Allow Registration Toggle -->
+        <label class="flex items-center gap-2 cursor-pointer bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
+          <input 
+            type="checkbox" 
+            id="reg_allow" 
+            {% if settings.ALLOW_REGISTRATION %}checked{% endif %}
+            onchange="saveRegistrationSettings()"
+            class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+          />
+          <span class="text-xs text-white font-medium">Allow Self-Registration</span>
+        </label>
+
+        <!-- Require Admin Approval Toggle -->
+        <label class="flex items-center gap-2 cursor-pointer bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
+          <input 
+            type="checkbox" 
+            id="reg_approval" 
+            {% if settings.REQUIRE_ADMIN_APPROVAL %}checked{% endif %}
+            onchange="saveRegistrationSettings()"
+            class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+          />
+          <span class="text-xs text-white font-medium">Require Admin Approval</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Actions & Filter Toolbar -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+      <div class="relative flex-1 max-w-md">
+        <input 
+          type="text" 
+          id="user-search" 
+          oninput="filterUsersTable()" 
+          placeholder="Filter users by username or email..." 
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <svg class="w-4 h-4 text-slate-500 absolute right-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      </div>
+
+      <button 
+        type="button" 
+        onclick="openAddUserModal()" 
+        class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex-shrink-0"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        Add New User
+      </button>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300" id="users-table">
+          <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+            <tr>
+              <th class="py-3.5 px-4 font-semibold">User</th>
+              <th class="py-3.5 px-4 font-semibold">Role</th>
+              <th class="py-3.5 px-4 font-semibold">Status</th>
+              <th class="py-3.5 px-4 font-semibold">Last Login</th>
+              <th class="py-3.5 px-4 font-semibold">Created</th>
+              <th class="py-3.5 px-4 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80 font-normal">
+            {% for u in users %}
+            <tr class="hover:bg-slate-800/40 transition-colors user-row" data-username="{{ u.username | lower }}" data-email="{{ (u.email or '') | lower }}">
+              
+              <!-- User -->
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center font-bold text-white uppercase text-xs border border-slate-700">
+                    {{ u.username[:1] }}
+                  </div>
+                  <div>
+                    <div class="font-semibold text-white">{{ u.username }}</div>
+                    <div class="text-[11px] text-slate-400">{{ u.email or 'No email' }}</div>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Role -->
+              <td class="py-3 px-4">
+                {% if u.role == 'admin' %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/30">Admin</span>
+                {% elif u.role == 'power_user' %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Power User</span>
+                {% else %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-700 text-slate-300 border border-slate-600">User</span>
+                {% endif %}
+              </td>
+
+              <!-- Status -->
+              <td class="py-3 px-4">
+                {% if u.is_active %}
+                <span class="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Active
+                </span>
+                {% else %}
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Pending Approval
+                </span>
+                {% endif %}
+              </td>
+
+              <!-- Last Login -->
+              <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                {{ u.last_login[:16] if u.last_login else 'Never' }}
+              </td>
+
+              <!-- Created -->
+              <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                {{ u.created_at[:10] if u.created_at else 'Unknown' }}
+              </td>
+
+              <!-- Actions -->
+              <td class="py-3 px-4 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  {% if not u.is_active %}
+                  <button 
+                    type="button" 
+                    onclick="approveUser({{ u.id }}, '{{ u.username }}')"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-sm cursor-pointer"
+                    title="Approve & Activate Account"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span>Approve</span>
+                  </button>
+                  {% endif %}
+
+                  <button 
+                    type="button" 
+                    onclick='openEditUserModal({{ u | tojson }})'
+                    class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+                    title="Edit User"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                  </button>
+
+                  {% if u.id != current_user.id %}
+                  <button 
+                    type="button" 
+                    onclick="confirmDeleteUser({{ u.id }}, '{{ u.username }}')"
+                    class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 transition-colors"
+                    title="Delete User"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  </button>
+                  {% endif %}
+                </div>
+              </td>
+
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: EMAIL & KINDLE (SMTP)                                          -->
+  <!-- ===================================================================== -->
+  <div id="tab-content-smtp" class="tab-pane hidden space-y-6">
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- SMTP Configuration Form -->
+      <div class="lg:col-span-2 bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+              SMTP Mail Delivery ("Send to Kindle")
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Allows library users to deliver eBooks straight to their Kindle or personal email inbox.</p>
+          </div>
+
+          <div class="hidden sm:flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 mr-1">Presets:</span>
+            <button type="button" onclick="applyPreset('gmail')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 transition-colors">Gmail</button>
+            <button type="button" onclick="applyPreset('proton')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 transition-colors">Proton Bridge</button>
+            <button type="button" onclick="applyPreset('ssl465')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 transition-colors">SSL 465</button>
+          </div>
+        </div>
+
+        <form id="smtp-form" onsubmit="saveSMTPSettings(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">SMTP Host / Server <span class="text-rose-400">*</span></label>
+              <input 
+                type="text" 
+                id="smtp_host" 
+                value="{{ settings.SMTP_HOST }}" 
+                placeholder="smtp.gmail.com or mail.yourdomain.com"
+                required
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Port <span class="text-rose-400">*</span></label>
+              <input 
+                type="number" 
+                id="smtp_port" 
+                value="{{ settings.SMTP_PORT }}" 
+                placeholder="587"
+                required
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Sender Email Address (<code class="text-indigo-300">From:</code>) <span class="text-rose-400">*</span></label>
+              <input 
+                type="email" 
+                id="smtp_from" 
+                value="{{ settings.SMTP_FROM }}" 
+                placeholder="books@yourdomain.com or your-email@gmail.com"
+                required
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">SMTP Username / Login</label>
+              <input 
+                type="text" 
+                id="smtp_user" 
+                value="{{ settings.SMTP_USER }}" 
+                placeholder="e.g. user@gmail.com"
+                autocomplete="off"
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-semibold text-slate-300">SMTP Password / App Password</label>
+              {% if smtp_password_set %}
+              <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">Password Saved</span>
+              {% endif %}
+            </div>
+            <div class="relative">
+              <input 
+                type="password" 
+                id="smtp_password" 
+                placeholder="{% if smtp_password_set %}•••••••• (leave unchanged to keep current){% else %}Enter SMTP password or app password{% endif %}"
+                autocomplete="new-password"
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors pr-10 font-mono"
+              />
+              <button 
+                type="button" 
+                onclick="togglePasswordVisibility()" 
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+                title="Show/Hide Password"
+              >
+                <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
+              <input 
+                type="checkbox" 
+                id="smtp_tls" 
+                {% if settings.SMTP_TLS %}checked{% endif %}
+                class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <div class="text-xs">
+                <span class="font-semibold text-white block">Enable STARTTLS</span>
+                <span class="text-slate-400 text-[11px]">Recommended for Port 587 and standard SMTP encryption.</span>
+              </div>
+            </label>
+
+            <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
+              <input 
+                type="checkbox" 
+                id="smtp_ssl" 
+                {% if settings.SMTP_SSL %}checked{% endif %}
+                class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <div class="text-xs">
+                <span class="font-semibold text-white block">Direct SSL/TLS Mode</span>
+                <span class="text-slate-400 text-[11px]">Required for Port 465 (SMTPS) or direct SSL endpoints.</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+            <span class="text-[11px] text-slate-400">Target config: <code class="text-indigo-300 font-mono">{{ system_info.env_path }}</code></span>
+            <button 
+              type="submit" 
+              id="save-smtp-btn"
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Save Settings</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Live Connection Tester -->
+      <div class="space-y-6">
+        <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl">
+          <h2 class="text-base font-bold text-white flex items-center gap-2 mb-1">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Test SMTP Connection
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Send a diagnostic test ping to verify end-to-end delivery right now.</p>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Recipient Address</label>
+              <input 
+                type="email" 
+                id="test_recipient" 
+                placeholder="e.g. your personal or Kindle email"
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+            <button 
+              type="button" 
+              onclick="runSMTPTest()" 
+              id="test-smtp-btn"
+              class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              <span>Send Test Email</span>
+            </button>
+
+            <div id="test-result" class="hidden p-3.5 rounded-xl text-xs font-mono transition-all"></div>
+          </div>
+        </div>
+
+        <!-- Kindle Tip Card -->
+        <div class="bg-indigo-950/20 rounded-2xl border border-indigo-500/20 p-5">
+          <div class="flex items-center gap-2 text-indigo-300 font-bold text-xs mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Send to Kindle Note
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Amazon requires your sender address (<code class="text-indigo-300">{{ settings.SMTP_FROM }}</code>) to be approved in your Amazon account under <strong>Preferences &rsaquo; Personal Document Settings</strong>.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 3: STORAGE & CACHING PERFORMANCE                                  -->
+  <!-- ===================================================================== -->
+  <div id="tab-content-system" class="tab-pane hidden space-y-6">
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Storage & Books Path Card -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4 md:col-span-2">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            Books Library Path & Storage
+          </h3>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 w-fit">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            Active Storage Pool
+          </span>
+        </div>
+        
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-slate-400">Used: <span class="text-white font-semibold">{{ system_info.storage.used }}</span></span>
+            <span class="text-slate-400">Free: <span class="text-emerald-400 font-semibold">{{ system_info.storage.free }}</span></span>
+          </div>
+          <div class="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800">
+            <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-3 rounded-full" style="width: {{ system_info.storage.percent }}%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] text-slate-500 mt-1.5">
+            <span>Total Capacity: {{ system_info.storage.total }}</span>
+            <span>{{ system_info.storage.percent }}% utilized</span>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800/80 space-y-3">
+          <div>
+            <label for="library-root-input" class="block text-xs font-semibold text-slate-300 mb-1.5">
+              Books Directory Path (<code class="text-indigo-300 font-mono">LIBRARY_ROOT</code>)
+            </label>
+            <div class="flex flex-col sm:flex-row gap-2.5">
+              <div class="relative flex-1">
+                <input 
+                  type="text" 
+                  id="library-root-input" 
+                  name="library_root" 
+                  value="{{ settings.LIBRARY_ROOT }}" 
+                  placeholder="/data/books or /mnt/books"
+                  class="w-full bg-slate-950 font-mono text-xs text-indigo-200 placeholder-slate-600 rounded-xl px-4 py-2.5 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-all shadow-inner"
+                />
+              </div>
+              <div class="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  onclick="verifyBooksPath()" 
+                  id="verify-path-btn"
+                  class="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span>Verify Path</span>
+                </button>
+                <button 
+                  type="button" 
+                  onclick="saveBooksPath()" 
+                  id="save-path-btn"
+                  class="px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  <span>Save Path</span>
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1.5">
+              The root directory where book files (.epub, .fb2, .pdf, .mobi) are loaded and saved. Automatically persists to <code class="text-indigo-400 font-mono">/etc/bookserver.env</code>.
+            </p>
+          </div>
+
+          <div id="books-path-status" class="hidden"></div>
+        </div>
+      </div>
+
+      <!-- Library Synchronization & Storage Scanner Card -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4 md:col-span-2">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              Library Synchronization & Storage Health Scanner
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">
+              Scans your books directory (<code class="text-indigo-300 font-mono">{{ settings.LIBRARY_ROOT }}</code>) for newly added titles, parses OPF and ebook metadata, and registers them into PostgreSQL.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button 
+              type="button" 
+              onclick="startLibrarySync(true)" 
+              id="sync-dry-btn"
+              class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+              <span>Dry-Run Scan</span>
+            </button>
+            <button 
+              type="button" 
+              onclick="startLibrarySync(false)" 
+              id="sync-live-btn"
+              class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              <span>Scan & Import Books</span>
+            </button>
+            <button 
+              type="button" 
+              onclick="runLibraryAudit()" 
+              id="audit-btn"
+              class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+              title="Verify a random sample of book files actually exist on disk"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>Audit Integrity</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sync Log Terminal Window -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-2">
+              <span id="sync-spinner" class="w-2 h-2 rounded-full {% if system_info.sync.running %}bg-emerald-400 animate-ping{% else %}bg-slate-600{% endif %}"></span>
+              <span id="sync-summary-text" class="font-mono text-[11px]">{{ system_info.sync.summary }}</span>
+            </span>
+            <span id="sync-timestamp" class="text-[10px] text-slate-500 font-mono">
+              {% if system_info.sync.started_at %}Started: {{ system_info.sync.started_at }}{% endif %}
+            </span>
+          </div>
+          <div id="sync-log-window" class="p-3 rounded-xl bg-slate-950 font-mono text-[11px] text-slate-300 border border-slate-800 max-h-48 overflow-y-auto whitespace-pre-wrap selection:bg-indigo-600/50">
+{{ system_info.sync.output or "Ready to scan library storage for new book files." }}
+          </div>
+        </div>
+
+        <!-- Scheduled Automated Rescan Settings -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div class="text-xs font-semibold text-white flex items-center gap-2">
+              <span>Automated Daily Rescan</span>
+              <span id="auto-sync-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold {% if system_info.auto_sync.enabled %}bg-emerald-500/20 text-emerald-300 border border-emerald-500/30{% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+                {% if system_info.auto_sync.enabled %}Enabled (Daily at {{ system_info.auto_sync.hour }}:00){% else %}Disabled{% endif %}
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              Runs in the background every night to automatically discover newly added books via cron (<code class="text-indigo-400 font-mono">/etc/cron.d/bookserver_sync</code>).
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <select id="auto-sync-hour" class="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none">
+              <option value="1" {% if system_info.auto_sync.hour == '1' %}selected{% endif %}>01:00 AM</option>
+              <option value="2" {% if system_info.auto_sync.hour == '2' or not system_info.auto_sync.hour %}selected{% endif %}>02:00 AM</option>
+              <option value="3" {% if system_info.auto_sync.hour == '3' %}selected{% endif %}>03:00 AM</option>
+              <option value="4" {% if system_info.auto_sync.hour == '4' %}selected{% endif %}>04:00 AM</option>
+            </select>
+            <button 
+              type="button" 
+              onclick="toggleAutoSyncSchedule()" 
+              id="auto-sync-toggle-btn"
+              data-enabled="{{ 'true' if system_info.auto_sync.enabled else 'false' }}"
+              class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer {% if system_info.auto_sync.enabled %}bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/30{% else %}bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30{% endif %}"
+            >
+              {% if system_info.auto_sync.enabled %}Disable Nightly Sync{% else %}Enable Nightly Sync{% endif %}
+            </button>
+          </div>
+        </div>
+        
+        <div id="audit-result-box" class="hidden"></div>
+      </div>
+
+      <!-- Duplicate Books Diagnostic & Library Cleanup Card -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4 md:col-span-2">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              Duplicate Books Diagnostic &amp; Library Cleanup
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">
+              Scans your library catalog for duplicate entries with matching titles and author names across different formats or repeated imports.
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onclick="scanForDuplicates()" 
+            id="find-duplicates-btn"
+            class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <span>Scan for Duplicates</span>
+          </button>
+        </div>
+
+        <div id="duplicates-container" class="space-y-3 hidden">
+          <div id="duplicates-summary" class="text-xs text-slate-300 font-medium pb-2 border-b border-slate-800"></div>
+          <div id="duplicates-list" class="space-y-3 max-h-96 overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <!-- Host Hardware Resources & System Health -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+            Resource Monitoring & Host Health
+          </h3>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Live</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">CPU Load (1m, 5m, 15m)</span>
+            <span class="text-sm font-bold text-white font-mono mt-0.5 block">{{ system_info.host.cpu_load }}</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">System Uptime</span>
+            <span class="text-sm font-bold text-cyan-300 font-mono mt-0.5 block">{{ system_info.host.uptime }}</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-slate-400">RAM: <span class="text-white font-semibold">{{ system_info.host.ram.used }}</span> / {{ system_info.host.ram.total }}</span>
+            <span class="text-slate-400 font-mono">{{ system_info.host.ram.percent }}% utilized</span>
+          </div>
+          <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+            <div class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-2 rounded-full" style="width: {{ system_info.host.ram.percent }}%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thumbnail WebP Cache Card -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            WebP Thumbnail Cache
+          </h3>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Active</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">Cached Thumbnails</span>
+            <span class="text-base font-bold text-white font-mono mt-0.5 block">{{ "{:,}".format(system_info.thumb_cache.count) }}</span>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">Disk Space</span>
+            <span class="text-base font-bold text-indigo-300 font-mono mt-0.5 block">{{ system_info.thumb_cache.size_mb }} MB</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <p class="text-[11px] text-slate-500">Thumbnails regenerate automatically on demand when viewed.</p>
+          <button 
+            type="button" 
+            onclick="clearThumbnails()" 
+            id="clear-thumbs-btn"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex-shrink-0"
+          >
+            Clear Thumbnail Cache
+          </button>
+        </div>
+      </div>
+
+      <!-- In-Memory Query Cache -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            In-Memory Catalog Cache
+          </h3>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">10-Min TTL</span>
+        </div>
+
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Sidebar genres, series, authors, and system statistics are cached in RAM for ultra-fast response times. Cache invalidates automatically when new books are uploaded.
+        </p>
+
+        <div class="flex items-center justify-between pt-2">
+          <span class="text-[11px] text-slate-500">Force immediate data refresh:</span>
+          <button 
+            type="button" 
+            onclick="flushQueryCache()" 
+            id="flush-cache-btn"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+          >
+            Flush Query Cache
+          </button>
+        </div>
+      </div>
+
+      <!-- Server Environment Paths -->
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+          System Configuration Paths
+        </h3>
+        <div class="space-y-2 text-xs">
+          <div class="py-1">
+            <span class="text-slate-400 block mb-0.5">Configuration File</span>
+            <code class="text-indigo-300 font-mono text-[11px] bg-slate-950 p-1.5 rounded-lg border border-slate-800 block break-all">{{ system_info.env_path }}</code>
+          </div>
+          <div class="py-1">
+            <span class="text-slate-400 block mb-0.5">Thumbnails Directory</span>
+            <code class="text-slate-300 font-mono text-[11px] bg-slate-950 p-1.5 rounded-lg border border-slate-800 block break-all">{{ system_info.thumb_cache.path }}</code>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: BACKUPS & DATABASE MAINTENANCE                                -->
+  <!-- ===================================================================== -->
+  <div id="tab-content-backups" class="tab-pane hidden space-y-6">
+
+    <!-- Top Stats & Manual Backup Trigger -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+          PostgreSQL Database & Automated Backups
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">
+          Scheduled daily at <strong>03:00 AM</strong> with accelerated parallel <code class="text-emerald-300">pigz</code> compression. Retention policy: 7-day daily rolling backups + 30-day Sunday historical archives.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button 
+          type="button" 
+          onclick="runVacuum()" 
+          id="vacuum-btn"
+          class="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+          title="Optimize database query planner"
+        >
+          Vacuum DB
+        </button>
+        <button 
+          type="button" 
+          onclick="triggerManualBackup()" 
+          id="backup-btn"
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          <span>Create Backup Now</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- DB Metrics Overview -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-xs">
+        <span class="text-slate-400 block text-[11px]">Database Size</span>
+        <span class="text-base font-bold text-purple-300 font-mono mt-0.5 block">{{ system_info.db_size }}</span>
+      </div>
+      <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-xs">
+        <span class="text-slate-400 block text-[11px]">Total Books</span>
+        <span class="text-base font-bold text-white font-mono mt-0.5 block">{{ "{:,}".format(system_info.total_books) }}</span>
+      </div>
+      <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-xs">
+        <span class="text-slate-400 block text-[11px]">Total Authors</span>
+        <span class="text-base font-bold text-white font-mono mt-0.5 block">{{ "{:,}".format(system_info.total_authors) }}</span>
+      </div>
+      <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-xs">
+        <span class="text-slate-400 block text-[11px]">Stored Backups</span>
+        <span class="text-base font-bold text-emerald-300 font-mono mt-0.5 block">{{ system_info.backup.count }} archives</span>
+      </div>
+    </div>
+
+    <!-- Backups Table -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Backup Archives</h3>
+        <span class="text-[11px] text-slate-500 font-mono">Location: {{ system_info.backup.directory or 'Backup Directory' }}</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4 font-semibold">Archive File Name</th>
+              <th class="py-3 px-4 font-semibold">Created Timestamp</th>
+              <th class="py-3 px-4 font-semibold">Archive Size</th>
+              <th class="py-3 px-4 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80 font-normal font-mono text-[11px]">
+            {% for b in system_info.backup.files %}
+            <tr class="hover:bg-slate-800/40 transition-colors">
+              <td class="py-3 px-4 text-white font-medium">{{ b.name }}</td>
+              <td class="py-3 px-4 text-slate-400">{{ b.time }}</td>
+              <td class="py-3 px-4 text-emerald-300 font-bold">{{ b.size }}</td>
+              <td class="py-3 px-4 text-right space-x-2">
+                <a 
+                  href="/admin/backup/download/{{ b.name }}" 
+                  download 
+                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 transition-colors"
+                  title="Download backup file"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  <span>Download</span>
+                </a>
+                {% if b.is_latest %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Latest</span>
+                {% else %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-400 border border-slate-700">Archived</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="py-6 text-center text-slate-500 font-sans">No database backups found in backup storage directory yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 5: SECURITY & FAIL2BAN                                            -->
+  <!-- ===================================================================== -->
+  <div id="tab-content-security" class="tab-pane hidden space-y-6">
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <span class="text-slate-400 block text-[11px]">Fail2ban Jail Status</span>
+        <span class="text-base font-bold {% if system_info.fail2ban.active %}text-emerald-400{% else %}text-rose-400{% endif %} mt-0.5 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full {% if system_info.fail2ban.active %}bg-emerald-400 animate-pulse{% else %}bg-rose-400{% endif %}"></span>
+          {% if system_info.fail2ban.active %}Active (bookserver){% else %}Inactive{% endif %}
+        </span>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <span class="text-slate-400 block text-[11px]">Currently Banned IPs</span>
+        <span class="text-base font-bold text-rose-300 font-mono mt-0.5 block">{{ system_info.fail2ban.banned_current }}</span>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <span class="text-slate-400 block text-[11px]">Login Rate Limiter</span>
+        <span class="text-base font-bold text-white font-mono mt-0.5 block">5 attempts / 300s</span>
+      </div>
+    </div>
+
+    <!-- Active Banned IPs Management -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+        Fail2ban Banned IP Addresses
+      </h3>
+      <p class="text-xs text-slate-400">
+        IP addresses that repeatedly failed authentication against the BookServer are automatically banned. You can manually unban any IP below.
+      </p>
+
+      {% if system_info.fail2ban.banned_ips %}
+      <div class="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
+        {% for ip in system_info.fail2ban.banned_ips %}
+        <div class="flex items-center justify-between p-3.5 bg-slate-950 font-mono text-xs">
+          <span class="text-rose-300 font-bold">{{ ip }}</span>
+          <button 
+            type="button" 
+            onclick="unbanIP('{{ ip }}')" 
+            class="px-3 py-1 rounded-lg text-xs font-semibold bg-rose-950/60 hover:bg-rose-900 text-rose-200 border border-rose-500/30 transition-colors"
+          >
+            Unban IP
+          </button>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-400">
+        No IP addresses are currently banned by Fail2ban.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ===================================================================== -->
+<!-- ADD USER MODAL                                                        -->
+<!-- ===================================================================== -->
+<div id="add-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+        Add New User
+      </h3>
+      <button type="button" onclick="closeAddUserModal()" class="text-slate-400 hover:text-white">&times;</button>
+    </div>
+
+    <form onsubmit="submitAddUser(event)" class="space-y-3.5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Username <span class="text-rose-400">*</span></label>
+        <input type="text" id="add-username" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Password <span class="text-rose-400">*</span></label>
+        <div class="relative">
+          <input type="password" id="add-password" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono pr-10" />
+          <button 
+            type="button" 
+            onclick="togglePasswordVisibility('add-password', 'add-eye')" 
+            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+            title="Show/Hide Password"
+          >
+            <svg id="add-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+        <input type="email" id="add-email" placeholder="user@example.com (optional)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+        <select id="add-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          <option value="user">Standard User (Read Online Only)</option>
+          <option value="power_user">Power User (Online + Downloads + Ingestion)</option>
+          <option value="admin">Administrator (Full Access)</option>
+        </select>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeAddUserModal()" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
+        <button type="submit" id="add-user-submit-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- EDIT USER MODAL                                                       -->
+<!-- ===================================================================== -->
+<div id="edit-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+        Edit User: <span id="edit-modal-username" class="text-indigo-300"></span>
+      </h3>
+      <button type="button" onclick="closeEditUserModal()" class="text-slate-400 hover:text-white">&times;</button>
+    </div>
+
+    <form onsubmit="submitEditUser(event)" class="space-y-3.5">
+      <input type="hidden" id="edit-user-id" />
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+        <input type="email" id="edit-email" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+        <select id="edit-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          <option value="user">Standard User (Read Online Only)</option>
+          <option value="power_user">Power User (Online + Downloads + Ingestion)</option>
+          <option value="admin">Administrator (Full Access)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Reset Password</label>
+        <div class="relative">
+          <input type="password" id="edit-password" placeholder="Leave blank to keep unchanged" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono pr-10" />
+          <button 
+            type="button" 
+            onclick="togglePasswordVisibility('edit-password', 'edit-eye')" 
+            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+            title="Show/Hide Password"
+          >
+            <svg id="edit-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="edit-active" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer" />
+          <span class="text-xs text-white font-medium">Account is Active</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeEditUserModal()" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
+        <button type="submit" id="edit-user-submit-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// --- TAB SWITCHING LOGIC ---
+const activeTabParam = "{{ active_tab }}";
+const VALID_TABS = ['users', 'smtp', 'system', 'backups', 'security'];
+
+function switchTab(tabId) {
+  if (!VALID_TABS.includes(tabId)) tabId = 'users';
+
+  document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.className = 'tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer flex-shrink-0';
+  });
+
+  const contentEl = document.getElementById(`tab-content-${tabId}`);
+  const btnEl = document.getElementById(`tab-btn-${tabId}`);
+  if (contentEl) contentEl.classList.remove('hidden');
+  if (btnEl) {
+    btnEl.className = 'tab-btn inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-950/60 text-indigo-300 border border-indigo-500/30 shadow-sm cursor-pointer flex-shrink-0';
+  }
+
+  // Update URL history without reload
+  const url = new URL(window.location);
+  url.searchParams.set('tab', tabId);
+  window.history.replaceState({}, '', url);
+}
+
+// Initialize active tab on load
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab = urlParams.get('tab') || activeTabParam || 'users';
+  switchTab(initialTab);
+});
+
+// --- ALERT TOAST HELPER ---
+function showAlert(message, isError = false) {
+  const el = document.getElementById('admin-alert');
+  el.className = isError 
+    ? 'p-4 rounded-xl text-xs bg-rose-950/80 border border-rose-500/40 text-rose-200 flex items-center gap-3 shadow-lg'
+    : 'p-4 rounded-xl text-xs bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 flex items-center gap-3 shadow-lg';
+  
+  const icon = isError
+    ? `<svg class="w-5 h-5 flex-shrink-0 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+    : `<svg class="w-5 h-5 flex-shrink-0 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+
+  el.innerHTML = `${icon}<span>${message}</span>`;
+  el.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// --- USER MANAGEMENT FUNCTIONS ---
+function filterUsersTable() {
+  const q = document.getElementById('user-search').value.toLowerCase().trim();
+  document.querySelectorAll('.user-row').forEach(row => {
+    const username = row.dataset.username || '';
+    const email = row.dataset.email || '';
+    if (username.includes(q) || email.includes(q)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+function openAddUserModal() {
+  document.getElementById('add-user-modal').classList.remove('hidden');
+  document.getElementById('add-username').focus();
+}
+
+function closeAddUserModal() {
+  document.getElementById('add-user-modal').classList.add('hidden');
+}
+
+async function submitAddUser(e) {
+  e.preventDefault();
+  const btn = document.getElementById('add-user-submit-btn');
+  btn.disabled = true;
+  const payload = {
+    username: document.getElementById('add-username').value.trim(),
+    password: document.getElementById('add-password').value,
+    email: document.getElementById('add-email').value.trim() || null,
+    role: document.getElementById('add-role').value
+  };
+
+  try {
+    const res = await fetch('/admin/users/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.location.reload();
+    } else {
+      showAlert(data.message || 'Failed to create user', true);
+      closeAddUserModal();
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function openEditUserModal(user) {
+  document.getElementById('edit-user-id').value = user.id;
+  document.getElementById('edit-modal-username').textContent = user.username;
+  document.getElementById('edit-email').value = user.email || '';
+  document.getElementById('edit-role').value = user.role;
+  document.getElementById('edit-active').checked = !!user.is_active;
+  document.getElementById('edit-password').value = '';
+  document.getElementById('edit-user-modal').classList.remove('hidden');
+}
+
+function closeEditUserModal() {
+  document.getElementById('edit-user-modal').classList.add('hidden');
+}
+
+async function submitEditUser(e) {
+  e.preventDefault();
+  const btn = document.getElementById('edit-user-submit-btn');
+  btn.disabled = true;
+  const payload = {
+    user_id: parseInt(document.getElementById('edit-user-id').value),
+    email: document.getElementById('edit-email').value.trim() || null,
+    role: document.getElementById('edit-role').value,
+    is_active: document.getElementById('edit-active').checked,
+    password: document.getElementById('edit-password').value.trim() || null
+  };
+
+  try {
+    const res = await fetch('/admin/users/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.location.reload();
+    } else {
+      showAlert(data.message || 'Failed to update user', true);
+      closeEditUserModal();
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function confirmDeleteUser(userId, username) {
+  if (!confirm(`Are you sure you want to permanently delete user "${username}"? This cannot be undone.`)) return;
+
+  try {
+    const res = await fetch(`/admin/users/delete/${userId}`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.location.reload();
+    } else {
+      showAlert(data.message || 'Failed to delete user', true);
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  }
+}
+
+async function approveUser(userId, username) {
+  if (!confirm(`Approve and activate account for "${username}"?`)) return;
+
+  try {
+    const res = await fetch(`/admin/users/approve/${userId}`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert(`User "${username}" approved and activated!`, false);
+      setTimeout(() => window.location.reload(), 1200);
+    } else {
+      showAlert(data.message || data.error || 'Failed to approve user', true);
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  }
+}
+
+async function saveRegistrationSettings() {
+  const allow = document.getElementById('reg_allow').checked;
+  const approval = document.getElementById('reg_approval').checked;
+
+  try {
+    const res = await fetch('/admin/settings/registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        allow_registration: allow,
+        require_approval: approval
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert(data.message || 'Registration policy updated successfully!', false);
+    } else {
+      showAlert(data.message || 'Failed to update registration policy', true);
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  }
+}
+
+// --- SMTP CONFIGURATION FUNCTIONS ---
+function togglePasswordVisibility(inputId = 'smtp_password', iconId = 'eye-icon') {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!input || !icon) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path>`;
+  } else {
+    input.type = 'password';
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>`;
+  }
+}
+
+function applyPreset(name) {
+  const host = document.getElementById('smtp_host');
+  const port = document.getElementById('smtp_port');
+  const tls = document.getElementById('smtp_tls');
+  const ssl = document.getElementById('smtp_ssl');
+
+  if (name === 'gmail') {
+    host.value = 'smtp.gmail.com';
+    port.value = '587';
+    tls.checked = true;
+    ssl.checked = false;
+  } else if (name === 'proton') {
+    host.value = '127.0.0.1';
+    port.value = '1025';
+    tls.checked = true;
+    ssl.checked = false;
+  } else if (name === 'ssl465') {
+    if (!host.value) host.value = 'smtp.gmail.com';
+    port.value = '465';
+    tls.checked = false;
+    ssl.checked = true;
+  }
+}
+
+async function saveSMTPSettings(e) {
+  e.preventDefault();
+  const btn = document.getElementById('save-smtp-btn');
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving...</span>`;
+  btn.disabled = true;
+
+  const payload = {
+    host: document.getElementById('smtp_host').value.trim(),
+    port: parseInt(document.getElementById('smtp_port').value.trim()) || 587,
+    from_email: document.getElementById('smtp_from').value.trim(),
+    user: document.getElementById('smtp_user').value.trim(),
+    password: document.getElementById('smtp_password').value,
+    tls: document.getElementById('smtp_tls').checked,
+    ssl: document.getElementById('smtp_ssl').checked
+  };
+
+  try {
+    const res = await fetch('/admin/settings/smtp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert(data.message || 'SMTP settings successfully saved!', false);
+    } else {
+      showAlert(data.message || 'Failed to save SMTP settings.', true);
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+async function runSMTPTest() {
+  const btn = document.getElementById('test-smtp-btn');
+  const recipientInput = document.getElementById('test_recipient');
+  const resultBox = document.getElementById('test-result');
+  const recipient = recipientInput.value.trim();
+
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Testing...</span>`;
+  btn.disabled = true;
+
+  resultBox.className = 'hidden';
+
+  const payload = {
+    host: document.getElementById('smtp_host').value.trim(),
+    port: parseInt(document.getElementById('smtp_port').value.trim()) || 587,
+    from_email: document.getElementById('smtp_from').value.trim(),
+    user: document.getElementById('smtp_user').value.trim(),
+    password: document.getElementById('smtp_password').value,
+    tls: document.getElementById('smtp_tls').checked,
+    ssl: document.getElementById('smtp_ssl').checked,
+    recipient: recipient
+  };
+
+  try {
+    const res = await fetch('/admin/settings/smtp/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    resultBox.classList.remove('hidden');
+    if (res.ok && data.success) {
+      resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-emerald-950/60 border border-emerald-500/40 text-emerald-300';
+      resultBox.innerHTML = `&#10004; ${data.message}`;
+    } else {
+      resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-rose-950/60 border border-rose-500/40 text-rose-300';
+      resultBox.innerHTML = `&#10008; ${data.message || 'SMTP Connection Failed'}`;
+    }
+  } catch (err) {
+    resultBox.classList.remove('hidden');
+    resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-rose-950/60 border border-rose-500/40 text-rose-300';
+    resultBox.innerHTML = `&#10008; Network Error: ${err.message}`;
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+// --- BOOKS PATH & STORAGE ACTIONS ---
+async function verifyBooksPath() {
+  const pathInput = document.getElementById('library-root-input');
+  const path = pathInput ? pathInput.value.trim() : '';
+  const btn = document.getElementById('verify-path-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Verifying...</span>`;
+
+  try {
+    const res = await fetch('/admin/settings/books-path/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ library_root: path })
+    });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    const statusBox = document.getElementById('books-path-status');
+    if (statusBox) {
+      statusBox.classList.remove('hidden');
+      if (data.success) {
+        statusBox.className = 'p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+        statusBox.innerHTML = `
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span>Valid directory (${data.top_level_entries.toLocaleString()} entries). Free: <strong>${data.disk_info.free}</strong></span>
+          </div>
+          <span class="text-[10px] text-emerald-400/80 font-mono">Readable: ${data.readable ? 'Yes' : 'No'} | Writable: ${data.writable ? 'Yes' : 'No'}</span>
+        `;
+      } else {
+        statusBox.className = 'p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center gap-2';
+        statusBox.innerHTML = `
+          <svg class="w-4 h-4 text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          <span>${data.message}</span>
+        `;
+      }
+    }
+  } catch (err) {
+    showAlert('Verification error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+async function saveBooksPath() {
+  const pathInput = document.getElementById('library-root-input');
+  const path = pathInput ? pathInput.value.trim() : '';
+  if (!path) {
+    showAlert('Books path cannot be empty', true);
+    return;
+  }
+
+  const btn = document.getElementById('save-path-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving...</span>`;
+
+  try {
+    const res = await fetch('/admin/settings/books-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ library_root: path })
+    });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    if (data.success) {
+      setTimeout(() => window.location.reload(), 1200);
+    }
+  } catch (err) {
+    showAlert('Error saving books path: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+// --- LIBRARY SYNC & FILE AUDIT ---
+let syncPollInterval = null;
+
+async function startLibrarySync(dryRun = false) {
+  const btn = dryRun ? document.getElementById('sync-dry-btn') : document.getElementById('sync-live-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Starting...</span>`;
+  }
+
+  try {
+    const res = await fetch('/admin/maintenance/sync-library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry_run: dryRun })
+    });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    if (data.success) {
+      pollSyncStatus();
+      if (!syncPollInterval) {
+        syncPollInterval = setInterval(pollSyncStatus, 2000);
+      }
+    }
+  } catch (err) {
+    showAlert('Error initiating sync: ' + err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+}
+
+async function pollSyncStatus() {
+  try {
+    const res = await fetch('/admin/maintenance/sync-status');
+    const data = await res.json();
+    const logBox = document.getElementById('sync-log-window');
+    const summaryText = document.getElementById('sync-summary-text');
+    const spinner = document.getElementById('sync-spinner');
+    const timestamp = document.getElementById('sync-timestamp');
+
+    if (summaryText) summaryText.textContent = data.summary || 'Idle';
+    if (logBox && data.output) {
+      logBox.textContent = data.output;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    if (timestamp && data.started_at) {
+      timestamp.textContent = 'Started: ' + data.started_at;
+    }
+    if (spinner) {
+      if (data.running) {
+        spinner.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+      } else {
+        spinner.className = 'w-2 h-2 rounded-full bg-slate-600';
+      }
+    }
+
+    if (!data.running && syncPollInterval) {
+      clearInterval(syncPollInterval);
+      syncPollInterval = null;
+    }
+  } catch (e) {
+    console.warn("Poll sync status:", e);
+  }
+}
+
+async function runLibraryAudit() {
+  const btn = document.getElementById('audit-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Auditing (150 books)...</span>`;
+
+  try {
+    const res = await fetch('/admin/maintenance/audit-files', { method: 'POST' });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    const box = document.getElementById('audit-result-box');
+    if (box) {
+      box.classList.remove('hidden');
+      if (data.missing_count === 0) {
+        box.className = 'p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium flex items-center gap-2';
+        box.innerHTML = `
+          <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+          <span><strong>100% Integrity Verified:</strong> All ${data.valid} sample book files are present and readable in storage.</span>
+        `;
+      } else {
+        box.className = 'p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium';
+        box.innerHTML = `
+          <span>Integrity: ${data.health_percent}% healthy. ${data.missing_count} missing files detected out of ${data.checked} sample.</span>
+        `;
+      }
+    }
+  } catch (err) {
+    showAlert('Audit error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+// --- MAINTENANCE & DIAGNOSTIC ACTIONS ---
+async function clearThumbnails() {
+  if (!confirm('Clear all cached WebP thumbnails from disk? They will regenerate on demand.')) return;
+  const btn = document.getElementById('clear-thumbs-btn');
+  btn.disabled = true;
+  btn.textContent = 'Clearing...';
+
+  try {
+    const res = await fetch('/admin/maintenance/clear-thumbs', { method: 'POST' });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    if (data.success) setTimeout(() => window.location.reload(), 1500);
+  } catch (err) {
+    showAlert('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Clear Thumbnail Cache';
+  }
+}
+
+async function flushQueryCache() {
+  const btn = document.getElementById('flush-cache-btn');
+  btn.disabled = true;
+  btn.textContent = 'Flushing...';
+
+  try {
+    const res = await fetch('/admin/maintenance/flush-cache', { method: 'POST' });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+  } catch (err) {
+    showAlert('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Flush Query Cache';
+  }
+}
+
+async function triggerManualBackup() {
+  const btn = document.getElementById('backup-btn');
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Backing up (~25s)...</span>`;
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/admin/maintenance/backup', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert('Database backup completed successfully!', false);
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      showAlert(data.message || 'Backup failed', true);
+    }
+  } catch (err) {
+    showAlert('Backup error: ' + err.message, true);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+async function runVacuum() {
+  const btn = document.getElementById('vacuum-btn');
+  btn.disabled = true;
+  btn.textContent = 'Optimizing...';
+
+  try {
+    const res = await fetch('/admin/maintenance/vacuum', { method: 'POST' });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+  } catch (err) {
+    showAlert('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Vacuum DB';
+  }
+}
+
+async function unbanIP(ip) {
+  if (!confirm(`Unban IP ${ip}?`)) return;
+
+  try {
+    const res = await fetch('/admin/maintenance/unban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: ip })
+    });
+    const data = await res.json();
+    showAlert(data.message, !data.success);
+    if (data.success) setTimeout(() => window.location.reload(), 1500);
+  } catch (err) {
+    showAlert('Error: ' + err.message, true);
+  }
+}
+async function toggleAutoSyncSchedule() {
+  const btn = document.getElementById('auto-sync-toggle-btn');
+  const badge = document.getElementById('auto-sync-status-badge');
+  const hourSelect = document.getElementById('auto-sync-hour');
+  const currentlyEnabled = btn.getAttribute('data-enabled') === 'true';
+  const targetEnabled = !currentlyEnabled;
+  const targetHour = parseInt(hourSelect.value, 10) || 2;
+
+  btn.disabled = true;
+  btn.innerText = "Updating schedule...";
+
+  try {
+    const res = await fetch('/admin/settings/auto-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: targetEnabled,
+        hour: targetHour,
+        minute: 0
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      btn.setAttribute('data-enabled', targetEnabled ? 'true' : 'false');
+      if (targetEnabled) {
+        btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/30";
+        btn.innerText = "Disable Nightly Sync";
+        badge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        badge.innerText = `Enabled (Daily at ${targetHour}:00)`;
+        showAlert(`Nightly Library Rescan enabled at ${targetHour}:00 AM`, false);
+      } else {
+        btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30";
+        btn.innerText = "Enable Nightly Sync";
+        badge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700";
+        badge.innerText = "Disabled";
+        showAlert("Nightly Library Rescan disabled", false);
+      }
+    } else {
+      showAlert(data.error || "Failed to update auto-sync schedule", true);
+    }
+  } catch (err) {
+    showAlert("Network error: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function scanForDuplicates() {
+  const btn = document.getElementById('find-duplicates-btn');
+  const container = document.getElementById('duplicates-container');
+  const summary = document.getElementById('duplicates-summary');
+  const list = document.getElementById('duplicates-list');
+
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Scanning database (~3s)...</span>`;
+
+  try {
+    const res = await fetch('/admin/maintenance/duplicates');
+    const data = await res.json();
+    container.classList.remove('hidden');
+
+    if (!data.duplicates || data.duplicates.length === 0) {
+      summary.innerHTML = `<span class="text-emerald-400 font-bold">✓ Clean Catalog:</span> No duplicate book titles found!`;
+      list.innerHTML = "";
+    } else {
+      summary.innerHTML = `Found <span class="text-amber-400 font-bold">${data.duplicates.length} sets</span> of duplicate books:`;
+      list.innerHTML = "";
+
+      data.duplicates.forEach(group => {
+        const card = document.createElement('div');
+        card.className = "p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2";
+        let booksHtml = group.books.map(b => `
+          <div class="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-mono text-slate-500 font-bold">#${b.id}</span>
+              <span class="text-white font-medium truncate max-w-xs">${b.title}</span>
+              <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-indigo-300 font-mono">${b.formats}</span>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="text-[10px] text-slate-500 hidden sm:inline">${b.pubdate}</span>
+              <a href="/cover/${b.id}" target="_blank" class="text-xs text-indigo-400 hover:underline">Cover</a>
+            </div>
+          </div>
+        `).join("");
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-xs font-semibold">
+            <span class="text-slate-200">${group.title} <span class="text-slate-400 font-normal">by ${group.author}</span></span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">${group.count} copies</span>
+          </div>
+          <div class="space-y-1.5 pt-1">${booksHtml}</div>
+        `;
+        list.appendChild(card);
+      });
+    }
+  } catch (err) {
+    showAlert("Error scanning duplicates: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg><span>Scan for Duplicates</span>`;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,256 @@
+<div>
+
+  <!-- Results Count & Active Filters Bar -->
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
+    <div class="flex items-center gap-2 text-xs sm:text-sm text-slate-300">
+      <span class="font-semibold text-white">{{ total | default(0) }}</span> books found
+      {% if active_query %}
+      <span class="text-slate-400">for "<span class="text-indigo-400 font-medium">{{ active_query }}</span>"</span>
+      {% endif %}
+      {% if active_filter_label %}
+      <span class="bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs border border-indigo-500/30 flex items-center gap-1.5">
+        {{ active_filter_label }}
+        <button 
+          type="button" 
+          onclick="clearFilter()"
+          class="hover:text-white"
+          title="Remove filter"
+        >
+          &times;
+        </button>
+      </span>
+      {% endif %}
+    </div>
+
+    <!-- Active page summary & View Mode Toggle -->
+    <div class="flex items-center gap-3">
+      <!-- View mode toggle: Grouped vs Grid -->
+      <div class="inline-flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+        <button 
+          type="button" 
+          onclick="setViewMode('grouped')"
+          class="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-semibold transition-all cursor-pointer {% if view_mode == 'grouped' %}bg-indigo-600 text-white shadow-sm{% else %}text-slate-400 hover:text-white{% endif %}"
+          title="Group by Author & Series"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          <span>Grouped</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="setViewMode('grid')"
+          class="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-semibold transition-all cursor-pointer {% if view_mode != 'grouped' %}bg-indigo-600 text-white shadow-sm{% else %}text-slate-400 hover:text-white{% endif %}"
+          title="Flat Grid"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span>Grid</span>
+        </button>
+      </div>
+
+      <div class="text-xs text-slate-400">
+        Page <span class="font-medium text-slate-200">{{ page }}</span> of <span class="font-medium text-slate-200">{{ total_pages }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty State (No books found) -->
+  {% if books|length == 0 %}
+  <div class="text-center py-20 px-4 bg-slate-900/30 rounded-2xl border border-slate-800/60">
+    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+      {% if current_favorites_only %}
+      <svg class="w-8 h-8 text-rose-500/80 fill-current" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+      {% else %}
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+      </svg>
+      {% endif %}
+    </div>
+    {% if current_favorites_only %}
+    <h3 class="text-base font-semibold text-slate-200">No favorites yet</h3>
+    <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Click the heart icon on any book cover or in the book details modal to save your favorite books here.</p>
+    <button 
+      type="button"
+      onclick="clearFilter()" 
+      class="mt-4 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium rounded-lg transition-colors">
+      Browse All Books
+    </button>
+    {% else %}
+    <h3 class="text-base font-semibold text-slate-200">No books found</h3>
+    <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Try searching for a different title or author, or reset your filters.</p>
+    <button 
+      type="button"
+      onclick="resetSearchAndFilters()" 
+      class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors">
+      Clear Search &amp; Filters
+    </button>
+    {% endif %}
+  </div>
+  {% else %}
+
+  {% if view_mode == 'grouped' and grouped_authors %}
+  <!-- Grouped View: Authors & Series -->
+  <div class="space-y-6 sm:space-y-8">
+    {% for author_data in grouped_authors %}
+    <div class="bg-slate-900/40 rounded-2xl border border-slate-800/80 p-3.5 sm:p-5 shadow-lg space-y-4">
+      
+      <!-- Author Header Banner -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-800/80">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center font-bold text-white text-xs sm:text-sm shadow-md shadow-indigo-600/30 flex-shrink-0">
+            {{ author_data.initials }}
+          </div>
+          <div class="min-w-0">
+            <h2 class="text-sm sm:text-base font-bold text-white truncate flex items-center gap-2" title="{{ author_data.author_name }}">
+              <span>{{ author_data.author_name }}</span>
+            </h2>
+            <p class="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+              <span>{{ author_data.total_books }} book{% if author_data.total_books > 1 %}s{% endif %}</span>
+              {% if author_data.series_count %}
+              <span>&bull;</span>
+              <span class="text-indigo-400 font-medium">{{ author_data.series_count }} series</span>
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        {% if author_data.author_id %}
+        <button 
+          type="button" 
+          onclick="filterByAuthor({{ author_data.author_id }}, '{{ author_data.author_name|escape }}')"
+          class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500/40 transition-colors cursor-pointer flex-shrink-0"
+          title="Filter all books by {{ author_data.author_name }}"
+        >
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          <span>All by Author</span>
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Author's Series Groups -->
+      {% for s in author_data.series_groups %}
+      <div class="pt-2 first:pt-0">
+        <div class="flex items-center justify-between gap-2 mb-2.5 sm:mb-3 bg-slate-800/50 px-3 py-1.5 sm:py-2 rounded-xl border border-slate-700/50">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-sm sm:text-base flex-shrink-0">📚</span>
+            <span class="text-xs sm:text-sm font-bold text-indigo-300 truncate">{{ s.series_name }}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex-shrink-0">
+              {{ s.books|length }}
+            </span>
+          </div>
+          {% if s.series_id %}
+          <button 
+            type="button" 
+            onclick="filterBySeries({{ s.series_id }}, '{{ s.series_name|escape }}')"
+            class="text-[11px] sm:text-xs text-indigo-400 hover:text-indigo-300 font-medium hover:underline flex items-center gap-1 cursor-pointer flex-shrink-0"
+            title="Filter by this series"
+          >
+            <span>Full Series &rarr;</span>
+          </button>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+          {% for book in s.books %}
+            {% include 'partials/book_card.html' %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Author's Standalone / Other Books -->
+      {% if author_data.standalone_books %}
+      <div class="pt-2 first:pt-0">
+        {% if author_data.series_groups %}
+        <div class="flex items-center gap-2 mb-2.5 sm:mb-3 px-1 text-xs font-semibold text-slate-400">
+          <span>📖</span>
+          <span>Standalone Works</span>
+          <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 text-slate-300 font-mono">
+            {{ author_data.standalone_books|length }}
+          </span>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+          {% for book in author_data.standalone_books %}
+            {% include 'partials/book_card.html' %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <!-- Book Cards Flat Grid (2 cols mobile, 3 tablet, 4 desktop, 6 large) -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+    {% for book in books %}
+      {% include 'partials/book_card.html' %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Pagination Controls -->
+  {% if total_pages > 1 %}
+  <div class="mt-8 pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2 sm:gap-4">
+    
+    <!-- Prev Button -->
+    <div>
+      {% if page > 1 %}
+      <button 
+        type="button"
+        onclick="goToPage({{ page - 1 }})"
+        class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors cursor-pointer">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        <span class="hidden xs:inline">Prev</span>
+      </button>
+      {% else %}
+      <button disabled class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 text-slate-600 text-xs font-medium border border-slate-800 cursor-not-allowed">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        <span class="hidden xs:inline">Prev</span>
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Quick Page Indicator & Jump -->
+    <div class="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-400">
+      <span class="hidden sm:inline">Page</span>
+      <form onsubmit="event.preventDefault(); goToPage(document.getElementById('jump-page-input').value);" class="inline-flex items-center gap-1">
+        <input 
+          type="number" 
+          id="jump-page-input"
+          min="1" 
+          max="{{ total_pages }}" 
+          value="{{ page }}" 
+          class="w-12 sm:w-14 bg-slate-800 text-center text-white border border-slate-700 rounded-lg py-1 px-1 text-xs focus:border-indigo-500 focus:outline-none"
+        />
+        <span class="text-slate-400 text-[11px] sm:text-xs">/ {{ total_pages }}</span>
+        <button type="submit" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700 cursor-pointer">Go</button>
+      </form>
+    </div>
+
+    <!-- Next Button -->
+    <div>
+      {% if page < total_pages %}
+      <button 
+        type="button"
+        onclick="goToPage({{ page + 1 }})"
+        class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors cursor-pointer">
+        <span class="hidden xs:inline">Next</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+      </button>
+      {% else %}
+      <button disabled class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 text-slate-600 text-xs font-medium border border-slate-800 cursor-not-allowed">
+        <span class="hidden xs:inline">Next</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+      </button>
+      {% endif %}
+    </div>
+
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+</div>

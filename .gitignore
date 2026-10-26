@@ -1,0 +1,51 @@
+# ===================================================================
+# Athenea - .gitignore
+# ===================================================================
+
+# Environment & Private Configuration
+.env
+.env.*
+!.env.example
+!schema.sql
+*.env
+bookserver.env
+deploy/*.local
+*.conf.local
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Application Caches & Temporary Storage
+cache/
+thumbnails/
+*.lock
+*.log
+sync_errors.log
+
+# Database Backups & Dumps (except base schema.sql)
+*.dump
+*.tar
+*.gz
+backups/
+*.bkp
+
+# IDE & OS Metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini

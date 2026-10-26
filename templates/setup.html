@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup Wizard - Athenea</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col justify-center py-10 sm:px-6 lg:px-8 bg-[#090d16] text-slate-100 antialiased selection:bg-indigo-600/50">
+
+  <div class="sm:mx-auto sm:w-full sm:max-w-2xl px-4">
+    <!-- Athenea Brand Header -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 shadow-xl shadow-indigo-600/30 p-2.5 mb-3 border border-indigo-400/30">
+        <img src="/static/athenea-icon.svg" alt="Athenea Logo" class="w-full h-full object-contain" />
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Athenea</h1>
+      <p class="text-xs sm:text-sm text-slate-400 mt-1">First-Run Configuration &amp; Deployment Wizard</p>
+    </div>
+
+    <!-- Main Card -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 space-y-6 backdrop-blur-xl animate-fadeIn">
+      
+      <!-- Intro Banner -->
+      <div class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/25 flex items-start gap-3 text-xs text-indigo-200">
+        <svg class="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div>
+          <span class="font-bold text-white">Welcome!</span> Athenea needs to connect to your PostgreSQL database, verify your storage directory, and create your master administrator account.
+        </div>
+      </div>
+
+      <form id="setup-form" onsubmit="handleSetupSubmit(event)" class="space-y-6">
+
+        <!-- SECTION 1: Database Settings -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">1</span>
+              PostgreSQL Database
+            </h2>
+            <button 
+              type="button" 
+              onclick="testDatabaseConnection()" 
+              id="test-db-btn"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+            >
+              Test Connection
+            </button>
+          </div>
+
+          <div id="db-test-status" class="hidden text-xs p-2.5 rounded-xl"></div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Host</label>
+              <input type="text" id="db_host" name="db_host" value="localhost" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Port</label>
+              <input type="number" id="db_port" name="db_port" value="5432" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Database Name</label>
+              <input type="text" id="db_name" name="db_name" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Database User</label>
+              <input type="text" id="db_user" name="db_user" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Database Password</label>
+              <input type="password" id="db_password" name="db_password" placeholder="Enter database password" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 2: Storage Path -->
+        <div class="space-y-3 pt-2">
+          <div class="pb-2 border-b border-slate-800">
+            <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">2</span>
+              Library Storage Path
+            </h2>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Books Directory (<code class="text-indigo-400">LIBRARY_ROOT</code>)</label>
+            <input type="text" id="library_root" name="library_root" value="/data/books" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            <p class="text-[11px] text-slate-400 mt-1">Directory where your books (.epub, .fb2, .pdf, .mobi) will be scanned and stored.</p>
+          </div>
+        </div>
+
+        <!-- SECTION 3: Master Administrator Account -->
+        <div class="space-y-3 pt-2">
+          <div class="pb-2 border-b border-slate-800">
+            <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">3</span>
+              Administrator Account
+            </h2>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Admin Username</label>
+              <input type="text" id="admin_username" name="admin_username" value="admin" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Admin Email (optional)</label>
+              <input type="email" id="admin_email" name="admin_email" placeholder="admin@example.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+              <input type="password" id="admin_password" name="admin_password" required minlength="8" placeholder="At least 8 characters" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Confirm Password</label>
+              <input type="password" id="admin_confirm_password" name="admin_confirm_password" required minlength="8" placeholder="Re-enter password" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 4: Policies & Optional Mail -->
+        <div class="space-y-3 pt-2">
+          <div class="pb-2 border-b border-slate-800">
+            <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px]">4</span>
+              User Registration &amp; Mail (Optional)
+            </h2>
+          </div>
+          <div class="space-y-2 text-xs">
+            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="allow_registration" name="allow_registration" checked class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
+              <span>Allow public registration on <code class="text-indigo-400 font-mono">/register</code></span>
+            </label>
+            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="require_approval" name="require_approval" checked class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0" />
+              <span>Require administrator approval before new users can log in</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Submission Status -->
+        <div id="submit-error" class="hidden p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-xs text-rose-300"></div>
+
+        <!-- Submit Button -->
+        <button 
+          type="submit" 
+          id="submit-btn"
+          class="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
+        >
+          <span>Complete Setup &amp; Launch Athenea</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </button>
+
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <p class="text-center text-[11px] text-slate-500 mt-6">
+      Athenea &bull; Open-Source High-Capacity Digital Library
+    </p>
+  </div>
+
+  <script>
+    async function testDatabaseConnection() {
+      const btn = document.getElementById('test-db-btn');
+      const statusDiv = document.getElementById('db-test-status');
+      
+      const payload = {
+        host: document.getElementById('db_host').value.trim(),
+        port: parseInt(document.getElementById('db_port').value.trim(), 10) || 5432,
+        dbname: document.getElementById('db_name').value.trim(),
+        user: document.getElementById('db_user').value.trim(),
+        password: document.getElementById('db_password').value
+      };
+
+      if (!payload.password) {
+        statusDiv.className = "text-xs p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 block";
+        statusDiv.innerText = "Please enter the database password first.";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "Testing...";
+      statusDiv.className = "text-xs p-2.5 rounded-xl bg-slate-800 text-slate-300 block";
+      statusDiv.innerText = "Attempting connection to PostgreSQL...";
+
+      try {
+        const res = await fetch('/setup/test-db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          statusDiv.className = "text-xs p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 block";
+          statusDiv.innerText = "✓ " + data.message;
+        } else {
+          statusDiv.className = "text-xs p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 block";
+          statusDiv.innerText = "✗ " + data.message;
+        }
+      } catch (err) {
+        statusDiv.className = "text-xs p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 block";
+        statusDiv.innerText = "Network error: " + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Test Connection";
+      }
+    }
+
+    async function handleSetupSubmit(e) {
+      e.preventDefault();
+      const errDiv = document.getElementById('submit-error');
+      const btn = document.getElementById('submit-btn');
+
+      const pwd = document.getElementById('admin_password').value;
+      const confirmPwd = document.getElementById('admin_confirm_password').value;
+
+      if (pwd !== confirmPwd) {
+        errDiv.innerText = "Administrator passwords do not match.";
+        errDiv.classList.remove('hidden');
+        return;
+      }
+
+      const payload = {
+        db_host: document.getElementById('db_host').value.trim(),
+        db_port: parseInt(document.getElementById('db_port').value.trim(), 10) || 5432,
+        db_name: document.getElementById('db_name').value.trim(),
+        db_user: document.getElementById('db_user').value.trim(),
+        db_password: document.getElementById('db_password').value,
+        library_root: document.getElementById('library_root').value.trim(),
+        admin_username: document.getElementById('admin_username').value.trim(),
+        admin_password: pwd,
+        admin_email: document.getElementById('admin_email').value.trim(),
+        allow_registration: document.getElementById('allow_registration').checked,
+        require_approval: document.getElementById('require_approval').checked
+      };
+
+      btn.disabled = true;
+      btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Initializing Athenea...</span>`;
+      errDiv.classList.add('hidden');
+
+      try {
+        const res = await fetch('/setup/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = data.redirect || '/login?setup=success';
+        } else {
+          errDiv.innerText = data.error || "Setup failed. Check database credentials.";
+          errDiv.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = `<span>Complete Setup &amp; Launch Athenea</span>`;
+        }
+      } catch (err) {
+        errDiv.innerText = "Network error: " + err.message;
+        errDiv.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = `<span>Complete Setup &amp; Launch Athenea</span>`;
+      }
+    }
+  </script>
+</body>
+</html>

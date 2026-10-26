@@ -1,0 +1,117 @@
+<div class="space-y-5 animate-fadeIn">
+  
+  <!-- Success / Status Banner -->
+  <div class="p-4 rounded-2xl {% if imported|length > 0 %}bg-emerald-950/40 border border-emerald-500/30 text-emerald-300{% else %}bg-amber-950/40 border border-amber-500/30 text-amber-300{% endif %} flex items-start gap-3.5">
+    <div class="w-10 h-10 rounded-xl {% if imported|length > 0 %}bg-emerald-500/20 text-emerald-400{% else %}bg-amber-500/20 text-amber-400{% endif %} flex items-center justify-center flex-shrink-0">
+      {% if imported|length > 0 %}
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      {% else %}
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      {% endif %}
+    </div>
+    <div>
+      <h3 class="text-sm font-bold text-white">
+        {% if imported|length > 0 %}
+          Successfully Imported {{ imported|length }} Book{% if imported|length > 1 %}s{% endif %}
+        {% else %}
+          No Books Were Imported
+        {% endif %}
+      </h3>
+      <p class="text-xs mt-0.5 opacity-90">
+        {% if imported|length > 0 %}
+          Books have been placed into the library folder and added to PostgreSQL.
+        {% else %}
+          Please check that valid ebook files (.epub, .fb2, .pdf, .mobi, .azw3) were selected.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Successfully Imported Books List -->
+  {% if imported %}
+  <div class="space-y-2">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Imported Books</p>
+    <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
+      {% for b in imported %}
+      <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3 text-xs">
+        <div class="min-w-0">
+          <p class="font-bold text-white truncate" title="{{ b.title }}">{{ b.title }}</p>
+          <p class="text-slate-400 text-[11px] truncate">{{ b.author }} &bull; ID #{{ b.id }}</p>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          {% if b.is_duplicate %}
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Duplicate book detected: folder overwritten & metadata updated">
+            Overwrote #{{ b.id }}
+          </span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            New
+          </span>
+          {% endif %}
+          {% if b.converted_from_fb2 %}
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            FB2 &rarr; EPUB
+          </span>
+          {% endif %}
+          {% for fmt in b.formats %}
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+            {{ fmt }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Failed / Skipped Files -->
+  {% if failed %}
+  <div class="space-y-2">
+    <p class="text-xs font-bold uppercase tracking-wider text-rose-400">Failed / Errors ({{ failed|length }})</p>
+    <div class="max-h-36 overflow-y-auto space-y-1.5 bg-rose-950/20 p-2.5 rounded-xl border border-rose-500/30 text-xs">
+      {% for f in failed %}
+      <div class="text-rose-300">
+        <span class="font-semibold">{{ f.file }}:</span> <span class="opacity-80">{{ f.error }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Actions -->
+  <div class="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+    <button 
+      type="button" 
+      hx-get="/upload/modal" 
+      hx-target="#upload-container" 
+      hx-swap="innerHTML"
+      class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+    >
+      Add More Books
+    </button>
+    <button 
+      type="button" 
+      onclick="closeUploadModal(); goToRecentlyAdded();" 
+      class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+      <span>View in Library</span>
+    </button>
+  </div>
+
+</div>
+
+<script>
+  function goToRecentlyAdded() {
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect) sortSelect.value = 'recent';
+    const pageInput = document.getElementById('input-page');
+    if (pageInput) pageInput.value = '1';
+    if (window.clearFilter) {
+      window.clearFilter();
+    } else if (window.triggerGridUpdate) {
+      window.triggerGridUpdate();
+    }
+  }
+</script>

@@ -1,0 +1,66 @@
+# ==============================================================================
+# Athenea - Docker Compose Deployment
+# Complete all-in-one stack: Web Application + PostgreSQL with pg_trgm
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  athenea:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: athenea-web
+    restart: unless-stopped
+    ports:
+      - "${ATHENEA_PORT:-8000}:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-athenea}
+      - DB_USER=${POSTGRES_USER:-athenea}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-change_me_to_a_secure_password}
+      - LIBRARY_ROOT=/data/books
+      - THUMBNAIL_DIR=/data/thumbnails
+      - SESSION_SECRET=${SESSION_SECRET:-change_this_secret_in_production}
+      - DEFAULT_PAGE_SIZE=48
+      - APP_NAME="Athenea"
+    volumes:
+      # Mount your host book library directory here:
+      - "${HOST_BOOKS_PATH:-./books}:/data/books"
+      - athenea_thumbnails:/data/thumbnails
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - athenea_net
+
+  db:
+    image: postgres:16-alpine
+    container_name: athenea-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-athenea}
+      - POSTGRES_USER=${POSTGRES_USER:-athenea}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_to_a_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Automatically initialize database schema, extensions, and trigram indexes on fresh start
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-athenea} -d ${POSTGRES_DB:-athenea}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - athenea_net
+
+volumes:
+  postgres_data:
+    driver: local
+  athenea_thumbnails:
+    driver: local
+
+networks:
+  athenea_net:
+    driver: bridge

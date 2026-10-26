@@ -1,0 +1,39 @@
+{% if context == 'modal' %}
+<button 
+  type="button" 
+  id="modal-fav-btn-{{ book_id }}"
+  hx-post="/book/{{ book_id }}/favorite?context=modal" 
+  hx-target="this" 
+  hx-swap="outerHTML"
+  class="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer {% if is_favorite %}bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/30{% else %}bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-rose-500/50{% endif %}"
+>
+  <svg class="w-4 h-4 {% if is_favorite %}fill-current text-white{% else %}fill-none text-rose-400{% endif %}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+  </svg>
+  <span>{% if is_favorite %}Favorited{% else %}Add to Favorites{% endif %}</span>
+</button>
+{% else %}
+<button 
+  type="button"
+  id="card-fav-btn-{{ book_id }}"
+  onclick="event.stopPropagation();"
+  hx-post="/book/{{ book_id }}/favorite?context=card"
+  hx-target="this"
+  hx-swap="outerHTML"
+  title="{% if is_favorite %}Remove from Favorites{% else %}Add to Favorites{% endif %}"
+  class="absolute top-2 left-2 z-10 w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-all duration-200 group/fav {% if is_favorite %}bg-rose-600/90 text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500 hover:scale-110{% else %}bg-slate-900/70 text-slate-400 hover:text-rose-400 hover:bg-slate-900/90 border border-slate-700/60 hover:border-rose-500/50 hover:scale-110{% endif %}"
+>
+  <svg class="w-4 h-4 transition-transform {% if is_favorite %}fill-current scale-105{% else %}fill-none group-hover/fav:scale-110{% endif %}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+  </svg>
+</button>
+{% endif %}
+
+{% if count is defined %}
+<span id="fav-count-badge" hx-swap-oob="true" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono {% if current_favorites_only %}bg-rose-700 text-white{% else %}bg-slate-700 text-rose-300{% endif %}">
+  {{ count }}
+</span>
+<span id="sidebar-fav-count" hx-swap-oob="true" class="px-2 py-0.5 rounded-full text-[11px] font-mono {% if current_favorites_only %}bg-rose-700 text-white{% else %}bg-slate-900/80 text-rose-300 border border-slate-700{% endif %}">
+  {{ count }}
+</span>
+{% endif %}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Athenea eBook & Audiobook Server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=athenea
+Group=athenea
+WorkingDirectory=/opt/athenea
+ExecStart=/opt/athenea/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips='*'
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/athenea.env
+
+[Install]
+WantedBy=multi-user.target

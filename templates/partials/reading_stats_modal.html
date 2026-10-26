@@ -1,0 +1,156 @@
+<div id="reading-stats-modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+  <!-- Backdrop Click Area -->
+  <div class="fixed inset-0" onclick="closeProfileModal()"></div>
+
+  <!-- Modal Dialog Card -->
+  <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden z-10 p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-white">My Reading Activity</h2>
+          <p class="text-xs text-slate-400">Personal bookshelf stats for <span class="text-indigo-400 font-semibold">{{ current_user.username }}</span></p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="closeProfileModal()" 
+        class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700"
+        title="Close (Esc)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- 6-Metric Stat Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Finished Books</div>
+        <div class="text-2xl font-bold text-emerald-400 font-mono mt-0.5">{{ stats.shelf_counts.finished }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Completed reads</div>
+      </div>
+
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Currently Reading</div>
+        <div class="text-2xl font-bold text-amber-400 font-mono mt-0.5">{{ stats.shelf_counts.reading }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Active books</div>
+      </div>
+
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Want to Read</div>
+        <div class="text-2xl font-bold text-sky-400 font-mono mt-0.5">{{ stats.shelf_counts.plan_to_read }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Reading wishlist</div>
+      </div>
+
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Favorites</div>
+        <div class="text-2xl font-bold text-rose-400 font-mono mt-0.5">{{ stats.favorites_count }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Starred titles</div>
+      </div>
+
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Notes &amp; Highlights</div>
+        <div class="text-2xl font-bold text-indigo-400 font-mono mt-0.5">{{ stats.notes_count }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Saved annotations</div>
+      </div>
+
+      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Bookmarks</div>
+        <div class="text-2xl font-bold text-purple-400 font-mono mt-0.5">{{ stats.bookmarks_count }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Saved positions</div>
+      </div>
+    </div>
+
+    <!-- Currently Reading Progress Section -->
+    {% if stats.in_progress_books %}
+    <div class="space-y-3">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-white uppercase tracking-wider text-[11px]">Continue Reading</span>
+        <span class="text-slate-400 text-[11px]">{{ stats.in_progress_books|length }} active</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {% for b in stats.in_progress_books %}
+        <div class="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center gap-3 hover:border-slate-700 transition-colors">
+          <img 
+            src="{{ b.thumbnail_url }}" 
+            alt="{{ b.title }}" 
+            class="w-10 h-14 object-cover rounded shadow border border-slate-800 flex-shrink-0"
+            onerror="this.onerror=null; this.src='/static/placeholder.svg';"
+          />
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-white truncate" title="{{ b.title }}">{{ b.title }}</h4>
+            <p class="text-[10px] text-slate-400 truncate">{{ b.author }}</p>
+            <div class="mt-1.5 flex items-center gap-2">
+              <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-gradient-to-r from-indigo-500 to-purple-500 h-1.5 rounded-full" style="width: {{ b.percentage }}%"></div>
+              </div>
+              <span class="text-[10px] font-mono text-indigo-300 font-bold">{{ b.percentage }}%</span>
+            </div>
+          </div>
+          <a 
+            href="/reader/{{ b.id }}" 
+            target="_blank" 
+            class="p-2 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white transition-colors flex-shrink-0 shadow cursor-pointer"
+            title="Open in Reader"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Genres / Tags -->
+    {% if stats.top_genres %}
+    <div class="space-y-2">
+      <span class="font-bold text-white uppercase tracking-wider text-[11px] block">Top Reading Genres</span>
+      <div class="flex flex-wrap gap-2">
+        {% for g in stats.top_genres %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">
+          <span>{{ g.name }}</span>
+          <span class="text-[10px] font-bold text-indigo-400 bg-indigo-950/80 px-1.5 py-0.5 rounded-full border border-indigo-500/30">{{ g.count }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Footer Actions -->
+    <div class="pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
+      <button 
+        type="button" 
+        hx-get="/profile/password-modal" 
+        hx-target="#profile-modal-container" 
+        hx-swap="innerHTML"
+        class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+        Account &amp; Kindle Settings
+      </button>
+
+      <button 
+        type="button" 
+        onclick="closeProfileModal()" 
+        class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+      >
+        Close
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    function closeProfileModal() {
+      const modal = document.getElementById('reading-stats-modal');
+      if (modal) modal.remove();
+      const container = document.getElementById('profile-modal-container');
+      if (container) container.innerHTML = "";
+    }
+  </script>
+</div>

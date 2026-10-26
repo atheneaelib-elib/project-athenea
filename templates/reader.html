@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ book.title }} - Reader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/js/jszip.min.js"></script>
+  <script src="/static/js/epub.min.js"></script>
+  <style>
+    /* Theme definitions */
+    body.theme-dark {
+      background-color: #0b0f19;
+      color: #e2e8f0;
+    }
+    body.theme-light {
+      background-color: #ffffff;
+      color: #1e293b;
+    }
+    body.theme-sepia {
+      background-color: #fbf0d9;
+      color: #433422;
+    }
+
+    #viewer iframe {
+      border: none !important;
+    }
+    
+    /* Flow specific styles */
+    .flow-paginated #viewer {
+      overflow: hidden;
+    }
+    .flow-scroll #viewer {
+      overflow-y: auto !important;
+      overflow-x: hidden;
+    }
+    .flow-scroll #prev-btn, .flow-scroll #next-btn {
+      display: none !important;
+    }
+
+    /* Highlight styling for active audiobook narration */
+    .tts-active-highlight {
+      background-color: rgba(99, 102, 241, 0.24) !important;
+      border-left: 4px solid #6366f1 !important;
+      padding-left: 8px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.12);
+      transition: background-color 0.25s ease, border-left 0.25s ease;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col theme-dark flow-paginated select-none antialiased">
+
+  <!-- Top Reader Navigation Bar -->
+  <header id="reader-header" class="flex-shrink-0 h-14 border-b border-slate-800/80 bg-slate-900/95 backdrop-blur px-2.5 sm:px-4 flex items-center justify-between z-30 transition-all duration-300">
+    
+    <!-- Left: Return & Table of Contents -->
+    <div class="flex items-center gap-1.5 sm:gap-3">
+      <a 
+        href="/" 
+        class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 flex-shrink-0"
+        title="Return to Library"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span class="hidden sm:inline">Library</span>
+      </a>
+
+      {% if fmt == 'epub' %}
+      <button 
+        type="button" 
+        onclick="toggleToc()" 
+        class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 flex-shrink-0"
+        title="Chapters &amp; Table of Contents"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+        <span class="hidden sm:inline">Contents</span>
+      </button>
+
+      <button 
+        type="button" 
+        onclick="toggleBookmarksDrawer()" 
+        class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 transition-colors border border-slate-700 flex-shrink-0 cursor-pointer"
+        title="Highlights, Notes &amp; Bookmarks"
+      >
+        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+        <span class="hidden sm:inline">Notes</span>
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Center: Title and Author (Visible on tablet/desktop) -->
+    <div class="hidden md:block text-center max-w-xs lg:max-w-md mx-2 truncate">
+      <h1 class="text-xs sm:text-sm font-semibold truncate text-slate-100" title="{{ book.title }}">{{ book.title }}</h1>
+      <p class="text-[10px] sm:text-[11px] text-slate-400 truncate">{{ book.author }}</p>
+    </div>
+
+    <!-- Right: Reading Controls -->
+    <div class="flex items-center gap-1 sm:gap-2">
+      
+      {% if fmt == 'epub' %}
+      <!-- Font Size Controls (Available on both Mobile & Desktop) -->
+      <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+        <button 
+          type="button"
+          onclick="changeFontSize(-10)" 
+          class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white rounded hover:bg-slate-700 active:scale-90 transition-all cursor-pointer"
+          title="Decrease font size (A-)"
+        >
+          A-
+        </button>
+        <span id="font-size-label" class="text-[10px] sm:text-[11px] text-slate-400 px-1 font-mono">100%</span>
+        <button 
+          type="button"
+          onclick="changeFontSize(10)" 
+          class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white rounded hover:bg-slate-700 active:scale-90 transition-all cursor-pointer"
+          title="Increase font size (A+)"
+        >
+          A+
+        </button>
+      </div>
+
+      <!-- Audiobook / Listen Toggle Button -->
+      <button 
+        id="audiobook-toggle-btn"
+        type="button" 
+        onclick="toggleAudiobookPlayer()" 
+        class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/90 hover:bg-indigo-600 text-white transition-all shadow-md shadow-indigo-600/20 border border-indigo-500/50 flex-shrink-0 group cursor-pointer"
+        title="Listen with Neural Audiobook TTS"
+      >
+        <svg class="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"></path></svg>
+        <span class="hidden sm:inline">Listen</span>
+      </button>
+
+      <!-- Layout / Read Mode Dropdown (Desktop/Tablet) -->
+      <select 
+        id="layout-select" 
+        onchange="changeLayout(this.value)" 
+        class="hidden sm:block bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer"
+        title="Reading Mode"
+      >
+        <option value="single">📄 1 Column (Full Page)</option>
+        <option value="double">📖 2 Columns (Spread)</option>
+        <option value="scroll">📜 Continuous Scroll</option>
+      </select>
+
+      <!-- Page Width Dropdown -->
+      <select 
+        id="width-select" 
+        onchange="changeWidth(this.value)" 
+        class="hidden md:block bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer"
+        title="Page Width"
+      >
+        <option value="full">↔️ 100% Full Width</option>
+        <option value="wide">↔️ Wide (1200px)</option>
+        <option value="medium">↔️ Standard (900px)</option>
+      </select>
+
+      <!-- Theme Selector Dropdown -->
+      <select 
+        id="theme-select" 
+        onchange="setTheme(this.value)" 
+        class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-1.5 sm:px-2 py-1.5 focus:outline-none cursor-pointer"
+        title="Theme"
+      >
+        <option value="dark">🌙 Dark</option>
+        <option value="light">☀️ Light</option>
+        <option value="sepia">📜 Sepia</option>
+      </select>
+      {% endif %}
+
+      <!-- Fullscreen Toggle -->
+      <button 
+        onclick="toggleFullscreen()" 
+        class="hidden sm:flex p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+        title="Toggle Fullscreen"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Table of Contents Sliding Drawer (EPUB only) -->
+  <aside id="toc-drawer" class="fixed inset-y-0 left-0 w-80 bg-slate-900 border-r border-slate-800 shadow-2xl z-40 transform -translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+        Table of Contents
+      </h2>
+      <button onclick="toggleToc()" class="p-1 rounded text-slate-400 hover:text-white">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <div id="toc-list" class="flex-1 overflow-y-auto p-3 space-y-1 text-xs">
+      <p class="text-slate-500 italic p-2">Loading chapters...</p>
+    </div>
+  </aside>
+
+  <!-- Notes & Bookmarks Sliding Drawer (EPUB only) -->
+  <aside id="bookmarks-drawer" class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-slate-900 border-l border-slate-800 shadow-2xl z-40 transform translate-x-full transition-transform duration-300 flex flex-col">
+    <!-- Header with Tabs -->
+    <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-1.5">
+        <button 
+          type="button" 
+          onclick="switchNotesTab('bookmarks')" 
+          id="tab-btn-bookmarks"
+          class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm cursor-pointer"
+        >
+          Bookmarks
+        </button>
+        <button 
+          type="button" 
+          onclick="switchNotesTab('notes')" 
+          id="tab-btn-notes"
+          class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+        >
+          Highlights &amp; Notes
+        </button>
+      </div>
+      <button onclick="toggleBookmarksDrawer(false)" class="p-1 rounded text-slate-400 hover:text-white" title="Close Drawer">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- Bookmarks Panel -->
+    <div id="panel-bookmarks" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+      <button 
+        type="button" 
+        onclick="addCurrentBookmark()" 
+        class="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+      >
+        <svg class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span>Bookmark Current Page</span>
+      </button>
+
+      <div id="bookmarks-list" class="space-y-2 pt-1">
+        <p class="text-slate-500 italic p-2 text-center">Loading bookmarks...</p>
+      </div>
+    </div>
+
+    <!-- Notes & Highlights Panel -->
+    <div id="panel-notes" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs hidden">
+      <div class="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400">
+        💡 <span class="text-slate-300 font-medium">Tip:</span> Select text in the book to create highlights and add reading notes.
+      </div>
+      <div id="notes-list" class="space-y-2">
+        <p class="text-slate-500 italic p-2 text-center">Loading highlights...</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Floating Highlight & Note Action Bar -->
+  <div id="highlight-bar" class="fixed top-16 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl p-2 px-3 z-50 hidden items-center gap-2 animate-fadeIn backdrop-blur-md">
+    <span class="text-[11px] text-slate-300 font-medium">Highlight:</span>
+    <button type="button" onclick="createHighlight('yellow')" class="w-5 h-5 rounded-full bg-yellow-400 hover:scale-115 transition-transform shadow cursor-pointer border border-yellow-200" title="Yellow Highlight"></button>
+    <button type="button" onclick="createHighlight('green')" class="w-5 h-5 rounded-full bg-emerald-400 hover:scale-115 transition-transform shadow cursor-pointer border border-emerald-200" title="Green Highlight"></button>
+    <button type="button" onclick="createHighlight('blue')" class="w-5 h-5 rounded-full bg-sky-400 hover:scale-115 transition-transform shadow cursor-pointer border border-sky-200" title="Blue Highlight"></button>
+    <button type="button" onclick="createHighlight('pink')" class="w-5 h-5 rounded-full bg-pink-400 hover:scale-115 transition-transform shadow cursor-pointer border border-pink-200" title="Pink Highlight"></button>
+    <span class="w-px h-4 bg-slate-700 mx-1"></span>
+    <input type="text" id="highlight-note-input" placeholder="Note (optional)..." class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 w-32 sm:w-48 focus:outline-none focus:border-indigo-500" />
+    <button type="button" onclick="createHighlightWithNote()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold cursor-pointer shadow">Save</button>
+    <button type="button" onclick="closeHighlightToolbar()" class="text-slate-400 hover:text-white p-1 ml-0.5 cursor-pointer" title="Cancel">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <!-- Main Viewport Area -->
+  <main class="flex-1 relative overflow-hidden flex items-center justify-center">
+
+    {% if fmt == 'epub' %}
+      <!-- EPUB Viewport Container (Configurable Width) -->
+      <div id="viewer-container" class="w-full h-full px-4 sm:px-14 transition-all duration-200">
+        <div id="viewer" class="w-full h-full"></div>
+      </div>
+
+      <!-- Left / Previous Page Arrow (Desktop Only) -->
+      <button 
+        id="prev-btn" 
+        onclick="prevPage()" 
+        class="hidden md:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white transition-all backdrop-blur shadow-xl border border-slate-700/60 z-20 group"
+        title="Previous Page (Left Arrow)"
+      >
+        <svg class="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+
+      <!-- Right / Next Page Arrow (Desktop Only) -->
+      <button 
+        id="next-btn" 
+        onclick="nextPage()" 
+        class="hidden md:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white transition-all backdrop-blur shadow-xl border border-slate-700/60 z-20 group"
+        title="Next Page (Right Arrow / Space)"
+      >
+        <svg class="w-5 h-5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+      </button>
+
+      <!-- Loading State Overlay -->
+      <div id="loading-overlay" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center z-30 transition-opacity duration-300">
+        <svg class="animate-spin h-8 w-8 text-indigo-500 mb-3" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-xs font-semibold text-slate-300">Loading eBook...</p>
+        <p id="loading-status" class="text-[11px] text-slate-500 mt-1">Downloading file...</p>
+      </div>
+
+    {% elif fmt == 'pdf' %}
+      <!-- PDF Native Reader Iframe -->
+      <iframe src="{{ raw_url }}" class="w-full h-full border-0"></iframe>
+
+    {% else %}
+      <!-- Unsupported Format Fallback -->
+      <div class="text-center p-8 max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+        <h3 class="text-base font-bold text-white mb-2">In-browser preview not available for .{{ fmt }}</h3>
+        <p class="text-xs text-slate-400 mb-6">This book is stored in <span class="font-mono text-indigo-400 uppercase">{{ fmt }}</span> format. You can download the file directly to read on your e-reader or desktop app.</p>
+        <a 
+          href="/download/{{ book.id }}/{{ fmt }}" 
+          download
+          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-all"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Download {{ fmt|upper }}
+        </a>
+      </div>
+    {% endif %}
+
+  </main>
+
+  <!-- Bottom Reader Status Bar (EPUB only) -->
+  {% if fmt == 'epub' %}
+  <!-- Floating Audiobook Player Panel (Dual Neural TTS) -->
+  <div 
+    id="audiobook-player" 
+    class="fixed bottom-0 sm:bottom-6 left-1/2 -translate-x-1/2 w-full sm:w-11/12 max-w-2xl bg-slate-900/98 backdrop-blur-2xl border-t sm:border border-indigo-500/30 rounded-t-2xl sm:rounded-2xl shadow-2xl p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-30 transition-all duration-300 transform translate-y-full sm:translate-y-36 opacity-0 pointer-events-none flex flex-col gap-2.5"
+  >
+    <!-- Top Row: Cover, Info & Playback Controls -->
+    <div class="flex items-center justify-between gap-2.5">
+      
+      <!-- Book Thumbnail & Narration Info -->
+      <div class="flex items-center gap-2.5 min-w-0 flex-1">
+        <img 
+          src="/cover/{{ book.id }}" 
+          alt="{{ book.title }}" 
+          class="w-8 h-11 rounded object-cover shadow border border-slate-700 flex-shrink-0"
+        />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+              Audiobook
+            </span>
+            <span id="tts-chapter-label" class="text-[11px] text-slate-400 truncate max-w-[140px] sm:max-w-[220px] font-medium">Chapter</span>
+          </div>
+          <p id="tts-preview-text" class="text-xs text-slate-200 truncate max-w-[220px] sm:max-w-md font-normal mt-0.5 italic">
+            Click play or tap any paragraph to listen
+          </p>
+        </div>
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <!-- Prev Paragraph -->
+        <button 
+          type="button" 
+          onclick="ttsPrevParagraph()" 
+          class="p-2 sm:p-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          title="Previous paragraph"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+        </button>
+
+        <!-- Main Play / Pause Button -->
+        <button 
+          id="tts-play-btn"
+          type="button" 
+          onclick="ttsTogglePlayPause()" 
+          class="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          title="Play / Pause"
+        >
+          <svg id="tts-play-icon" class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="tts-pause-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <svg id="tts-loading-icon" class="w-5 h-5 animate-spin hidden text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </button>
+
+        <!-- Next Paragraph -->
+        <button 
+          type="button" 
+          onclick="ttsNextParagraph()" 
+          class="p-2 sm:p-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          title="Next paragraph"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+        </button>
+
+        <!-- Close / Hide Player -->
+        <button 
+          type="button" 
+          onclick="toggleAudiobookPlayer(false)" 
+          class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-0.5"
+          title="Close player"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Progress Track & Time -->
+    <div class="flex items-center gap-2 pt-0.5 text-[10px] font-mono text-slate-400">
+      <span id="tts-time-current">0:00</span>
+      <div class="flex-1 bg-slate-800 h-2 rounded-full overflow-hidden relative cursor-pointer" onclick="ttsSeekAudio(event)">
+        <div id="tts-progress-bar" class="bg-indigo-500 h-full w-0 transition-all duration-100 rounded-full"></div>
+      </div>
+      <span id="tts-time-total">0:00</span>
+    </div>
+
+    <!-- Voice & Speed Selector Row (Visible on both Mobile & Desktop) -->
+    <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
+      <!-- Voice Selector -->
+      <div class="flex items-center gap-1.5 flex-1 min-w-0">
+        <span class="text-[10px] text-slate-400 font-medium hidden xs:inline">Voice:</span>
+        <select 
+          id="tts-voice-select" 
+          onchange="ttsChangeVoice(this.value)" 
+          class="w-full xs:w-auto flex-1 max-w-[200px] bg-slate-800 text-[11px] text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer truncate"
+          title="Select Voice"
+        >
+          <optgroup label="🇷🇺 Русские">
+            <option value="ru_irina">🇷🇺 Ирина ⭐</option>
+            <option value="ru_dmitri">🇷🇺 Дмитрий ⭐</option>
+            <option value="ru_ruslan">🇷🇺 Руслан</option>
+          </optgroup>
+          <optgroup label="🇺🇸 English (US)">
+            <option value="af_heart" selected>🇺🇸 Heart ⭐</option>
+            <option value="af_bella">🇺🇸 Bella</option>
+            <option value="am_adam">🇺🇸 Adam ⭐</option>
+            <option value="am_michael">🇺🇸 Michael</option>
+          </optgroup>
+          <optgroup label="🇬🇧 English (UK)">
+            <option value="bf_emma">🇬🇧 Emma ⭐</option>
+            <option value="bm_george">🇬🇧 George</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Speed Dropdown -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span class="text-[10px] text-slate-400 font-medium hidden xs:inline">Speed:</span>
+        <select 
+          id="tts-speed-select" 
+          onchange="ttsChangeSpeed(this.value)" 
+          class="bg-slate-800 text-[11px] text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+          title="Playback Speed"
+        >
+          <option value="0.85">0.85x</option>
+          <option value="1.0" selected>1.0x</option>
+          <option value="1.15">1.15x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+        </select>
+      </div>
+
+      <!-- Sleep Timer -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span class="text-[10px] text-slate-400 font-medium hidden xs:inline">Sleep:</span>
+        <select 
+          id="tts-sleep-select" 
+          onchange="setSleepTimer(this.value)" 
+          class="bg-slate-800 text-[11px] text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+          title="Audiobook Sleep Timer"
+        >
+          <option value="off" selected>Off</option>
+          <option value="15">15m</option>
+          <option value="30">30m</option>
+          <option value="45">45m</option>
+          <option value="60">60m</option>
+          <option value="chapter">Chapter</option>
+        </select>
+        <span id="sleep-timer-badge" class="hidden px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <audio id="tts-audio-elem" class="hidden" preload="auto"></audio>
+
+  <footer class="flex-shrink-0 h-8 border-t border-slate-800/60 bg-slate-900/90 px-4 flex items-center justify-between text-[11px] text-slate-400">
+    <div id="chapter-label" class="truncate max-w-xs font-medium">Reading...</div>
+    <div id="progress-label" class="font-mono text-[10px]">0%</div>
+  </footer>
+  {% endif %}
+
+  <!-- Reader JavaScript Engine -->
+  {% if fmt == 'epub' %}
+  <script>
+    const BOOK_ID = {{ book.id }};
+    const RAW_URL = "{{ raw_url }}";
+    const STORAGE_KEY_POS = "epub_pos_" + BOOK_ID;
+    const STORAGE_KEY_THEME = "reader_theme";
+    const STORAGE_KEY_FONT_SIZE = "reader_font_size";
+    const STORAGE_KEY_LAYOUT = "reader_layout_mode";
+    const STORAGE_KEY_WIDTH = "reader_width_mode";
+
+    let book, rendition, bookBuffer;
+    let currentFontSize = parseInt(localStorage.getItem(STORAGE_KEY_FONT_SIZE)) || 100;
+    let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || "dark";
+    let currentLayout = localStorage.getItem(STORAGE_KEY_LAYOUT) || "single"; // default: 1 column full page
+    let currentWidth = localStorage.getItem(STORAGE_KEY_WIDTH) || "full";     // default: 100% full width
+
+    function applyWidthStyles() {
+      const container = document.getElementById('viewer-container');
+      if (!container) return;
+      container.className = "h-full transition-all duration-200 ";
+      if (currentWidth === "medium") {
+        container.className += "w-full max-w-4xl mx-auto px-4 sm:px-12";
+      } else if (currentWidth === "wide") {
+        container.className += "w-full max-w-6xl mx-auto px-4 sm:px-12";
+      } else { // "full"
+        container.className += "w-full px-4 sm:px-14";
+      }
+      const select = document.getElementById('width-select');
+      if (select) select.value = currentWidth;
+    }
+
+    function initReader() {
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingStatus = document.getElementById('loading-status');
+
+      applyWidthStyles();
+      const layoutSelect = document.getElementById('layout-select');
+      if (layoutSelect) layoutSelect.value = currentLayout;
+
+      if (loadingStatus) loadingStatus.innerText = "Downloading eBook...";
+
+      fetch(RAW_URL)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to load eBook file (HTTP " + res.status + ")");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          bookBuffer = buffer;
+          if (loadingStatus) loadingStatus.innerText = "Unpacking eBook...";
+          renderBook();
+        })
+        .catch(err => {
+          console.error("Reader error:", err);
+          showError(err.message);
+        });
+    }
+
+    function renderBook(startCfi) {
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const viewer = document.getElementById('viewer');
+      viewer.innerHTML = "";
+
+      // Setup layout mode parameters
+      let spreadSetting = "none";
+      let flowSetting = "paginated";
+
+      if (currentLayout === "double") {
+        spreadSetting = "always";
+        flowSetting = "paginated";
+        document.body.classList.remove('flow-scroll');
+        document.body.classList.add('flow-paginated');
+      } else if (currentLayout === "scroll") {
+        spreadSetting = "none";
+        flowSetting = "scrolled-doc";
+        document.body.classList.remove('flow-paginated');
+        document.body.classList.add('flow-scroll');
+      } else { // "single"
+        spreadSetting = "none";
+        flowSetting = "paginated";
+        document.body.classList.remove('flow-scroll');
+        document.body.classList.add('flow-paginated');
+      }
+
+      book = ePub(bookBuffer);
+      rendition = book.renderTo("viewer", {
+        width: "100%",
+        height: "100%",
+        spread: spreadSetting,
+        flow: flowSetting
+      });
+
+      // Register Themes with generous padding
+      rendition.themes.register("dark", {
+        "body": { "color": "#e2e8f0 !important", "background": "#0b0f19 !important", "font-family": "system-ui, -apple-system, sans-serif !important", "line-height": "1.75 !important", "padding": "20px 40px !important" },
+        "p": { "color": "#e2e8f0 !important" },
+        "a": { "color": "#818cf8 !important" },
+        "h1, h2, h3, h4, h5, h6": { "color": "#ffffff !important" }
+      });
+      rendition.themes.register("light", {
+        "body": { "color": "#1e293b !important", "background": "#ffffff !important", "font-family": "system-ui, -apple-system, sans-serif !important", "line-height": "1.75 !important", "padding": "20px 40px !important" },
+        "p": { "color": "#1e293b !important" },
+        "a": { "color": "#4f46e5 !important" },
+        "h1, h2, h3, h4, h5, h6": { "color": "#0f172a !important" }
+      });
+      rendition.themes.register("sepia", {
+        "body": { "color": "#433422 !important", "background": "#fbf0d9 !important", "font-family": "Georgia, serif !important", "line-height": "1.75 !important", "padding": "20px 40px !important" },
+        "p": { "color": "#433422 !important" },
+        "a": { "color": "#8f4b1e !important" },
+        "h1, h2, h3, h4, h5, h6": { "color": "#2c2216 !important" }
+      });
+
+      rendition.themes.default({
+        ".tts-active-highlight": {
+          "background-color": "rgba(99, 102, 241, 0.24) !important",
+          "border-left": "4px solid #6366f1 !important",
+          "padding-left": "8px !important",
+          "border-radius": "4px !important",
+          "transition": "all 0.25s ease !important"
+        },
+        ".hl-yellow": { "background-color": "rgba(250, 204, 21, 0.45) !important", "border-bottom": "2px solid #eab308 !important" },
+        ".hl-green": { "background-color": "rgba(74, 222, 128, 0.45) !important", "border-bottom": "2px solid #22c55e !important" },
+        ".hl-blue": { "background-color": "rgba(96, 165, 250, 0.45) !important", "border-bottom": "2px solid #3b82f6 !important" },
+        ".hl-pink": { "background-color": "rgba(244, 114, 182, 0.45) !important", "border-bottom": "2px solid #ec4899 !important" }
+      });
+
+      setTheme(currentTheme);
+      updateFontSizeUI();
+
+      async function determineInitialPosition() {
+        if (startCfi) return startCfi;
+        try {
+          const res = await fetch(`/api/progress/${BOOK_ID}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.cfi) return data.cfi;
+          }
+        } catch (e) {}
+        return localStorage.getItem(STORAGE_KEY_POS);
+      }
+
+      determineInitialPosition().then(initialPos => {
+        rendition.display(initialPos || undefined).then(() => {
+          if (loadingOverlay) {
+            loadingOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+              if (loadingOverlay && loadingOverlay.parentNode) loadingOverlay.remove();
+            }, 300);
+          }
+
+          // Generate locations in background
+          book.ready.then(() => {
+            return book.locations.generate(1000);
+          }).then(() => {
+            updateProgressUI();
+          }).catch(e => console.warn("Locations:", e));
+
+          // Load TOC
+          book.loaded.navigation.then(function(toc) {
+            const tocList = document.getElementById('toc-list');
+            if (!tocList) return;
+            tocList.innerHTML = "";
+            if (!toc || toc.length === 0) {
+              tocList.innerHTML = '<p class="text-slate-500 italic p-2">No table of contents available.</p>';
+              return;
+            }
+            toc.forEach(function(chapter) {
+              const item = document.createElement("a");
+              item.href = "javascript:void(0)";
+              item.className = "block py-1.5 px-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors truncate";
+              item.innerText = (chapter.label || "Chapter").trim();
+              item.onclick = function() {
+                rendition.display(chapter.href);
+                const chapLabel = document.getElementById('chapter-label');
+                if (chapLabel) chapLabel.innerText = chapter.label.trim();
+                const ttsChap = document.getElementById('tts-chapter-label');
+                if (ttsChap) ttsChap.innerText = chapter.label.trim();
+                toggleToc();
+              };
+              tocList.appendChild(item);
+            });
+          });
+
+          // Relocated handler
+          rendition.on("relocated", function(location) {
+            if (location && location.start && location.start.cfi) {
+              localStorage.setItem(STORAGE_KEY_POS, location.start.cfi);
+            }
+            updateProgressUI(location);
+            setTimeout(ttsScanParagraphs, 150);
+          });
+
+          rendition.on("rendered", function() {
+            setTimeout(ttsScanParagraphs, 150);
+          });
+
+          // Text Selection Handler for Highlights & Notes
+          rendition.on("selected", function(cfiRange, contents) {
+            book.getRange(cfiRange).then(function(range) {
+              const text = range.toString().trim();
+              if (!text) return;
+              showHighlightToolbar(cfiRange, text);
+            });
+          });
+
+          // Load saved bookmarks and highlights
+          setTimeout(() => {
+            loadBookmarks();
+            loadNotes();
+          }, 300);
+
+          // Keyboard navigation
+          document.addEventListener("keydown", handleKeyDown);
+          rendition.on("keydown", handleKeyDown);
+
+          // Mobile Touch Gestures & Tap Zones
+          let touchStartX = 0;
+          let touchStartY = 0;
+          let touchStartTime = 0;
+
+          function handleTouchStart(e) {
+            if (e.changedTouches && e.changedTouches.length > 0) {
+              touchStartX = e.changedTouches[0].screenX;
+              touchStartY = e.changedTouches[0].screenY;
+              touchStartTime = Date.now();
+            }
+          }
+
+          function handleTouchEnd(e) {
+            if (!e.changedTouches || e.changedTouches.length === 0) return;
+            const touchEndX = e.changedTouches[0].screenX;
+            const touchEndY = e.changedTouches[0].screenY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            const deltaTime = Date.now() - touchStartTime;
+
+            // 1. Horizontal swipe gesture (> 45px distance, mostly horizontal, < 600ms)
+            if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4 && deltaTime < 600) {
+              if (deltaX < 0) {
+                nextPage();
+              } else {
+                prevPage();
+              }
+              return;
+            }
+
+            // 2. Tap-zone navigation (tap without dragging, < 350ms)
+            if (Math.abs(deltaX) < 12 && Math.abs(deltaY) < 12 && deltaTime < 350) {
+              const screenW = window.innerWidth;
+              const tapX = touchEndX;
+              // Left 22% -> Prev page
+              if (tapX < screenW * 0.22) {
+                prevPage();
+              }
+              // Right 22% -> Next page
+              else if (tapX > screenW * 0.78) {
+                nextPage();
+              }
+              // Center 56% -> Toggle header/footer (distraction-free immersive reading)
+              else {
+                toggleReaderBars();
+              }
+            }
+          }
+
+          rendition.on("touchstart", handleTouchStart);
+          rendition.on("touchend", handleTouchEnd);
+        });
+      });
+    }
+
+    let readerBarsVisible = true;
+    function toggleReaderBars() {
+      const header = document.getElementById("reader-header");
+      const footer = document.querySelector("footer");
+      readerBarsVisible = !readerBarsVisible;
+      if (header) {
+        if (readerBarsVisible) {
+          header.classList.remove("-translate-y-full");
+        } else {
+          header.classList.add("-translate-y-full");
+        }
+      }
+      if (footer) {
+        if (readerBarsVisible) {
+          footer.classList.remove("translate-y-full");
+        } else {
+          footer.classList.add("translate-y-full");
+        }
+      }
+    }
+
+    let syncProgressTimer = null;
+    function syncCloudProgress(cfi, pct) {
+      if (!cfi) return;
+      clearTimeout(syncProgressTimer);
+      syncProgressTimer = setTimeout(() => {
+        fetch(`/api/progress/${BOOK_ID}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cfi: cfi, percentage: pct || 0 })
+        }).catch(e => console.warn("Cloud progress sync:", e));
+      }, 1500);
+    }
+
+    function updateProgressUI(loc) {
+      const location = loc || (rendition ? rendition.currentLocation() : null);
+      let pct = 0;
+      if (book && book.locations && book.locations.length() > 0 && location && location.start) {
+        const progress = book.locations.percentageFromCfi(location.start.cfi);
+        const label = document.getElementById('progress-label');
+        if (label && !isNaN(progress)) {
+          pct = Math.round(progress * 100);
+          label.innerText = pct + "%";
+        }
+      }
+      if (location && location.start && location.start.cfi) {
+        syncCloudProgress(location.start.cfi, pct);
+      }
+    }
+
+    function changeLayout(mode) {
+      currentLayout = mode;
+      localStorage.setItem(STORAGE_KEY_LAYOUT, mode);
+      const curr = rendition ? rendition.currentLocation() : null;
+      const currentCfi = curr && curr.start ? curr.start.cfi : null;
+      renderBook(currentCfi);
+    }
+
+    function changeWidth(width) {
+      currentWidth = width;
+      localStorage.setItem(STORAGE_KEY_WIDTH, width);
+      applyWidthStyles();
+      if (rendition) {
+        setTimeout(() => rendition.resize(), 150);
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (currentLayout === "scroll") return; // Use native scroll
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        prevPage();
+      } else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
+        nextPage();
+      }
+    }
+
+    function prevPage() {
+      if (rendition) rendition.prev();
+    }
+
+    function nextPage() {
+      if (rendition) rendition.next();
+    }
+
+    function toggleToc() {
+      const drawer = document.getElementById('toc-drawer');
+      drawer.classList.toggle('-translate-x-full');
+    }
+
+    function setTheme(theme) {
+      currentTheme = theme;
+      localStorage.setItem(STORAGE_KEY_THEME, theme);
+      document.body.className = "h-full flex flex-col select-none antialiased theme-" + theme + (currentLayout === 'scroll' ? ' flow-scroll' : ' flow-paginated');
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect) themeSelect.value = theme;
+      if (rendition) {
+        rendition.themes.select(theme);
+      }
+    }
+
+    function changeFontSize(delta) {
+      currentFontSize = Math.min(200, Math.max(70, currentFontSize + delta));
+      localStorage.setItem(STORAGE_KEY_FONT_SIZE, currentFontSize);
+      updateFontSizeUI();
+      if (rendition) {
+        rendition.themes.fontSize(currentFontSize + "%");
+      }
+    }
+
+    function updateFontSizeUI() {
+      const label = document.getElementById('font-size-label');
+      if (label) label.innerText = currentFontSize + "%";
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    function showError(msg) {
+      const loadingOverlay = document.getElementById('loading-overlay');
+      if (loadingOverlay) {
+        loadingOverlay.innerHTML = `
+          <div class="text-center max-w-sm p-6 bg-slate-900 border border-red-500/30 rounded-2xl shadow-2xl">
+            <div class="w-10 h-10 mx-auto mb-3 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center font-bold">!</div>
+            <h3 class="text-sm font-bold text-white mb-1">Could not render book</h3>
+            <p class="text-xs text-slate-400 mb-4">${msg || 'Unknown error'}</p>
+            <div class="flex gap-2 justify-center">
+              <a href="/download/${BOOK_ID}/epub" download class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold">Download File</a>
+              <a href="/" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Back to Library</a>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // ===================================================================
+    // KOKORO-82M NEURAL AUDIOBOOK TTS PLAYER ENGINE
+    // ===================================================================
+    const STORAGE_KEY_VOICE = "tts_voice";
+    const STORAGE_KEY_SPEED = "tts_speed";
+
+    let ttsPlayerVisible = false;
+    let ttsVoice = localStorage.getItem(STORAGE_KEY_VOICE) || "af_heart";
+    let ttsSpeed = parseFloat(localStorage.getItem(STORAGE_KEY_SPEED)) || 1.0;
+    let ttsParagraphs = [];
+    let ttsCurrentIndex = -1;
+    let ttsIsLoading = false;
+    let ttsAudio = null;
+    let ttsVoicesLoaded = false;
+    const ttsPrefetchSet = new Set();
+
+    function initTts() {
+      ttsAudio = document.getElementById("tts-audio-elem");
+      if (!ttsAudio) return;
+
+      const voiceSelect = document.getElementById("tts-voice-select");
+      if (voiceSelect) voiceSelect.value = ttsVoice;
+      const speedSelect = document.getElementById("tts-speed-select");
+      if (speedSelect) speedSelect.value = ttsSpeed.toString();
+
+      // Audio Event Listeners
+      ttsAudio.addEventListener("timeupdate", () => {
+        if (!ttsAudio.duration) return;
+        const cur = ttsAudio.currentTime;
+        const dur = ttsAudio.duration;
+        const curEl = document.getElementById("tts-time-current");
+        const totEl = document.getElementById("tts-time-total");
+        const barEl = document.getElementById("tts-progress-bar");
+        if (curEl) curEl.innerText = formatTime(cur);
+        if (totEl) totEl.innerText = formatTime(dur);
+        if (barEl) barEl.style.width = ((cur / dur) * 100) + "%";
+      });
+
+      ttsAudio.addEventListener("play", () => {
+        setTtsPlayIconState("playing");
+        updateMediaSessionState("playing");
+      });
+
+      ttsAudio.addEventListener("pause", () => {
+        setTtsPlayIconState("paused");
+        updateMediaSessionState("paused");
+      });
+
+      ttsAudio.addEventListener("ended", () => {
+        // Automatically play next paragraph
+        ttsNextParagraph();
+      });
+
+      ttsAudio.addEventListener("error", (e) => {
+        console.error("Audio playback error:", e);
+        setTtsPlayIconState("paused");
+        const previewEl = document.getElementById("tts-preview-text");
+        if (previewEl) previewEl.innerText = "Error playing audio chunk. Retrying...";
+      });
+
+      loadTtsVoices();
+    }
+
+    function formatTime(sec) {
+      if (!sec || isNaN(sec)) return "0:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function setTtsPlayIconState(state) {
+      const playIcon = document.getElementById("tts-play-icon");
+      const pauseIcon = document.getElementById("tts-pause-icon");
+      const loadIcon = document.getElementById("tts-loading-icon");
+
+      if (state === "loading") {
+        if (playIcon) playIcon.classList.add("hidden");
+        if (pauseIcon) pauseIcon.classList.add("hidden");
+        if (loadIcon) loadIcon.classList.remove("hidden");
+      } else if (state === "playing") {
+        if (loadIcon) loadIcon.classList.add("hidden");
+        if (playIcon) playIcon.classList.add("hidden");
+        if (pauseIcon) pauseIcon.classList.remove("hidden");
+      } else { // paused
+        if (loadIcon) loadIcon.classList.add("hidden");
+        if (pauseIcon) pauseIcon.classList.add("hidden");
+        if (playIcon) playIcon.classList.remove("hidden");
+      }
+    }
+
+    function toggleAudiobookPlayer(force) {
+      const player = document.getElementById("audiobook-player");
+      const viewerContainer = document.getElementById("viewer-container");
+      if (!player) return;
+
+      if (force !== undefined) {
+        ttsPlayerVisible = force;
+      } else {
+        ttsPlayerVisible = !ttsPlayerVisible;
+      }
+
+      if (ttsPlayerVisible) {
+        player.classList.remove("translate-y-full", "sm:translate-y-36", "opacity-0", "pointer-events-none");
+        player.classList.add("translate-y-0", "opacity-100", "pointer-events-auto");
+        if (viewerContainer) {
+          viewerContainer.classList.add("pb-36", "sm:pb-20");
+        }
+        ttsScanParagraphs();
+        loadTtsVoices();
+      } else {
+        player.classList.add("translate-y-full", "sm:translate-y-36", "opacity-0", "pointer-events-none");
+        player.classList.remove("translate-y-0", "opacity-100", "pointer-events-auto");
+        if (viewerContainer) {
+          viewerContainer.classList.remove("pb-36", "sm:pb-20");
+        }
+      }
+    }
+
+    function loadTtsVoices() {
+      if (ttsVoicesLoaded) return;
+      fetch("/api/tts/voices")
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.voices) return;
+          const select = document.getElementById("tts-voice-select");
+          if (!select) return;
+          select.innerHTML = "";
+
+          const groups = [
+            { label: "🇷🇺 Русские голоса", filter: v => v.lang === "ru" },
+            { label: "🇺🇸 English (US)", filter: v => v.lang === "en-us" },
+            { label: "🇬🇧 English (UK)", filter: v => v.lang === "en-gb" },
+            { label: "🌍 Other Languages", filter: v => !["ru", "en-us", "en-gb"].includes(v.lang) }
+          ];
+
+          groups.forEach(g => {
+            const voicesInGroup = data.voices.filter(g.filter);
+            if (voicesInGroup.length === 0) return;
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = g.label;
+            voicesInGroup.forEach(v => {
+              const opt = document.createElement("option");
+              opt.value = v.id;
+              opt.textContent = v.name + (v.starred ? " ⭐" : "");
+              if (v.id === ttsVoice) opt.selected = true;
+              optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
+          });
+          ttsVoicesLoaded = true;
+        })
+        .catch(err => console.warn("Failed to load voices:", err));
+    }
+
+    function ttsScanParagraphs() {
+      const contents = rendition ? rendition.getContents() : null;
+      if (!contents || contents.length === 0) return;
+      const doc = contents[0].document;
+      if (!doc) return;
+
+      const candidates = Array.from(doc.querySelectorAll("p, blockquote, h1, h2, h3, h4, h5, h6, li"));
+      ttsParagraphs = candidates.filter(el => {
+        const txt = (el.innerText || "").trim();
+        return txt.length > 5 && !el.closest("header, footer, nav");
+      });
+
+      // Auto-switch to Russian voice if book contains Cyrillic text
+      if (ttsParagraphs.length > 0) {
+        const sampleText = ttsParagraphs.slice(0, 3).map(p => p.innerText || "").join(" ");
+        const isRu = /[\u0400-\u04FF]/.test(sampleText);
+        if (isRu && !ttsVoice.startsWith("ru_")) {
+          ttsVoice = "ru_irina";
+          localStorage.setItem(STORAGE_KEY_VOICE, ttsVoice);
+          const sel = document.getElementById("tts-voice-select");
+          if (sel) sel.value = ttsVoice;
+        }
+      }
+
+      ttsParagraphs.forEach((el, idx) => {
+        el.setAttribute("data-tts-idx", idx);
+        el.style.cursor = "pointer";
+        el.onclick = (e) => {
+          e.stopPropagation();
+          toggleAudiobookPlayer(true);
+          ttsPlayParagraph(idx);
+        };
+      });
+
+      // Highlight active if in bounds
+      if (ttsCurrentIndex >= 0 && ttsCurrentIndex < ttsParagraphs.length) {
+        ttsHighlightParagraph(ttsCurrentIndex);
+      }
+    }
+
+    function ttsHighlightParagraph(idx) {
+      ttsParagraphs.forEach(p => p.classList.remove("tts-active-highlight"));
+      if (idx >= 0 && idx < ttsParagraphs.length) {
+        const target = ttsParagraphs[idx];
+        target.classList.add("tts-active-highlight");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    async function ttsPlayParagraph(idx) {
+      if (idx < 0) idx = 0;
+
+      // Check if we reached the end of current chapter / viewport
+      if (idx >= ttsParagraphs.length) {
+        if (sleepTimerMode === 'chapter') {
+          console.log("Sleep timer: reached end of chapter.");
+          if (ttsAudio) ttsAudio.pause();
+          setTtsPlayIconState("paused");
+          setSleepTimer('off');
+          const badge = document.getElementById("sleep-timer-badge");
+          if (badge) {
+            badge.innerText = "⏱️ Paused (Chapter End)";
+            badge.classList.remove("hidden");
+            setTimeout(() => badge.classList.add("hidden"), 5000);
+          }
+          return;
+        }
+        console.log("Reached end of page/chapter, turning to next...");
+        if (rendition) {
+          rendition.next();
+          // Wait for relocation and next paragraphs to load
+          setTimeout(() => {
+            ttsScanParagraphs();
+            if (ttsParagraphs.length > 0) {
+              ttsPlayParagraph(0);
+            } else {
+              setTtsPlayIconState("paused");
+            }
+          }, 400);
+        }
+        return;
+      }
+
+      ttsCurrentIndex = idx;
+      ttsHighlightParagraph(idx);
+
+      const targetEl = ttsParagraphs[idx];
+      const rawText = targetEl.innerText.trim();
+
+      const previewEl = document.getElementById("tts-preview-text");
+      if (previewEl) {
+        previewEl.innerText = rawText.length > 90 ? rawText.slice(0, 90) + "..." : rawText;
+      }
+
+      setTtsPlayIconState("loading");
+
+      try {
+        const res = await fetch("/api/tts/synthesize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: rawText,
+            voice: ttsVoice,
+            speed: ttsSpeed
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error("HTTP " + res.status);
+        }
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        if (ttsAudio) {
+          ttsAudio.src = data.url;
+          ttsAudio.playbackRate = ttsSpeed;
+          await ttsAudio.play();
+          setTtsPlayIconState("playing");
+        }
+
+        // Setup lock-screen & Bluetooth media session controls
+        setupMediaSession(rawText);
+
+        // Pre-fetch the next paragraph in background for 0-latency continuous playback
+        ttsPrefetchNext(idx + 1);
+
+      } catch (err) {
+        console.error("TTS play error:", err);
+        setTtsPlayIconState("paused");
+        if (previewEl) previewEl.innerText = "Error synthesizing speech. Please retry.";
+      }
+    }
+
+    function ttsPrefetchNext(nextIdx) {
+      if (nextIdx >= ttsParagraphs.length) return;
+      const nextEl = ttsParagraphs[nextIdx];
+      const nextText = nextEl.innerText.trim();
+      if (!nextText || ttsPrefetchSet.has(nextText)) return;
+
+      ttsPrefetchSet.add(nextText);
+      // Fire-and-forget prefetch
+      fetch("/api/tts/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: nextText,
+          voice: ttsVoice,
+          speed: ttsSpeed
+        })
+      }).catch(() => {});
+    }
+
+    function ttsTogglePlayPause() {
+      if (!ttsAudio) return;
+
+      if (ttsAudio.paused) {
+        if (ttsCurrentIndex < 0 || !ttsAudio.src) {
+          ttsPlayParagraph(0);
+        } else {
+          ttsAudio.play();
+        }
+      } else {
+        ttsAudio.pause();
+      }
+    }
+
+    function ttsNextParagraph() {
+      ttsPlayParagraph(ttsCurrentIndex + 1);
+    }
+
+    function ttsPrevParagraph() {
+      if (ttsAudio && ttsAudio.currentTime > 3) {
+        ttsAudio.currentTime = 0;
+      } else {
+        ttsPlayParagraph(Math.max(0, ttsCurrentIndex - 1));
+      }
+    }
+
+    function ttsChangeVoice(voice) {
+      ttsVoice = voice;
+      localStorage.setItem(STORAGE_KEY_VOICE, voice);
+      if (ttsCurrentIndex >= 0 && ttsAudio && !ttsAudio.paused) {
+        ttsPlayParagraph(ttsCurrentIndex);
+      }
+    }
+
+    function ttsChangeSpeed(spd) {
+      ttsSpeed = parseFloat(spd);
+      localStorage.setItem(STORAGE_KEY_SPEED, ttsSpeed);
+      if (ttsAudio) {
+        ttsAudio.playbackRate = ttsSpeed;
+      }
+    }
+
+    function ttsSeekAudio(e) {
+      if (!ttsAudio || !ttsAudio.duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pos = (e.clientX - rect.left) / rect.width;
+      ttsAudio.currentTime = pos * ttsAudio.duration;
+    }
+
+    // ===================================================================
+    // SLEEP TIMER ENGINE
+    // ===================================================================
+    let sleepTimerInterval = null;
+    let sleepTimerRemainingSeconds = 0;
+    let sleepTimerMode = 'off';
+
+    function setSleepTimer(val) {
+      sleepTimerMode = val;
+      if (sleepTimerInterval) {
+        clearInterval(sleepTimerInterval);
+        sleepTimerInterval = null;
+      }
+      const badge = document.getElementById("sleep-timer-badge");
+      if (val === 'off') {
+        if (badge) badge.classList.add("hidden");
+        return;
+      }
+      if (val === 'chapter') {
+        if (badge) {
+          badge.innerText = "⏱️ Chapter End";
+          badge.classList.remove("hidden");
+        }
+        return;
+      }
+      const minutes = parseInt(val, 10);
+      sleepTimerRemainingSeconds = minutes * 60;
+      updateSleepTimerDisplay();
+      if (badge) badge.classList.remove("hidden");
+
+      sleepTimerInterval = setInterval(() => {
+        sleepTimerRemainingSeconds--;
+        if (sleepTimerRemainingSeconds <= 0) {
+          clearInterval(sleepTimerInterval);
+          sleepTimerInterval = null;
+          if (ttsAudio && !ttsAudio.paused) {
+            ttsAudio.pause();
+            setTtsPlayIconState("paused");
+          }
+          if (badge) {
+            badge.innerText = "⏱️ Paused (Timer)";
+            setTimeout(() => badge.classList.add("hidden"), 5000);
+          }
+          const sel = document.getElementById("tts-sleep-select");
+          if (sel) sel.value = "off";
+          sleepTimerMode = "off";
+        } else {
+          updateSleepTimerDisplay();
+        }
+      }, 1000);
+    }
+
+    function updateSleepTimerDisplay() {
+      const badge = document.getElementById("sleep-timer-badge");
+      if (!badge) return;
+      const m = Math.floor(sleepTimerRemainingSeconds / 60);
+      const s = sleepTimerRemainingSeconds % 60;
+      badge.innerText = `⏱️ ${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // ===================================================================
+    // HIGHLIGHTS, NOTES & BOOKMARKS ENGINE
+    // ===================================================================
+    let activeSelectionCfi = null;
+    let activeSelectionText = "";
+
+    function toggleBookmarksDrawer(force) {
+      const drawer = document.getElementById('bookmarks-drawer');
+      if (!drawer) return;
+      const isCurrentlyOpen = !drawer.classList.contains('translate-x-full');
+      const shouldOpen = (force !== undefined) ? force : !isCurrentlyOpen;
+      if (shouldOpen) {
+        drawer.classList.remove('translate-x-full');
+        loadBookmarks();
+        loadNotes();
+      } else {
+        drawer.classList.add('translate-x-full');
+      }
+    }
+
+    function switchNotesTab(tab) {
+      const tabBm = document.getElementById('tab-btn-bookmarks');
+      const tabNotes = document.getElementById('tab-btn-notes');
+      const panelBm = document.getElementById('panel-bookmarks');
+      const panelNotes = document.getElementById('panel-notes');
+
+      if (tab === 'bookmarks') {
+        if (tabBm) tabBm.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm cursor-pointer";
+        if (tabNotes) tabNotes.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:text-white cursor-pointer";
+        if (panelBm) panelBm.classList.remove('hidden');
+        if (panelNotes) panelNotes.classList.add('hidden');
+      } else {
+        if (tabBm) tabBm.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:text-white cursor-pointer";
+        if (tabNotes) tabNotes.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm cursor-pointer";
+        if (panelBm) panelBm.classList.add('hidden');
+        if (panelNotes) panelNotes.classList.remove('hidden');
+      }
+    }
+
+    function showHighlightToolbar(cfiRange, text) {
+      activeSelectionCfi = cfiRange;
+      activeSelectionText = text;
+      const bar = document.getElementById('highlight-bar');
+      const noteInput = document.getElementById('highlight-note-input');
+      if (noteInput) noteInput.value = "";
+      if (bar) {
+        bar.classList.remove('hidden');
+        bar.classList.add('flex');
+      }
+    }
+
+    function closeHighlightToolbar() {
+      const bar = document.getElementById('highlight-bar');
+      if (bar) {
+        bar.classList.add('hidden');
+        bar.classList.remove('flex');
+      }
+      activeSelectionCfi = null;
+      activeSelectionText = "";
+    }
+
+    async function createHighlight(color) {
+      if (!activeSelectionCfi) return;
+      const cfi = activeSelectionCfi;
+      const text = activeSelectionText;
+      const noteInput = document.getElementById('highlight-note-input');
+      const noteText = noteInput ? noteInput.value.trim() : "";
+      closeHighlightToolbar();
+
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cfi: cfi,
+            text: text,
+            color: color || 'yellow',
+            note: noteText
+          })
+        });
+        if (res.ok) {
+          if (rendition && rendition.annotations) {
+            rendition.annotations.highlight(cfi, {}, (e) => {}, "hl-" + (color || 'yellow'));
+          }
+          loadNotes();
+        }
+      } catch (err) {
+        console.error("Failed to save highlight:", err);
+      }
+    }
+
+    function createHighlightWithNote() {
+      createHighlight('yellow');
+    }
+
+    async function loadBookmarks() {
+      const listEl = document.getElementById('bookmarks-list');
+      if (!listEl) return;
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/bookmarks`);
+        if (!res.ok) return;
+        const bms = await res.json();
+        if (!bms || bms.length === 0) {
+          listEl.innerHTML = '<p class="text-slate-500 italic p-3 text-center text-xs">No bookmarks saved yet.</p>';
+          return;
+        }
+        listEl.innerHTML = "";
+        bms.forEach(bm => {
+          const item = document.createElement('div');
+          item.className = "p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between gap-2 hover:border-slate-700 transition-colors";
+          item.innerHTML = `
+            <div class="min-w-0 flex-1 cursor-pointer" onclick="jumpToCfi('${bm.cfi}')">
+              <div class="font-semibold text-slate-200 truncate">${bm.label}</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">${bm.percentage}% • ${bm.created_at}</div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="jumpToCfi('${bm.cfi}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-white transition-colors" title="Jump to location">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </button>
+              <button onclick="deleteBookmark(${bm.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition-colors" title="Delete bookmark">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          `;
+          listEl.appendChild(item);
+        });
+      } catch (err) {
+        console.warn("Error loading bookmarks:", err);
+      }
+    }
+
+    async function addCurrentBookmark() {
+      if (!rendition) return;
+      const loc = rendition.currentLocation();
+      if (!loc || !loc.start || !loc.start.cfi) return;
+      const cfi = loc.start.cfi;
+      const pct = (loc.start.percentage !== undefined) ? Math.round(loc.start.percentage * 100) : 0;
+      const label = prompt("Bookmark label (optional):", `Location at ${pct}%`);
+      if (label === null) return;
+
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/bookmarks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cfi: cfi,
+            label: label || `Page at ${pct}%`,
+            percentage: pct
+          })
+        });
+        if (res.ok) {
+          loadBookmarks();
+        }
+      } catch (err) {
+        console.error("Failed to add bookmark:", err);
+      }
+    }
+
+    async function deleteBookmark(bmId) {
+      if (!confirm("Delete this bookmark?")) return;
+      try {
+        const res = await fetch(`/api/bookmarks/${bmId}`, { method: 'DELETE' });
+        if (res.ok) loadBookmarks();
+      } catch (err) {
+        console.error("Failed to delete bookmark:", err);
+      }
+    }
+
+    async function loadNotes() {
+      const listEl = document.getElementById('notes-list');
+      if (!listEl) return;
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/notes`);
+        if (!res.ok) return;
+        const notes = await res.json();
+        if (!notes || notes.length === 0) {
+          listEl.innerHTML = '<p class="text-slate-500 italic p-3 text-center text-xs">No highlights or notes saved yet.</p>';
+          return;
+        }
+        listEl.innerHTML = "";
+        notes.forEach(n => {
+          // Add annotation to rendition if not already added
+          if (rendition && rendition.annotations) {
+            rendition.annotations.highlight(n.cfi, {}, (e) => {}, "hl-" + (n.color || 'yellow'));
+          }
+
+          const colorDotClass = n.color === 'green' ? 'bg-emerald-400' : (n.color === 'blue' ? 'bg-sky-400' : (n.color === 'pink' ? 'bg-pink-400' : 'bg-yellow-400'));
+          const item = document.createElement('div');
+          item.className = "p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5 hover:border-slate-700 transition-colors";
+          item.innerHTML = `
+            <div class="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full ${colorDotClass}"></span>
+                <span>Highlight</span>
+              </span>
+              <span>${n.created_at}</span>
+            </div>
+            <div class="text-xs text-slate-300 italic border-l-2 border-slate-700 pl-2 cursor-pointer line-clamp-3" onclick="jumpToCfi('${n.cfi}')">
+              "${n.text}"
+            </div>
+            ${n.note ? `<div class="text-xs text-indigo-300 font-medium bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">${n.note}</div>` : ''}
+            <div class="flex items-center justify-end gap-1.5 pt-1">
+              <button onclick="jumpToCfi('${n.cfi}')" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-white transition-colors" title="Jump to note">
+                Jump
+              </button>
+              <button onclick="deleteNote(${n.id}, '${n.cfi}')" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition-colors" title="Delete note">
+                Delete
+              </button>
+            </div>
+          `;
+          listEl.appendChild(item);
+        });
+      } catch (err) {
+        console.warn("Error loading notes:", err);
+      }
+    }
+
+    async function deleteNote(noteId, cfi) {
+      if (!confirm("Delete this highlight / note?")) return;
+      try {
+        const res = await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
+        if (res.ok) {
+          if (rendition && rendition.annotations && cfi) {
+            rendition.annotations.remove(cfi, "highlight");
+          }
+          loadNotes();
+        }
+      } catch (err) {
+        console.error("Failed to delete note:", err);
+      }
+    }
+
+    function jumpToCfi(cfi) {
+      if (rendition) {
+        rendition.display(cfi);
+        toggleBookmarksDrawer(false);
+      }
+    }
+
+    function setupMediaSession(currentText) {
+      if (!('mediaSession' in navigator)) return;
+
+      const chapLabel = document.getElementById("chapter-label");
+      const currentChapter = chapLabel ? chapLabel.innerText : "Audiobook";
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "{{ book.title }}",
+        artist: "{{ book.author }}",
+        album: currentChapter,
+        artwork: [
+          { src: "/cover/{{ book.id }}", sizes: "512x512", type: "image/jpeg" }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler("play", () => ttsTogglePlayPause());
+      navigator.mediaSession.setActionHandler("pause", () => ttsTogglePlayPause());
+      navigator.mediaSession.setActionHandler("previoustrack", () => ttsPrevParagraph());
+      navigator.mediaSession.setActionHandler("nexttrack", () => ttsNextParagraph());
+      
+      try {
+        navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+          if (ttsAudio) ttsAudio.currentTime = Math.max(0, ttsAudio.currentTime - (details.seekOffset || 10));
+        });
+        navigator.mediaSession.setActionHandler("seekforward", (details) => {
+          if (ttsAudio) ttsAudio.currentTime = Math.min(ttsAudio.duration || 9999, ttsAudio.currentTime + (details.seekOffset || 10));
+        });
+        navigator.mediaSession.setActionHandler("stop", () => {
+          if (ttsAudio) {
+            ttsAudio.pause();
+            setTtsPlayIconState("paused");
+          }
+        });
+      } catch (e) {}
+    }
+
+    function updateMediaSessionState(state) {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = state;
+      }
+    }
+
+    if (document.readyState === "loading") {
+      window.addEventListener("DOMContentLoaded", () => {
+        initReader();
+        initTts();
+      });
+    } else {
+      initReader();
+      initTts();
+    }
+  </script>
+  {% endif %}
+
+</body>
+</html>

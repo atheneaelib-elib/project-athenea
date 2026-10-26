@@ -1,0 +1,2 @@
+# Athenea - Daily automated database backup at 03:00 AM
+0 3 * * * root /opt/athenea/deploy/backup_db.sh >/dev/null 2>&1

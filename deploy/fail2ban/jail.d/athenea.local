@@ -1,0 +1,9 @@
+[athenea]
+enabled = true
+port = http,https,8000
+filter = athenea
+backend = systemd
+journalmatch = _SYSTEMD_UNIT=athenea.service
+maxretry = 5
+findtime = 600
+bantime = 3600
