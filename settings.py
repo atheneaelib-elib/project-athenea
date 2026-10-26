@@ -4,7 +4,12 @@ from pydantic import BaseModel
 
 
 def _load_env_files():
-    for env_path in [Path("/etc/bookserver.env"), Path(__file__).resolve().parent.parent / ".env", Path(__file__).resolve().parent / ".env"]:
+    for env_path in [
+        Path("/etc/athenea.env"),
+        Path("/etc/bookserver.env"),
+        Path(__file__).resolve().parent.parent / ".env",
+        Path(__file__).resolve().parent / ".env"
+    ]:
         if env_path.is_file():
             try:
                 with open(env_path, "r", encoding="utf-8") as f:

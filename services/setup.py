@@ -52,9 +52,8 @@ def is_system_configured() -> bool:
             if res:
                 _CONFIGURED_CACHE = True
                 return True
-    except Exception:
-        # Table doesn't exist, database connection failed, or no admin
-        pass
+    except Exception as e:
+        logger.warning(f"is_system_configured check failed: {e}")
 
     return False
 
