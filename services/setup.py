@@ -24,7 +24,7 @@ logger = logging.getLogger("athenea.setup")
 _CONFIGURED_CACHE = None
 SCHEMA_SQL_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
 LOCAL_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-SYSTEM_ENV_PATH = Path("/etc/bookserver.env")
+SYSTEM_ENV_PATH = Path("/etc/athenea.env")
 
 
 def get_target_env_write_path() -> Path:
