@@ -35,6 +35,7 @@ apt-get install -y \
     pigz \
     sudo \
     build-essential \
+    calibre \
     python3 \
     python3-venv \
     python3-pip \

@@ -110,6 +110,7 @@ if [ "$OS_FAMILY" == "debian" ]; then
         rsync \
         pigz \
         build-essential \
+        calibre \
         python3 \
         python3-venv \
         python3-pip \

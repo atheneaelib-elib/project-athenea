@@ -121,6 +121,7 @@ async def lifespan(app: FastAPI):
         try:
             auth_service.init_auth_tables(db)
             importer_service.ensure_sequences(db)
+            importer_service.convert_all_fb2_books(db)
         finally:
             db.close()
     except Exception as e:
@@ -1618,6 +1619,13 @@ def reader_page(
         chosen_fmt = "epub"
     elif "pdf" in available_fmts:
         chosen_fmt = "pdf"
+    elif "fb2" in available_fmts or "fbz" in available_fmts:
+        # Auto-convert FB2 to EPUB on the fly for in-browser reading
+        if importer_service.ensure_book_epub_format(db, book_id):
+            chosen_fmt = "epub"
+            book = book_service.get_book_details(db, book_id)
+        else:
+            chosen_fmt = available_fmts[0] if available_fmts else None
     elif available_fmts:
         chosen_fmt = available_fmts[0]
 

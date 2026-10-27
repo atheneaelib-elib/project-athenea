@@ -1,5 +1,6 @@
 import os
 import re
+import html
 import shutil
 import tempfile
 import zipfile
@@ -368,25 +369,460 @@ def parse_epub_metadata(epub_path: Path) -> dict:
     return meta
 
 
-def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
-    """Convert FB2 to standard EPUB using Calibre's ebook-convert."""
-    if not shutil.which("ebook-convert"):
-        return False
+def native_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
+    """
+    Pure-Python converter from FB2 XML to standard EPUB 2/3.
+    Extracts chapters, nested sections, inline styles, poems, epigraphs, and embedded base64 images.
+    Used as high-performance zero-dependency fallback when Calibre is not installed.
+    """
     try:
-        env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
-        cmd = ["ebook-convert", str(fb2_path), str(output_epub_path)]
-        if title:
-            cmd.extend(["--title", title])
-        if author:
-            cmd.extend(["--authors", author])
+        raw_bytes = fb2_path.read_bytes()
+        if not raw_bytes:
+            return False
 
-        # Pre-encode all arguments to raw utf-8 bytes on POSIX to prevent ASCII filesystem encoding errors
-        byte_cmd = [a.encode("utf-8") if isinstance(a, str) else bytes(a) for a in cmd]
-        subprocess.run(byte_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
+        encoding = "utf-8"
+        enc_match = re.search(rb'<\?xml[^>]+encoding=[\'"]([^\'"]+)[\'"]', raw_bytes[:200])
+        if enc_match:
+            try:
+                encoding = enc_match.group(1).decode("ascii").strip()
+            except Exception:
+                pass
+
+        try:
+            xml_text = raw_bytes.decode(encoding, errors="replace")
+        except Exception:
+            xml_text = raw_bytes.decode("utf-8", errors="replace")
+
+        # Sanitize unescaped ampersands that violate XML spec
+        clean_xml = re.sub(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', '&amp;', xml_text)
+
+        try:
+            root = ET.fromstring(clean_xml)
+        except Exception:
+            idx = clean_xml.find("<FictionBook")
+            if idx > 0:
+                clean_xml = clean_xml[idx:]
+            root = ET.fromstring(clean_xml)
+
+        def strip_ns(t: str) -> str:
+            return t.split("}")[-1].lower() if "}" in t else t.lower()
+
+        book_title = title
+        book_author = author
+        book_lang = "ru" if re.search(r'[а-яА-ЯёЁ]', clean_xml[:4000]) else "en"
+        cover_image_id = None
+
+        for desc in root:
+            if strip_ns(desc.tag) == "description":
+                for ti in desc:
+                    if strip_ns(ti.tag) == "title-info":
+                        for c in ti:
+                            ctag = strip_ns(c.tag)
+                            if ctag == "book-title" and not book_title and c.text:
+                                book_title = c.text.strip()
+                            elif ctag == "lang" and c.text:
+                                book_lang = c.text.strip().lower()[:10]
+                            elif ctag == "coverpage":
+                                for img in c.iter():
+                                    if strip_ns(img.tag) == "image":
+                                        for k, v in img.attrib.items():
+                                            if k.endswith("href"):
+                                                cover_image_id = v.lstrip("#")
+                            elif ctag == "author" and not book_author:
+                                parts = [p.text.strip() for p in c if p.text and p.text.strip()]
+                                if parts:
+                                    book_author = " ".join(parts)
+
+        book_title = book_title or fb2_path.stem
+        book_author = book_author or "Unknown Author"
+
+        # Extract binary attachments (embedded images)
+        images = {}
+        cover_filename = None
+        for elem in root:
+            if strip_ns(elem.tag) == "binary":
+                b_id = elem.attrib.get("id", "").strip().lstrip("#")
+                content_type = elem.attrib.get("content-type", "image/jpeg")
+                if not b_id or not elem.text:
+                    continue
+                try:
+                    img_data = base64.b64decode(elem.text.strip())
+                    ext_img = "jpg"
+                    if "png" in content_type:
+                        ext_img = "png"
+                    elif "gif" in content_type:
+                        ext_img = "gif"
+                    elif "webp" in content_type:
+                        ext_img = "webp"
+
+                    safe_name = f"img_{re.sub(r'[^a-zA-Z0-9_-]', '_', b_id)}.{ext_img}"
+                    images[b_id] = {
+                        "name": safe_name,
+                        "data": img_data,
+                        "mime": content_type
+                    }
+                    if (cover_image_id and b_id == cover_image_id) or (not cover_filename and "cover" in b_id.lower()):
+                        cover_filename = safe_name
+                except Exception:
+                    pass
+
+        def inner_html(node) -> str:
+            out = html.escape(node.text or "")
+            for child in node:
+                ctag = strip_ns(child.tag)
+                c_inner = inner_html(child)
+                if ctag in ("emphasis", "i"):
+                    out += f"<em>{c_inner}</em>"
+                elif ctag in ("strong", "b"):
+                    out += f"<strong>{c_inner}</strong>"
+                elif ctag in ("strikethrough", "s"):
+                    out += f"<s>{c_inner}</s>"
+                elif ctag == "sub":
+                    out += f"<sub>{c_inner}</sub>"
+                elif ctag == "sup":
+                    out += f"<sup>{c_inner}</sup>"
+                elif ctag == "a":
+                    hr = child.attrib.get("href", "#")
+                    out += f'<a href="{hr}">{c_inner}</a>'
+                elif ctag == "image":
+                    hr = None
+                    for k, v in child.attrib.items():
+                        if k.endswith("href"):
+                            hr = v.lstrip("#")
+                    if hr and hr in images:
+                        out += f'<img src="../images/{images[hr]["name"]}" alt="" />'
+                else:
+                    out += c_inner
+                if child.tail:
+                    out += html.escape(child.tail)
+            return out
+
+        def elem_to_html(element) -> str:
+            res = []
+            for node in element:
+                ntag = strip_ns(node.tag)
+                tail = (node.tail or "").strip()
+
+                if ntag == "p":
+                    inner = inner_html(node)
+                    res.append(f"<p>{inner}</p>")
+                elif ntag in ("subtitle", "title"):
+                    inner = inner_html(node)
+                    res.append(f"<h3>{inner}</h3>")
+                elif ntag == "empty-line":
+                    res.append('<p class="empty-line">&nbsp;</p>')
+                elif ntag in ("epigraph", "cite"):
+                    inner = elem_to_html(node)
+                    res.append(f"<blockquote>{inner}</blockquote>")
+                elif ntag == "poem":
+                    inner = elem_to_html(node)
+                    res.append(f'<div class="poem">{inner}</div>')
+                elif ntag == "stanza":
+                    inner = elem_to_html(node)
+                    res.append(f'<div class="stanza">{inner}</div>')
+                elif ntag == "v":
+                    inner = inner_html(node)
+                    res.append(f'<p class="verse">{inner}</p>')
+                elif ntag == "image":
+                    href = None
+                    for k, v in node.attrib.items():
+                        if k.endswith("href"):
+                            href = v.lstrip("#")
+                    if href and href in images:
+                        res.append(f'<div class="illustration"><img src="../images/{images[href]["name"]}" alt="" /></div>')
+                elif ntag == "section":
+                    res.append(elem_to_html(node))
+                else:
+                    inner = inner_html(node)
+                    if inner:
+                        res.append(f"<p>{inner}</p>")
+                if tail:
+                    res.append(f"<p>{html.escape(tail)}</p>")
+            return "\n".join(res)
+
+        chapters = []
+        for body in root:
+            if strip_ns(body.tag) != "body":
+                continue
+            b_name = body.attrib.get("name", "")
+            is_notes = "notes" in b_name.lower() or "comments" in b_name.lower()
+
+            sections = [s for s in body if strip_ns(s.tag) == "section"]
+            if sections:
+                for idx, sec in enumerate(sections, 1):
+                    sec_title = f"Chapter {idx}" if not is_notes else f"Note {idx}"
+                    t_elem = None
+                    for c in sec:
+                        if strip_ns(c.tag) == "title":
+                            t_elem = c
+                            break
+                    if t_elem is not None:
+                        t_parts = [inner_html(p) for p in t_elem if strip_ns(p.tag) == "p"]
+                        if t_parts:
+                            sec_title = re.sub(r'<[^>]+>', '', " - ".join(t_parts)).strip()
+                        elif t_elem.text:
+                            sec_title = t_elem.text.strip()
+                    sec_html = elem_to_html(sec)
+                    if sec_html.strip():
+                        chapters.append((sec_title, sec_html))
+            else:
+                b_html = elem_to_html(body)
+                if b_html.strip():
+                    chapters.append(("Notes" if is_notes else book_title, b_html))
+
+        if not chapters:
+            return False
+
+        # Generate XHTML pages
+        chapter_files = []
+        for i, (ch_title, ch_body) in enumerate(chapters, 1):
+            fname = f"chapter_{i:04d}.xhtml"
+            xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{book_lang}">
+<head>
+  <title>{html.escape(ch_title)}</title>
+  <link rel="stylesheet" type="text/css" href="../styles/style.css" />
+</head>
+<body>
+  <h2>{html.escape(ch_title)}</h2>
+  {ch_body}
+</body>
+</html>'''
+            chapter_files.append({
+                "filename": fname,
+                "title": ch_title,
+                "content": xhtml.encode("utf-8")
+            })
+
+        css_content = b'''body {
+  font-family: serif;
+  margin: 5%;
+  line-height: 1.5;
+  color: #1a1a1a;
+  background-color: #fff;
+}
+h1, h2, h3, h4 {
+  text-align: center;
+  font-weight: normal;
+  margin: 1.5em 0 1em 0;
+}
+p {
+  text-indent: 1.5em;
+  margin: 0 0 0.5em 0;
+  text-align: justify;
+}
+p.empty-line {
+  margin: 0.8em 0;
+  text-indent: 0;
+}
+blockquote {
+  margin: 1em 2em;
+  font-style: italic;
+  color: #555;
+}
+.poem {
+  margin: 1em 2em;
+  font-style: italic;
+}
+.stanza {
+  margin-bottom: 0.8em;
+}
+p.verse {
+  text-indent: 0;
+  margin: 0.2em 0;
+}
+.illustration {
+  text-align: center;
+  margin: 1.5em auto;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+'''
+        book_uuid = str(uuid.uuid4())
+        container_xml = b'''<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>'''
+
+        # Build content.opf
+        manifest_items = [
+            '<item id="style" href="styles/style.css" media-type="text/css"/>',
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        ]
+        spine_items = []
+        for i, ch in enumerate(chapter_files, 1):
+            cid = f"ch_{i:04d}"
+            manifest_items.append(f'<item id="{cid}" href="text/{ch["filename"]}" media-type="application/xhtml+xml"/>')
+            spine_items.append(f'<itemref idref="{cid}"/>')
+
+        for img_id, img_info in images.items():
+            manifest_items.append(f'<item id="img_{re.sub(r"[^a-zA-Z0-9_-]", "_", img_id)}" href="images/{img_info["name"]}" media-type="{img_info["mime"]}"/>')
+
+        manifest_str = "\n    ".join(manifest_items)
+        spine_str = "\n    ".join(spine_items)
+
+        cover_meta = f'<meta name="cover" content="img_{re.sub(r"[^a-zA-Z0-9_-]", "_", cover_image_id)}"/>' if cover_image_id and cover_image_id in images else ''
+
+        opf_content = f'''<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="BookID">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>{html.escape(book_title)}</dc:title>
+    <dc:creator opf:role="aut">{html.escape(book_author)}</dc:creator>
+    <dc:language>{book_lang}</dc:language>
+    <dc:identifier id="BookID" opf:scheme="UUID">{book_uuid}</dc:identifier>
+    {cover_meta}
+  </metadata>
+  <manifest>
+    {manifest_str}
+  </manifest>
+  <spine toc="ncx">
+    {spine_str}
+  </spine>
+</package>'''.encode("utf-8")
+
+        # Build toc.ncx
+        nav_points = []
+        for i, ch in enumerate(chapter_files, 1):
+            nav_points.append(f'''    <navPoint id="nav_{i}" playOrder="{i}">
+      <navLabel><text>{html.escape(ch["title"])}</text></navLabel>
+      <content src="text/{ch["filename"]}"/>
+    </navPoint>''')
+        nav_str = "\n".join(nav_points)
+
+        ncx_content = f'''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="{book_uuid}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>{html.escape(book_title)}</text></docTitle>
+  <docAuthor><text>{html.escape(book_author)}</text></docAuthor>
+  <navMap>
+{nav_str}
+  </navMap>
+</ncx>'''.encode("utf-8")
+
+        output_epub_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(output_epub_path, "w") as zf:
+            # 1. mimetype MUST be uncompressed and first
+            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            # 2. container.xml
+            zf.writestr("META-INF/container.xml", container_xml, compress_type=zipfile.ZIP_DEFLATED)
+            # 3. CSS
+            zf.writestr("OEBPS/styles/style.css", css_content, compress_type=zipfile.ZIP_DEFLATED)
+            # 4. Images
+            for img_info in images.values():
+                zf.writestr(f"OEBPS/images/{img_info['name']}", img_info['data'], compress_type=zipfile.ZIP_DEFLATED)
+            # 5. Chapters
+            for ch in chapter_files:
+                zf.writestr(f"OEBPS/text/{ch['filename']}", ch['content'], compress_type=zipfile.ZIP_DEFLATED)
+            # 6. OPF & NCX
+            zf.writestr("OEBPS/content.opf", opf_content, compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr("OEBPS/toc.ncx", ncx_content, compress_type=zipfile.ZIP_DEFLATED)
+
         return output_epub_path.is_file() and output_epub_path.stat().st_size > 0
     except Exception as e:
-        logger.warning(f"Error converting {fb2_path.name} to EPUB: {e}")
+        logger.warning(f"native_fb2_to_epub failed for {fb2_path.name}: {e}")
         return False
+
+
+def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
+    """Convert FB2 to standard EPUB using Calibre's ebook-convert, falling back to native Python converter."""
+    if shutil.which("ebook-convert"):
+        try:
+            env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
+            cmd = ["ebook-convert", str(fb2_path), str(output_epub_path)]
+            if title:
+                cmd.extend(["--title", title])
+            if author:
+                cmd.extend(["--authors", author])
+
+            # Pre-encode all arguments to raw utf-8 bytes on POSIX to prevent ASCII filesystem encoding errors
+            byte_cmd = [a.encode("utf-8") if isinstance(a, str) else bytes(a) for a in cmd]
+            subprocess.run(byte_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
+            if output_epub_path.is_file() and output_epub_path.stat().st_size > 0:
+                return True
+        except Exception as e:
+            logger.warning(f"Calibre ebook-convert failed: {e}")
+
+    # Seamless fallback to pure-Python native converter
+    return native_fb2_to_epub(fb2_path, output_epub_path, title=title, author=author)
+
+
+def ensure_book_epub_format(db: Session, book_id: int) -> bool:
+    """If a book only has FB2/FBZ format, convert it to EPUB and register it in the data table."""
+    try:
+        formats = db.execute(text("SELECT format, name FROM data WHERE book_id = :bid"), {"bid": book_id}).fetchall()
+        fmt_names = {r.format.upper(): r.name for r in formats}
+        if "EPUB" in fmt_names:
+            return True
+        if "FB2" not in fmt_names and "FBZ" not in fmt_names:
+            return False
+
+        book_row = db.execute(text("SELECT title, path FROM books WHERE id = :bid"), {"bid": book_id}).fetchone()
+        if not book_row or not book_row.path:
+            return False
+
+        book_dir = Path(settings.LIBRARY_ROOT) / book_row.path
+        if not book_dir.is_dir():
+            return False
+
+        fb2_file = None
+        for f in book_dir.iterdir():
+            if f.is_file() and f.suffix.lower() in ('.fb2', '.fbz'):
+                fb2_file = f
+                break
+        if not fb2_file:
+            return False
+
+        base_name = fmt_names.get("FB2") or fmt_names.get("FBZ") or fb2_file.stem
+        target_epub = book_dir / f"{base_name}.epub"
+
+        author_row = db.execute(text("""
+            SELECT a.name FROM authors a
+            JOIN book_authors ba ON a.id = ba.author_id
+            WHERE ba.book_id = :bid LIMIT 1
+        """), {"bid": book_id}).fetchone()
+        author_name = author_row.name if author_row else "Unknown Author"
+
+        if convert_fb2_to_epub(fb2_file, target_epub, title=book_row.title, author=author_name):
+            sz = target_epub.stat().st_size
+            db.execute(text("""
+                INSERT INTO data (book_id, format, uncompressed_size, name)
+                VALUES (:bid, 'EPUB', :sz, :name)
+                ON CONFLICT DO NOTHING
+            """), {"bid": book_id, "sz": sz, "name": base_name})
+            db.commit()
+            return True
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Failed to auto-convert book {book_id} to EPUB: {e}")
+    return False
+
+
+def convert_all_fb2_books(db: Session):
+    """Background utility to convert all FB2-only books in the catalog to EPUB."""
+    try:
+        rows = db.execute(text("""
+            SELECT DISTINCT b.id FROM books b
+            JOIN data d ON b.id = d.book_id
+            WHERE d.format IN ('FB2', 'FBZ')
+              AND NOT EXISTS (
+                  SELECT 1 FROM data d2 WHERE d2.book_id = b.id AND d2.format = 'EPUB'
+              )
+        """)).fetchall()
+        for r in rows:
+            ensure_book_epub_format(db, r.id)
+    except Exception as e:
+        logger.warning(f"Error in convert_all_fb2_books: {e}")
 
 
 def get_book_metadata(file_path: Path, ext: str) -> dict:
