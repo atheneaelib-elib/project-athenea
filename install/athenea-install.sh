@@ -130,10 +130,21 @@ if [ ! -d "$VENV_PATH" ]; then
     sudo -u "$APP_USER" python3 -m venv "$VENV_PATH"
 fi
 
-msg_info "Installing Python dependencies (Uvicorn, FastAPI, SQLAlchemy, Pillow, Edge-TTS)..."
+msg_info "Installing Python dependencies (Uvicorn, FastAPI, SQLAlchemy, Pillow, Edge-TTS, Piper)..."
 sudo -u "$APP_USER" "$VENV_PATH/bin/pip" install --upgrade pip setuptools wheel
 sudo -u "$APP_USER" "$VENV_PATH/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
 msg_ok "Virtual environment dependencies installed."
+
+msg_info "Downloading high-fidelity Russian Piper neural voice models..."
+mkdir -p "$INSTALL_DIR/models/piper"
+for v in dmitri ruslan irina; do
+    if [ ! -f "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" ]; then
+        curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx"
+        curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx.json" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx.json"
+    fi
+done
+chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR/models"
+msg_ok "Neural TTS voices installed."
 
 msg_info "Writing environment configuration to $ENV_FILE..."
 if [ ! -f "$ENV_FILE" ]; then
