@@ -41,10 +41,9 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # Curated voice catalog for audiobook narration
 VOICE_CATALOG = [
     # --- Native Russian Voices (Piper Neural) ---
-    {"id": "ru_irina", "name": "🇷🇺 Ирина (RU Female, Natural & Expressive)", "gender": "female", "lang": "ru", "engine": "piper", "starred": True},
     {"id": "ru_dmitri", "name": "🇷🇺 Дмитрий (RU Male, Classic Narrator)", "gender": "male", "lang": "ru", "engine": "piper", "starred": True},
-    {"id": "ru_dmitriy", "name": "🇷🇺 Дмитрий (RU Male, Classic Narrator)", "gender": "male", "lang": "ru", "engine": "piper", "starred": False},
     {"id": "ru_ruslan", "name": "🇷🇺 Руслан (RU Male, Rich Storyteller)", "gender": "male", "lang": "ru", "engine": "piper", "starred": False},
+    {"id": "ru_irina", "name": "🇷🇺 Ирина (RU Female, Natural & Expressive)", "gender": "female", "lang": "ru", "engine": "piper", "starred": True},
 
     # --- American Voices (Kokoro-82M) ---
     {"id": "af_heart", "name": "🇺🇸 Heart (US Female, Warm & Expressive)", "gender": "female", "lang": "en-us", "engine": "kokoro", "starred": True},

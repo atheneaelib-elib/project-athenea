@@ -225,19 +225,19 @@ success "Python virtual environment and dependencies installed."
 
 info "Downloading high-fidelity Russian Piper neural voice models..."
 mkdir -p "$INSTALL_DIR/models/piper"
-for v in dmitri ruslan irina; do
+for v in denis ruslan irina dmitri; do
     if [ ! -f "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" ]; then
         curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx"
         curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx.json" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx.json"
     fi
 done
-# Voice aliases and shortcuts
-ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx"
-ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx.json"
-ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitri.onnx"
-ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitri.onnx.json"
-ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitriy.onnx"
-ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitriy.onnx.json"
+# Map Dmitry to the resonant 132Hz Denis model so Dmitry is clearly male
+ln -sf ru_RU-denis-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitri.onnx"
+ln -sf ru_RU-denis-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitri.onnx.json"
+ln -sf ru_RU-denis-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitriy.onnx"
+ln -sf ru_RU-denis-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitriy.onnx.json"
+ln -sf ru_RU-denis-medium.onnx "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx"
+ln -sf ru_RU-denis-medium.onnx.json "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx.json"
 ln -sf ru_RU-ruslan-medium.onnx "$INSTALL_DIR/models/piper/ru_ruslan.onnx"
 ln -sf ru_RU-ruslan-medium.onnx.json "$INSTALL_DIR/models/piper/ru_ruslan.onnx.json"
 ln -sf ru_RU-irina-medium.onnx "$INSTALL_DIR/models/piper/ru_irina.onnx"
