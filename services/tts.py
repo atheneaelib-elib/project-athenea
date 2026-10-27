@@ -43,6 +43,7 @@ VOICE_CATALOG = [
     # --- Native Russian Voices (Piper Neural) ---
     {"id": "ru_irina", "name": "🇷🇺 Ирина (RU Female, Natural & Expressive)", "gender": "female", "lang": "ru", "engine": "piper", "starred": True},
     {"id": "ru_dmitri", "name": "🇷🇺 Дмитрий (RU Male, Classic Narrator)", "gender": "male", "lang": "ru", "engine": "piper", "starred": True},
+    {"id": "ru_dmitriy", "name": "🇷🇺 Дмитрий (RU Male, Classic Narrator)", "gender": "male", "lang": "ru", "engine": "piper", "starred": False},
     {"id": "ru_ruslan", "name": "🇷🇺 Руслан (RU Male, Rich Storyteller)", "gender": "male", "lang": "ru", "engine": "piper", "starred": False},
 
     # --- American Voices (Kokoro-82M) ---
@@ -72,11 +73,36 @@ VOICE_CATALOG = [
 DEFAULT_VOICE = "af_heart"
 DEFAULT_RUSSIAN_VOICE = "ru_dmitri"
 
+# Voice aliases and spelling normalization
+VOICE_ALIASES = {
+    "ru_dmitriy": "ru_dmitri",
+    "dmitriy": "ru_dmitri",
+    "dmitri": "ru_dmitri",
+    "ru-ru-dmitryneural": "ru_dmitri",
+    "ru-RU-DmitryNeural": "ru_dmitri",
+    "ru_ruslan": "ru_ruslan",
+    "ruslan": "ru_ruslan",
+    "ru_irina": "ru_irina",
+    "irina": "ru_irina",
+    "ru-ru-svetlananeural": "ru_irina",
+    "ru-RU-SvetlanaNeural": "ru_irina",
+}
+
+
+def normalize_voice_id(voice: str | None) -> str:
+    """Normalize user input voice alias into canonical internal voice ID."""
+    if not voice:
+        return DEFAULT_VOICE
+    v_clean = str(voice).strip()
+    return VOICE_ALIASES.get(v_clean, VOICE_ALIASES.get(v_clean.lower(), v_clean))
+
+
 # High-fidelity Edge Neural Voice mappings for zero-dependency studio narration
 EDGE_VOICE_MAP = {
     # Russian voices
     "ru_irina": "ru-RU-SvetlanaNeural",
     "ru_dmitri": "ru-RU-DmitryNeural",
+    "ru_dmitriy": "ru-RU-DmitryNeural",
     "ru_ruslan": "ru-RU-DmitryNeural",
     "ru-RU-DmitryNeural": "ru-RU-DmitryNeural",
     "ru-RU-SvetlanaNeural": "ru-RU-SvetlanaNeural",
@@ -118,11 +144,15 @@ def has_kokoro() -> bool:
 
 def has_piper_voice(voice_id: str) -> bool:
     """Check if local Piper ONNX model files exist on disk."""
-    model_file = PIPER_DIR / f"{voice_id}.onnx"
-    if model_file.is_file():
-        return True
-    alt_file = PIPER_DIR / f"{voice_id.replace('ru_', 'ru_RU-')}-medium.onnx"
-    return alt_file.is_file()
+    canon_id = normalize_voice_id(voice_id)
+    for vid in (canon_id, voice_id):
+        model_file = PIPER_DIR / f"{vid}.onnx"
+        if model_file.is_file():
+            return True
+        alt_file = PIPER_DIR / f"{vid.replace('ru_', 'ru_RU-')}-medium.onnx"
+        if alt_file.is_file():
+            return True
+    return False
 
 
 _edge_lock = threading.Lock()
@@ -188,19 +218,26 @@ def get_kokoro():
 
 def get_piper_voice(voice_id: str):
     """Cached loader for Piper ONNX voices."""
+    canon_id = normalize_voice_id(voice_id)
     with _piper_lock:
+        if canon_id in _piper_voices:
+            return _piper_voices[canon_id]
         if voice_id in _piper_voices:
             return _piper_voices[voice_id]
 
-        model_file = PIPER_DIR / f"{voice_id}.onnx"
+        model_file = PIPER_DIR / f"{canon_id}.onnx"
         if not model_file.is_file():
-            # Try alternate naming
-            model_file = PIPER_DIR / f"{voice_id.replace('ru_', 'ru_RU-')}-medium.onnx"
+            model_file = PIPER_DIR / f"{voice_id}.onnx"
             if not model_file.is_file():
-                raise FileNotFoundError(f"Piper model not found: {voice_id} at {PIPER_DIR}")
+                model_file = PIPER_DIR / f"{canon_id.replace('ru_', 'ru_RU-')}-medium.onnx"
+                if not model_file.is_file():
+                    model_file = PIPER_DIR / f"{voice_id.replace('ru_', 'ru_RU-')}-medium.onnx"
+                    if not model_file.is_file():
+                        raise FileNotFoundError(f"Piper model not found for voice {voice_id} (canon: {canon_id}) at {PIPER_DIR}")
 
         from piper import PiperVoice
         voice = PiperVoice.load(str(model_file))
+        _piper_voices[canon_id] = voice
         _piper_voices[voice_id] = voice
         return voice
 
@@ -286,6 +323,9 @@ def synthesize_speech(
     if not clean_text:
         return {"error": "Empty text provided"}
 
+    # Normalize voice alias upfront (e.g. ru_dmitriy -> ru_dmitri)
+    voice = normalize_voice_id(voice)
+
     # Clamp speed between 0.5x and 2.0x
     speed = max(0.5, min(2.0, float(speed)))
 
@@ -293,7 +333,7 @@ def synthesize_speech(
     text_has_cyrillic = is_cyrillic(clean_text)
     is_russian_context = (lang == "ru") or (voice and (voice.startswith("ru") or "russian" in voice.lower())) or text_has_cyrillic
 
-    valid_voice = voice if (any(v["id"] == voice for v in VOICE_CATALOG) or voice in EDGE_VOICE_MAP) else DEFAULT_VOICE
+    valid_voice = voice if (any(v["id"] == voice for v in VOICE_CATALOG) or voice in EDGE_VOICE_MAP) else (DEFAULT_RUSSIAN_VOICE if is_russian_context else DEFAULT_VOICE)
     selected_voice_meta = next((v for v in VOICE_CATALOG if v["id"] == valid_voice), None)
 
     # If in Russian context and an English voice was selected by default, switch to Russian

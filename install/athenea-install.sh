@@ -143,6 +143,17 @@ for v in dmitri ruslan irina; do
         curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx.json" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx.json"
     fi
 done
+# Voice aliases and shortcuts
+ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx"
+ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_RU-dmitriy-medium.onnx.json"
+ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitri.onnx"
+ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitri.onnx.json"
+ln -sf ru_RU-dmitri-medium.onnx "$INSTALL_DIR/models/piper/ru_dmitriy.onnx"
+ln -sf ru_RU-dmitri-medium.onnx.json "$INSTALL_DIR/models/piper/ru_dmitriy.onnx.json"
+ln -sf ru_RU-ruslan-medium.onnx "$INSTALL_DIR/models/piper/ru_ruslan.onnx"
+ln -sf ru_RU-ruslan-medium.onnx.json "$INSTALL_DIR/models/piper/ru_ruslan.onnx.json"
+ln -sf ru_RU-irina-medium.onnx "$INSTALL_DIR/models/piper/ru_irina.onnx"
+ln -sf ru_RU-irina-medium.onnx.json "$INSTALL_DIR/models/piper/ru_irina.onnx.json"
 chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR/models"
 msg_ok "Neural TTS voices installed."
 

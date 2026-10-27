@@ -426,9 +426,9 @@
           title="Select Voice"
         >
           <optgroup label="🇷🇺 Russian">
-            <option value="ru_irina">🇷🇺 Irina ⭐</option>
-            <option value="ru_dmitri">🇷🇺 Dmitri ⭐</option>
-            <option value="ru_ruslan">🇷🇺 Ruslan</option>
+            <option value="ru_irina">🇷🇺 Irina (Female) ⭐</option>
+            <option value="ru_dmitri">🇷🇺 Dmitri (Male) ⭐</option>
+            <option value="ru_ruslan">🇷🇺 Ruslan (Male)</option>
           </optgroup>
           <optgroup label="🇺🇸 English (US)">
             <option value="af_heart" selected>🇺🇸 Heart ⭐</option>
@@ -923,6 +923,9 @@
     let isBookLangResolved = false;
     let defaultBookVoice = BOOK_IS_RU ? "ru_dmitri" : "af_heart";
     let ttsVoice = localStorage.getItem(STORAGE_KEY_VOICE) || defaultBookVoice;
+    if (ttsVoice === "ru_dmitriy" || ttsVoice === "dmitriy") {
+      ttsVoice = "ru_dmitri";
+    }
     if (BOOK_IS_RU && !ttsVoice.startsWith("ru_") && !ttsVoice.startsWith("ru-")) {
       ttsVoice = "ru_dmitri";
     }
@@ -1396,6 +1399,7 @@
     }
 
     function ttsChangeVoice(voice) {
+      if (voice === "ru_dmitriy" || voice === "dmitriy") voice = "ru_dmitri";
       ttsVoice = voice;
       localStorage.setItem(STORAGE_KEY_VOICE, voice);
       if (ttsCurrentIndex >= 0 && ttsAudio && !ttsAudio.paused) {
