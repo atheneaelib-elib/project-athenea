@@ -265,6 +265,25 @@ CREATE TABLE public.languages (
 
 
 --
+-- Name: languages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.languages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: languages_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.languages_id_seq OWNED BY public.languages.id;
+
+
+--
 -- Name: login_attempts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -557,6 +576,13 @@ ALTER TABLE ONLY public.identifiers ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
+-- Name: languages id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.languages ALTER COLUMN id SET DEFAULT nextval('public.languages_id_seq'::regclass);
+
+
+--
 -- Name: login_attempts id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -699,6 +725,8 @@ ALTER TABLE ONLY public.identifiers
 
 ALTER TABLE ONLY public.languages
     ADD CONSTRAINT languages_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX idx_languages_lang_code ON public.languages USING btree (lang_code);
 
 
 --

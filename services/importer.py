@@ -93,18 +93,29 @@ def ensure_sequences(db: Session):
         ("tags", "tags_id_seq"),
         ("publishers", "publishers_id_seq"),
         ("identifiers", "identifiers_id_seq"),
+        ("languages", "languages_id_seq"),
     ]
     for tbl, seq in tables_cols:
-        exists = db.execute(
-            text("SELECT 1 FROM pg_sequences WHERE sequencename = :seq"),
-            {"seq": seq}
-        ).scalar()
-        if not exists:
-            max_val = db.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {tbl}")).scalar() or 0
-            db.execute(text(f"CREATE SEQUENCE {seq} OWNED BY {tbl}.id"))
-            db.execute(text(f"SELECT setval('{seq}', :m + 1, false)"), {"m": max_val})
-            db.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN id SET DEFAULT nextval('{seq}')"))
-            db.commit()
+        try:
+            exists = db.execute(
+                text("SELECT 1 FROM pg_sequences WHERE sequencename = :seq"),
+                {"seq": seq}
+            ).scalar()
+            if not exists:
+                max_val = db.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {tbl}")).scalar() or 0
+                db.execute(text(f"CREATE SEQUENCE IF NOT EXISTS {seq} OWNED BY {tbl}.id"))
+                db.execute(text(f"SELECT setval('{seq}', :m + 1, false)"), {"m": max_val})
+                db.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN id SET DEFAULT nextval('{seq}')"))
+                db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Failed to ensure sequence {seq} for {tbl}: {e}")
+
+    try:
+        db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_lang_code ON languages (lang_code)"))
+        db.commit()
+    except Exception as e:
+        db.rollback()
 
 
 def parse_fb2_metadata(fb2_path: Path) -> dict:
@@ -884,9 +895,21 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
             if l_row:
                 lid = l_row.id
             else:
-                lid = db.execute(text("INSERT INTO languages (lang_code) VALUES (:c) ON CONFLICT (lang_code) DO NOTHING RETURNING id"), {"c": lang_code}).scalar()
+                try:
+                    db.execute(text("SAVEPOINT sp_lang"))
+                    lid = db.execute(text("INSERT INTO languages (lang_code) VALUES (:c) ON CONFLICT (lang_code) DO NOTHING RETURNING id"), {"c": lang_code}).scalar()
+                    db.execute(text("RELEASE SAVEPOINT sp_lang"))
+                except Exception:
+                    db.execute(text("ROLLBACK TO SAVEPOINT sp_lang"))
+                    lid = None
+
                 if not lid:
-                    lid = db.execute(text("SELECT id FROM languages WHERE lang_code = :c"), {"c": lang_code}).scalar()
+                    l_row2 = db.execute(text("SELECT id FROM languages WHERE lang_code = :c LIMIT 1"), {"c": lang_code}).fetchone()
+                    if l_row2:
+                        lid = l_row2.id
+                    else:
+                        max_id = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM languages")).scalar() or 1
+                        lid = db.execute(text("INSERT INTO languages (id, lang_code) VALUES (:lid, :c) RETURNING id"), {"lid": max_id, "c": lang_code}).scalar()
             if lid:
                 db.execute(text("""
                     INSERT INTO book_languages (book_id, language_id)
