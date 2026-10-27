@@ -1961,6 +1961,7 @@ def synthesize_tts(req: SynthesizeRequest):
 
 
 @app.get("/api/tts/audio/{filename}")
+@app.head("/api/tts/audio/{filename}")
 def get_tts_audio(filename: str):
     """Serve cached TTS audio file with byte range support for smooth scrubbing."""
     safe_name = Path(filename).name
