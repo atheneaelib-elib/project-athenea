@@ -1005,6 +1005,8 @@ CREATE INDEX idx_data_book ON public.data USING btree (book_id);
 
 CREATE INDEX idx_data_format ON public.data USING btree (format);
 
+CREATE UNIQUE INDEX idx_data_book_format ON public.data USING btree (book_id, format);
+
 
 --
 -- Name: idx_favorites_book; Type: INDEX; Schema: public; Owner: -

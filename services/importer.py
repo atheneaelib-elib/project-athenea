@@ -114,6 +114,15 @@ def ensure_sequences(db: Session):
 
     try:
         db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_lang_code ON languages (lang_code)"))
+        # Deduplicate any duplicate format rows in data table and enforce unique index
+        db.execute(text("""
+            DELETE FROM data a
+            USING data b
+            WHERE a.id > b.id
+              AND a.book_id = b.book_id
+              AND UPPER(a.format) = UPPER(b.format)
+        """))
+        db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_book_format ON data (book_id, format)"))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -795,10 +804,10 @@ def ensure_book_epub_format(db: Session, book_id: int) -> bool:
 
         if convert_fb2_to_epub(fb2_file, target_epub, title=book_row.title, author=author_name):
             sz = target_epub.stat().st_size
+            db.execute(text("DELETE FROM data WHERE book_id = :bid AND UPPER(format) = 'EPUB'"), {"bid": book_id})
             db.execute(text("""
                 INSERT INTO data (book_id, format, uncompressed_size, name)
                 VALUES (:bid, 'EPUB', :sz, :name)
-                ON CONFLICT DO NOTHING
             """), {"bid": book_id, "sz": sz, "name": base_name})
             db.commit()
             return True

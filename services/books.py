@@ -835,16 +835,20 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         WHERE book_id = :id
         ORDER BY format
     """), {"id": book_id}).fetchall()
-    formats = [
-        {
+    seen_fmts = set()
+    formats = []
+    for f in formats_rows:
+        fmt_key = f.format.strip().upper()
+        if fmt_key in seen_fmts:
+            continue
+        seen_fmts.add(fmt_key)
+        formats.append({
             "format": f.format,
             "size_formatted": format_file_size(f.uncompressed_size),
             "size_bytes": f.uncompressed_size,
             "filename": f"{f.name}.{f.format.lower()}",
             "download_url": f"/download/{book_id}/{f.format.lower()}"
-        }
-        for f in formats_rows
-    ]
+        })
 
     pubdate_str = None
     if row.pubdate:
