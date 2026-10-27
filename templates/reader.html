@@ -917,6 +917,7 @@
     const STORAGE_KEY_SPEED = "tts_speed";
 
     let ttsPlayerVisible = false;
+    let ttsIsPlaying = false;
     let ttsVoice = localStorage.getItem(STORAGE_KEY_VOICE) || "af_heart";
     let ttsSpeed = parseFloat(localStorage.getItem(STORAGE_KEY_SPEED)) || 1.0;
     let ttsParagraphs = [];
@@ -949,11 +950,13 @@
       });
 
       ttsAudio.addEventListener("play", () => {
+        ttsIsPlaying = true;
         setTtsPlayIconState("playing");
         updateMediaSessionState("playing");
       });
 
       ttsAudio.addEventListener("pause", () => {
+        ttsIsPlaying = false;
         setTtsPlayIconState("paused");
         updateMediaSessionState("paused");
       });
@@ -1071,16 +1074,31 @@
         .catch(err => console.warn("Failed to load voices:", err));
     }
 
+    function getFirstVisibleParagraphIndex() {
+      if (!ttsParagraphs || ttsParagraphs.length === 0) return 0;
+      const winW = window.innerWidth;
+      const winH = window.innerHeight;
+      for (let i = 0; i < ttsParagraphs.length; i++) {
+        const el = ttsParagraphs[i];
+        const rect = el.getBoundingClientRect();
+        // Check if element is inside current viewport
+        if (rect.top >= -20 && rect.top < winH && rect.left >= -20 && rect.left < winW) {
+          return i;
+        }
+      }
+      return 0;
+    }
+
     function ttsScanParagraphs() {
       const contents = rendition ? rendition.getContents() : null;
       if (!contents || contents.length === 0) return;
       const doc = contents[0].document;
       if (!doc) return;
 
-      const candidates = Array.from(doc.querySelectorAll("p, blockquote, h1, h2, h3, h4, h5, h6, li"));
+      const candidates = Array.from(doc.querySelectorAll("p, blockquote, li, .verse, .stanza, h1, h2, h3, h4, h5, h6"));
       ttsParagraphs = candidates.filter(el => {
         const txt = (el.innerText || "").trim();
-        return txt.length > 5 && !el.closest("header, footer, nav");
+        return txt.length > 3 && !el.closest("header, footer, nav");
       });
 
       // Auto-switch to Russian voice if book contains Cyrillic text
@@ -1116,7 +1134,27 @@
       if (idx >= 0 && idx < ttsParagraphs.length) {
         const target = ttsParagraphs[idx];
         target.classList.add("tts-active-highlight");
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        try {
+          if (currentLayout === 'scroll') {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+          } else if (rendition) {
+            const contents = rendition.getContents();
+            if (contents && contents[0] && contents[0].cfiFromNode) {
+              const cfi = contents[0].cfiFromNode(target);
+              if (cfi) {
+                const rect = target.getBoundingClientRect();
+                const winW = window.innerWidth;
+                const winH = window.innerHeight;
+                // If element is not currently visible on the active page, turn to its CFI
+                if (rect.left < 0 || rect.right > winW || rect.top < 0 || rect.bottom > winH) {
+                  rendition.display(cfi);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }
     }
 
@@ -1128,6 +1166,7 @@
         if (sleepTimerMode === 'chapter') {
           console.log("Sleep timer: reached end of chapter.");
           if (ttsAudio) ttsAudio.pause();
+          ttsIsPlaying = false;
           setTtsPlayIconState("paused");
           setSleepTimer('off');
           const badge = document.getElementById("sleep-timer-badge");
@@ -1140,16 +1179,21 @@
         }
         console.log("Reached end of page/chapter, turning to next...");
         if (rendition) {
-          rendition.next();
-          // Wait for relocation and next paragraphs to load
-          setTimeout(() => {
-            ttsScanParagraphs();
-            if (ttsParagraphs.length > 0) {
-              ttsPlayParagraph(0);
-            } else {
-              setTtsPlayIconState("paused");
-            }
-          }, 400);
+          rendition.next().then(() => {
+            setTimeout(() => {
+              ttsScanParagraphs();
+              if (ttsParagraphs.length > 0) {
+                ttsPlayParagraph(0);
+              } else {
+                ttsIsPlaying = false;
+                setTtsPlayIconState("paused");
+              }
+            }, 250);
+          }).catch(err => {
+            console.warn("Navigation to next chapter:", err);
+            ttsIsPlaying = false;
+            setTtsPlayIconState("paused");
+          });
         }
         return;
       }
@@ -1189,6 +1233,7 @@
           ttsAudio.src = data.url;
           ttsAudio.playbackRate = ttsSpeed;
           await ttsAudio.play();
+          ttsIsPlaying = true;
           setTtsPlayIconState("playing");
         }
 
@@ -1210,16 +1255,22 @@
             if (ruVoice && /[\u0400-\u04FF]/.test(rawText)) {
               utter.voice = ruVoice;
             }
+            utter.onstart = () => {
+              ttsIsPlaying = true;
+              setTtsPlayIconState("playing");
+            };
             utter.onend = () => {
               if (ttsIsPlaying) {
                 ttsPlayParagraph(idx + 1);
               }
             };
             utter.onerror = () => {
+              ttsIsPlaying = false;
               setTtsPlayIconState("paused");
               if (previewEl) previewEl.innerText = "Error synthesizing speech. Please retry.";
             };
             window.speechSynthesis.speak(utter);
+            ttsIsPlaying = true;
             setTtsPlayIconState("playing");
             if (previewEl) previewEl.innerText = rawText.slice(0, 100) + (rawText.length > 100 ? "..." : "");
             ttsPrefetchNext(idx + 1);
@@ -1228,6 +1279,7 @@
             console.error("Web speech fallback error:", webErr);
           }
         }
+        ttsIsPlaying = false;
         setTtsPlayIconState("paused");
         if (previewEl) previewEl.innerText = "Error synthesizing speech. Please retry.";
       }
@@ -1253,16 +1305,34 @@
     }
 
     function ttsTogglePlayPause() {
+      if ('speechSynthesis' in window && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+        ttsIsPlaying = false;
+        setTtsPlayIconState("paused");
+        return;
+      }
+      if ('speechSynthesis' in window && window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        ttsIsPlaying = true;
+        setTtsPlayIconState("playing");
+        return;
+      }
+
       if (!ttsAudio) return;
 
       if (ttsAudio.paused) {
         if (ttsCurrentIndex < 0 || !ttsAudio.src) {
-          ttsPlayParagraph(0);
+          const startIdx = getFirstVisibleParagraphIndex();
+          ttsPlayParagraph(startIdx);
         } else {
           ttsAudio.play();
+          ttsIsPlaying = true;
+          setTtsPlayIconState("playing");
         }
       } else {
         ttsAudio.pause();
+        ttsIsPlaying = false;
+        setTtsPlayIconState("paused");
       }
     }
 

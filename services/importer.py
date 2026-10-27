@@ -515,9 +515,14 @@ def native_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None
                 if ntag == "p":
                     inner = inner_html(node)
                     res.append(f"<p>{inner}</p>")
-                elif ntag in ("subtitle", "title"):
-                    inner = inner_html(node)
-                    res.append(f"<h3>{inner}</h3>")
+                elif ntag == "title":
+                    inner = inner_html(node).strip()
+                    if inner:
+                        res.append(f"<h2>{inner}</h2>")
+                elif ntag == "subtitle":
+                    inner = inner_html(node).strip()
+                    if inner:
+                        res.append(f"<h3>{inner}</h3>")
                 elif ntag == "empty-line":
                     res.append('<p class="empty-line">&nbsp;</p>')
                 elif ntag in ("epigraph", "cite"):
@@ -586,6 +591,7 @@ def native_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None
         chapter_files = []
         for i, (ch_title, ch_body) in enumerate(chapters, 1):
             fname = f"chapter_{i:04d}.xhtml"
+            header_html = f"<h2>{html.escape(ch_title)}</h2>\n  " if not ch_body.lstrip().startswith("<h") else ""
             xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{book_lang}">
@@ -594,8 +600,7 @@ def native_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None
   <link rel="stylesheet" type="text/css" href="../styles/style.css" />
 </head>
 <body>
-  <h2>{html.escape(ch_title)}</h2>
-  {ch_body}
+  {header_html}{ch_body}
 </body>
 </html>'''
             chapter_files.append({
