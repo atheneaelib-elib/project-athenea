@@ -125,34 +125,46 @@ def has_piper_voice(voice_id: str) -> bool:
     return alt_file.is_file()
 
 
+_edge_lock = threading.Lock()
+
+
 def synthesize_edge(text: str, voice: str, speed: float, out_path: Path):
-    """Zero-dependency studio-grade neural TTS via edge-tts."""
+    """Zero-dependency studio-grade neural TTS via edge-tts with automatic retry and voice fallback."""
     rate_percent = int(round((speed - 1.0) * 100))
     rate_str = f"{rate_percent:+d}%"
 
-    async def _run():
-        import edge_tts
-        comm = edge_tts.Communicate(text, voice, rate=rate_str)
-        await comm.save(str(out_path))
+    alt_voice = "ru-RU-SvetlanaNeural" if voice == "ru-RU-DmitryNeural" else ("ru-RU-DmitryNeural" if "ru-RU" in voice else "en-US-JennyNeural")
 
-    for attempt in range(2):
-        try:
-            asyncio.run(_run())
-            if out_path.is_file() and out_path.stat().st_size > 0:
-                return
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
+    last_err = None
+    for target_voice in (voice, alt_voice):
+        for attempt in range(3):
+            async def _run():
+                import edge_tts
+                comm = edge_tts.Communicate(text, target_voice, rate=rate_str)
+                await comm.save(str(out_path))
+
             try:
-                loop.run_until_complete(_run())
+                with _edge_lock:
+                    loop = asyncio.new_event_loop()
+                    try:
+                        loop.run_until_complete(_run())
+                    finally:
+                        loop.close()
+
                 if out_path.is_file() and out_path.stat().st_size > 0:
                     return
-            finally:
-                loop.close()
-        except Exception as e:
-            if attempt == 1:
-                raise e
-            import time
-            time.sleep(0.3)
+            except Exception as e:
+                last_err = e
+                if out_path.is_file() and out_path.stat().st_size == 0:
+                    try:
+                        out_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                import time
+                time.sleep(0.3 * (attempt + 1))
+
+    if last_err:
+        raise last_err
 
 
 def get_kokoro():
@@ -213,9 +225,13 @@ def sanitize_text_for_speech(text: str) -> str:
     clean = re.sub(r'<[^>]+>', ' ', text)
 
     # Decode common HTML entities
-    clean = clean.replace('&nbsp;', ' ').replace('&mdash;', ' — ').replace('&ndash;', ' — ')
+    clean = clean.replace('&nbsp;', ' ').replace('&mdash;', ', ').replace('&ndash;', ', ')
     clean = clean.replace('&hellip;', '...').replace('&quot;', '"').replace('&apos;', "'")
     clean = clean.replace('&amp;', '&')
+
+    # Normalize quotes (replace Russian guillemets and curly quotes with standard quotes)
+    clean = clean.replace('«', '"').replace('»', '"').replace('“', '"').replace('”', '"').replace('„', '"')
+    clean = clean.replace('‘', "'").replace('’', "'")
 
     # Remove footnote markers like [1], [12], [*]
     clean = re.sub(r'\[\s*\d+\s*\]', '', clean)
@@ -224,8 +240,9 @@ def sanitize_text_for_speech(text: str) -> str:
     # Standardize ellipsis to ensure pause
     clean = re.sub(r'\.{3,}', '... ', clean)
 
-    # Standardize em dashes to introduce natural pauses
-    clean = re.sub(r'[\u2014\u2013\u2015]', ' — ', clean)
+    # Remove leading dialogue dashes that trip Edge-TTS SSML, and turn internal em-dashes into speech pauses
+    clean = re.sub(r'^\s*[\u2014\u2013\u2015\-]+\s*', '', clean)
+    clean = re.sub(r'\s*[\u2014\u2013\u2015]\s*', ', ', clean)
 
     # English abbreviation expansions
     clean = re.sub(r'\bMr\.\s*', 'Mister ', clean)

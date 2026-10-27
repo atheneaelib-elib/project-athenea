@@ -1102,23 +1102,38 @@
       const doc = contents[0].document;
       if (!doc) return;
 
-      // Select ONLY body narrative elements (NO h1, h2, h3, h4, h5, h6)
-      const candidates = Array.from(doc.querySelectorAll("p, blockquote, li, .verse, .stanza"));
+      // 1. Target all narrative body paragraphs across all ebook generators:
+      // - Standard EPUBs: <p>
+      // - Calibre-converted EPUBs: <div class="paragraph">, <div class="calibre_text">, <div class="para">
+      // - Poetry & Quotes: <blockquote>, <li>, <div class="verse">, <div class="stanza">
+      let candidates = Array.from(doc.querySelectorAll(
+        "p, div.paragraph, div.para, div.text, blockquote, li, .verse, .stanza, dd, dt"
+      ));
+
+      // 2. Fallback for custom EPUBs that wrap paragraphs in plain leaf <div>s
+      if (candidates.length === 0) {
+        const allDivs = Array.from(doc.querySelectorAll("div"));
+        candidates = allDivs.filter(d => {
+          return !d.querySelector("div, p, h1, h2, h3, h4, h5, h6, table, ul, ol");
+        });
+      }
+
+      // 3. Exclude headers, empty snippets, navigation, and title elements
       ttsParagraphs = candidates.filter(el => {
         const txt = (el.innerText || "").trim();
-        // Skip short snippets (< 5 chars), empty lines, page numbers
+        // Skip tiny snippets (< 5 chars), empty lines, page numbers
         if (txt.length < 5) return false;
         // Skip elements inside headers, footers, navigation
         if (el.closest("header, footer, nav")) return false;
         // Skip elements styled as headings or chapter titles
         const cls = ((el.className || "") + " " + (el.parentElement ? el.parentElement.className : "")).toLowerCase();
-        if (cls.includes("title") || cls.includes("chapter-title") || cls.includes("heading") || cls.includes("header")) {
+        if (cls.includes("title") || cls.includes("chapter-title") || cls.includes("heading") || cls.includes("header") || cls.includes("toc")) {
           if (txt.length < 80) return false;
         }
         return true;
       });
 
-      // Only if the document has NO body paragraphs at all, fallback to headings
+      // 4. Absolute fallback only if the document contains strictly NO body text
       if (ttsParagraphs.length === 0) {
         ttsParagraphs = Array.from(doc.querySelectorAll("h1, h2, h3, h4, h5, h6"))
           .filter(el => (el.innerText || "").trim().length > 3 && !el.closest("header, footer, nav"));
