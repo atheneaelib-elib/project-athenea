@@ -504,6 +504,8 @@
   {% if fmt == 'epub' %}
   <script>
     const BOOK_ID = {{ book.id }};
+    const BOOK_LANG = "{{ (book.primary_lang_code or '').lower() }}";
+    const BOOK_IS_RU = {% if (book.primary_lang_code or '').lower() in ('ru', 'rus') or 'ru' in (book.path or '').lower() or 'рус' in (book.title or '').lower() %}true{% else %}false{% endif %};
     const RAW_URL = "{{ raw_url }}";
     const STORAGE_KEY_POS = "epub_pos_" + BOOK_ID;
     const STORAGE_KEY_THEME = "reader_theme";
@@ -918,7 +920,12 @@
 
     let ttsPlayerVisible = false;
     let ttsIsPlaying = false;
-    let ttsVoice = localStorage.getItem(STORAGE_KEY_VOICE) || "af_heart";
+    let isBookLangResolved = false;
+    let defaultBookVoice = BOOK_IS_RU ? "ru_dmitri" : "af_heart";
+    let ttsVoice = localStorage.getItem(STORAGE_KEY_VOICE) || defaultBookVoice;
+    if (BOOK_IS_RU && !ttsVoice.startsWith("ru_") && !ttsVoice.startsWith("ru-")) {
+      ttsVoice = "ru_dmitri";
+    }
     let ttsSpeed = parseFloat(localStorage.getItem(STORAGE_KEY_SPEED)) || 1.0;
     let ttsParagraphs = [];
     let ttsCurrentIndex = -1;
@@ -1095,22 +1102,39 @@
       const doc = contents[0].document;
       if (!doc) return;
 
-      const candidates = Array.from(doc.querySelectorAll("p, blockquote, li, .verse, .stanza, h1, h2, h3, h4, h5, h6"));
+      // Select ONLY body narrative elements (NO h1, h2, h3, h4, h5, h6)
+      const candidates = Array.from(doc.querySelectorAll("p, blockquote, li, .verse, .stanza"));
       ttsParagraphs = candidates.filter(el => {
         const txt = (el.innerText || "").trim();
-        return txt.length > 3 && !el.closest("header, footer, nav");
+        // Skip short snippets (< 5 chars), empty lines, page numbers
+        if (txt.length < 5) return false;
+        // Skip elements inside headers, footers, navigation
+        if (el.closest("header, footer, nav")) return false;
+        // Skip elements styled as headings or chapter titles
+        const cls = ((el.className || "") + " " + (el.parentElement ? el.parentElement.className : "")).toLowerCase();
+        if (cls.includes("title") || cls.includes("chapter-title") || cls.includes("heading") || cls.includes("header")) {
+          if (txt.length < 80) return false;
+        }
+        return true;
       });
 
-      // Auto-switch to Russian voice if book contains Cyrillic text
-      if (ttsParagraphs.length > 0) {
-        const sampleText = ttsParagraphs.slice(0, 3).map(p => p.innerText || "").join(" ");
-        const isRu = /[\u0400-\u04FF]/.test(sampleText);
-        if (isRu && !ttsVoice.startsWith("ru_")) {
-          ttsVoice = "ru_irina";
+      // Only if the document has NO body paragraphs at all, fallback to headings
+      if (ttsParagraphs.length === 0) {
+        ttsParagraphs = Array.from(doc.querySelectorAll("h1, h2, h3, h4, h5, h6"))
+          .filter(el => (el.innerText || "").trim().length > 3 && !el.closest("header, footer, nav"));
+      }
+
+      // One-time book language resolution to prevent random mid-book voice changes
+      if (!isBookLangResolved && ttsParagraphs.length > 0) {
+        const sampleText = ttsParagraphs.slice(0, 10).map(p => p.innerText || "").join(" ");
+        const isRu = BOOK_IS_RU || /[\u0400-\u04FF]/.test(sampleText);
+        if (isRu && !ttsVoice.startsWith("ru_") && !ttsVoice.startsWith("ru-")) {
+          ttsVoice = "ru_dmitri";
           localStorage.setItem(STORAGE_KEY_VOICE, ttsVoice);
           const sel = document.getElementById("tts-voice-select");
           if (sel) sel.value = ttsVoice;
         }
+        isBookLangResolved = true;
       }
 
       ttsParagraphs.forEach((el, idx) => {
@@ -1212,13 +1236,15 @@
       setTtsPlayIconState("loading");
 
       try {
+        const isRuContext = BOOK_IS_RU || ttsVoice.startsWith("ru_") || ttsVoice.startsWith("ru-");
         const res = await fetch("/api/tts/synthesize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: rawText,
             voice: ttsVoice,
-            speed: ttsSpeed
+            speed: ttsSpeed,
+            lang: isRuContext ? "ru" : undefined
           })
         });
 
@@ -1251,9 +1277,13 @@
             const utter = new SpeechSynthesisUtterance(rawText);
             utter.rate = ttsSpeed;
             const voices = window.speechSynthesis.getVoices();
-            const ruVoice = voices.find(v => v.lang.startsWith("ru"));
-            if (ruVoice && /[\u0400-\u04FF]/.test(rawText)) {
-              utter.voice = ruVoice;
+            const isRu = BOOK_IS_RU || ttsVoice.startsWith("ru_") || ttsVoice.startsWith("ru-") || /[\u0400-\u04FF]/.test(rawText);
+            if (isRu) {
+              const ruVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("ru"));
+              if (ruVoice) {
+                utter.voice = ruVoice;
+                utter.lang = "ru-RU";
+              }
             }
             utter.onstart = () => {
               ttsIsPlaying = true;
@@ -1292,6 +1322,7 @@
       if (!nextText || ttsPrefetchSet.has(nextText)) return;
 
       ttsPrefetchSet.add(nextText);
+      const isRuContext = BOOK_IS_RU || ttsVoice.startsWith("ru_") || ttsVoice.startsWith("ru-");
       // Fire-and-forget prefetch
       fetch("/api/tts/synthesize", {
         method: "POST",
@@ -1299,7 +1330,8 @@
         body: JSON.stringify({
           text: nextText,
           voice: ttsVoice,
-          speed: ttsSpeed
+          speed: ttsSpeed,
+          lang: isRuContext ? "ru" : undefined
         })
       }).catch(() => {});
     }

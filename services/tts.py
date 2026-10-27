@@ -272,23 +272,23 @@ def synthesize_speech(
     # Clamp speed between 0.5x and 2.0x
     speed = max(0.5, min(2.0, float(speed)))
 
-    # Language and voice auto-resolution
+    # Language and voice resolution
     text_has_cyrillic = is_cyrillic(clean_text)
+    is_russian_context = (lang == "ru") or (voice and (voice.startswith("ru") or "russian" in voice.lower())) or text_has_cyrillic
 
-    valid_voice = voice if any(v["id"] == voice for v in VOICE_CATALOG) else DEFAULT_VOICE
+    valid_voice = voice if (any(v["id"] == voice for v in VOICE_CATALOG) or voice in EDGE_VOICE_MAP) else DEFAULT_VOICE
     selected_voice_meta = next((v for v in VOICE_CATALOG if v["id"] == valid_voice), None)
 
-    # If text is in Russian but an English voice was selected, auto-switch to Russian voice
-    if text_has_cyrillic and selected_voice_meta and selected_voice_meta.get("engine") != "piper":
-        # Keep same gender if possible
-        if selected_voice_meta.get("gender") == "male":
-            valid_voice = "ru_dmitri"
-        else:
+    # If in Russian context and an English voice was selected by default, switch to Russian
+    if is_russian_context and not valid_voice.startswith("ru"):
+        if selected_voice_meta and selected_voice_meta.get("gender") == "female":
             valid_voice = "ru_irina"
+        else:
+            valid_voice = "ru_dmitri"
         selected_voice_meta = next((v for v in VOICE_CATALOG if v["id"] == valid_voice), None)
 
-    engine = selected_voice_meta.get("engine", "kokoro") if selected_voice_meta else "kokoro"
-    resolved_lang = selected_voice_meta.get("lang", "en-us") if selected_voice_meta else "en-us"
+    engine = selected_voice_meta.get("engine", "edge-tts") if selected_voice_meta else "edge-tts"
+    resolved_lang = "ru" if is_russian_context else (selected_voice_meta.get("lang", "en-us") if selected_voice_meta else "en-us")
 
     # Compute deterministic cache key
     cache_payload = f"{clean_text}|{valid_voice}|{speed:.2f}|{engine}".encode("utf-8")
@@ -388,7 +388,9 @@ def synthesize_speech(
 
     # 3. High-Fidelity Edge Neural TTS (Zero-dependency, studio quality, no ffmpeg needed)
     if use_edge:
-        edge_voice = EDGE_VOICE_MAP.get(valid_voice, "ru-RU-DmitryNeural" if text_has_cyrillic else "en-US-GuyNeural")
+        edge_voice = EDGE_VOICE_MAP.get(valid_voice)
+        if not edge_voice:
+            edge_voice = "ru-RU-DmitryNeural" if is_russian_context else "en-US-GuyNeural"
         synthesize_edge(clean_text, edge_voice, speed, temp_cache_file)
         if not temp_cache_file.is_file() or temp_cache_file.stat().st_size == 0:
             raise RuntimeError(f"Edge-TTS failed to produce speech audio for voice: {edge_voice}")
