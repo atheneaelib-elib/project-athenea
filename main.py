@@ -219,7 +219,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class RequireLoginMiddleware(BaseHTTPMiddleware):
     """Enforce login-wall, OPDS Basic Auth, and admin-only paths on every request."""
 
-    PUBLIC_PREFIXES    = ("/login", "/register", "/static", "/api/tts/audio", "/api/set-language", "/manifest.json", "/sw.js", "/cover/", "/thumbnail/", "/setup", "/health")
+    PUBLIC_PREFIXES    = ("/login", "/register", "/static", "/api/tts", "/api/set-language", "/manifest.json", "/sw.js", "/cover/", "/thumbnail/", "/setup", "/health")
     ADMIN_ONLY_PATHS   = ("/docs", "/redoc", "/openapi.json", "/api/stats", "/admin")
 
     async def dispatch(self, request: Request, call_next):
