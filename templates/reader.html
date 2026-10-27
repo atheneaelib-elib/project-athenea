@@ -1199,7 +1199,35 @@
         ttsPrefetchNext(idx + 1);
 
       } catch (err) {
-        console.error("TTS play error:", err);
+        console.warn("Server TTS error, attempting browser Web Speech fallback:", err);
+        if ('speechSynthesis' in window) {
+          try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(rawText);
+            utter.rate = ttsSpeed;
+            const voices = window.speechSynthesis.getVoices();
+            const ruVoice = voices.find(v => v.lang.startsWith("ru"));
+            if (ruVoice && /[\u0400-\u04FF]/.test(rawText)) {
+              utter.voice = ruVoice;
+            }
+            utter.onend = () => {
+              if (ttsIsPlaying) {
+                ttsPlayParagraph(idx + 1);
+              }
+            };
+            utter.onerror = () => {
+              setTtsPlayIconState("paused");
+              if (previewEl) previewEl.innerText = "Error synthesizing speech. Please retry.";
+            };
+            window.speechSynthesis.speak(utter);
+            setTtsPlayIconState("playing");
+            if (previewEl) previewEl.innerText = rawText.slice(0, 100) + (rawText.length > 100 ? "..." : "");
+            ttsPrefetchNext(idx + 1);
+            return;
+          } catch (webErr) {
+            console.error("Web speech fallback error:", webErr);
+          }
+        }
         setTtsPlayIconState("paused");
         if (previewEl) previewEl.innerText = "Error synthesizing speech. Please retry.";
       }

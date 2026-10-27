@@ -36,6 +36,7 @@ apt-get install -y \
     sudo \
     build-essential \
     calibre \
+    ffmpeg \
     python3 \
     python3-venv \
     python3-pip \

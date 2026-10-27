@@ -111,6 +111,7 @@ if [ "$OS_FAMILY" == "debian" ]; then
         pigz \
         build-essential \
         calibre \
+        ffmpeg \
         python3 \
         python3-venv \
         python3-pip \

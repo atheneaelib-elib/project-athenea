@@ -5,11 +5,13 @@ Dual Neural Text-to-Speech (TTS) Service
 Includes automatic language detection, text sanitization, and deterministic MP3 caching.
 """
 
+import asyncio
 import hashlib
 import io
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
 import wave
@@ -68,12 +70,89 @@ VOICE_CATALOG = [
 ]
 
 DEFAULT_VOICE = "af_heart"
-DEFAULT_RUSSIAN_VOICE = "ru_irina"
+DEFAULT_RUSSIAN_VOICE = "ru_dmitri"
+
+# High-fidelity Edge Neural Voice mappings for zero-dependency studio narration
+EDGE_VOICE_MAP = {
+    # Russian voices
+    "ru_irina": "ru-RU-SvetlanaNeural",
+    "ru_dmitri": "ru-RU-DmitryNeural",
+    "ru_ruslan": "ru-RU-DmitryNeural",
+    "ru-RU-DmitryNeural": "ru-RU-DmitryNeural",
+    "ru-RU-SvetlanaNeural": "ru-RU-SvetlanaNeural",
+
+    # American English voices
+    "af_heart": "en-US-JennyNeural",
+    "af_bella": "en-US-AriaNeural",
+    "af_sarah": "en-US-AriaNeural",
+    "af_nicole": "en-US-JennyNeural",
+    "af_sky": "en-US-JennyNeural",
+    "am_adam": "en-US-GuyNeural",
+    "am_michael": "en-US-ChristopherNeural",
+    "am_fenrir": "en-US-GuyNeural",
+    "am_puck": "en-US-GuyNeural",
+
+    # British English voices
+    "bf_emma": "en-GB-SoniaNeural",
+    "bf_isabella": "en-GB-SoniaNeural",
+    "bm_george": "en-GB-RyanNeural",
+    "bm_lewis": "en-GB-RyanNeural",
+
+    # European languages
+    "ef_dora": "es-ES-ElviraNeural",
+    "em_alex": "es-ES-AlvaroNeural",
+    "ff_siwis": "fr-FR-DeniseNeural",
+    "if_sara": "it-IT-ElsaNeural",
+}
 
 _kokoro_instance = None
 _kokoro_lock = threading.Lock()
 _piper_voices = {}
 _piper_lock = threading.Lock()
+
+
+def has_kokoro() -> bool:
+    """Check if local Kokoro ONNX model files exist on disk."""
+    return KOKORO_MODEL_PATH.is_file() and KOKORO_VOICES_PATH.is_file()
+
+
+def has_piper_voice(voice_id: str) -> bool:
+    """Check if local Piper ONNX model files exist on disk."""
+    model_file = PIPER_DIR / f"{voice_id}.onnx"
+    if model_file.is_file():
+        return True
+    alt_file = PIPER_DIR / f"{voice_id.replace('ru_', 'ru_RU-')}-medium.onnx"
+    return alt_file.is_file()
+
+
+def synthesize_edge(text: str, voice: str, speed: float, out_path: Path):
+    """Zero-dependency studio-grade neural TTS via edge-tts."""
+    rate_percent = int(round((speed - 1.0) * 100))
+    rate_str = f"{rate_percent:+d}%"
+
+    async def _run():
+        import edge_tts
+        comm = edge_tts.Communicate(text, voice, rate=rate_str)
+        await comm.save(str(out_path))
+
+    for attempt in range(2):
+        try:
+            asyncio.run(_run())
+            if out_path.is_file() and out_path.stat().st_size > 0:
+                return
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(_run())
+                if out_path.is_file() and out_path.stat().st_size > 0:
+                    return
+            finally:
+                loop.close()
+        except Exception as e:
+            if attempt == 1:
+                raise e
+            import time
+            time.sleep(0.3)
 
 
 def get_kokoro():
@@ -232,73 +311,89 @@ def synthesize_speech(
 
     temp_cache_file = CACHE_DIR / f"{cache_hash}.tmp.mp3"
 
-    # --- PIPER SYNTHESIS (NATIVE RUSSIAN) ---
-    if engine == "piper":
-        piper_voice = get_piper_voice(valid_voice)
-        wav_io = io.BytesIO()
-        with wave.open(wav_io, "wb") as wf:
-            piper_voice.synthesize_wav(clean_text, wf)
-        wav_bytes = wav_io.getvalue()
+    use_edge = True
+    duration = 1.0
 
-        # Convert WAV to MP3 via ffmpeg
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", "pipe:0",
-            "-b:a", "96k",
-            "-f", "mp3",
-            str(temp_cache_file)
-        ]
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        proc.communicate(input=wav_bytes)
+    # 1. Try local Piper if requested, voice model file exists, and ffmpeg is installed
+    if engine == "piper" and has_piper_voice(valid_voice) and shutil.which("ffmpeg"):
+        try:
+            piper_voice = get_piper_voice(valid_voice)
+            wav_io = io.BytesIO()
+            with wave.open(wav_io, "wb") as wf:
+                piper_voice.synthesize_wav(clean_text, wf)
+            wav_bytes = wav_io.getvalue()
 
-        if proc.returncode != 0 or not temp_cache_file.is_file():
-            raise RuntimeError("ffmpeg failed to encode Piper WAV to MP3")
-
-        # Estimate duration
-        sample_rate = piper_voice.config.sample_rate or 22050
-        duration = len(wav_bytes) / (sample_rate * 2)  # 16-bit mono
-
-    # --- KOKORO SYNTHESIS (ENGLISH & EUROPEAN) ---
-    else:
-        kokoro = get_kokoro()
-        with _kokoro_lock:
-            samples, sample_rate = kokoro.create(
-                clean_text,
-                voice=valid_voice,
-                speed=speed,
-                lang=resolved_lang
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", "pipe:0",
+                "-b:a", "96k",
+                "-f", "mp3",
+                str(temp_cache_file)
+            ]
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
             )
+            proc.communicate(input=wav_bytes)
 
-        import numpy as np
-        raw_pcm = samples.astype(np.float32).tobytes()
+            if proc.returncode == 0 and temp_cache_file.is_file() and temp_cache_file.stat().st_size > 0:
+                sample_rate = piper_voice.config.sample_rate or 22050
+                duration = len(wav_bytes) / (sample_rate * 2)  # 16-bit mono
+                use_edge = False
+        except Exception as pe:
+            logger.warning(f"Piper local synthesis failed, falling back to Edge-TTS: {pe}")
+            use_edge = True
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-f", "f32le",
-            "-ar", str(sample_rate),
-            "-ac", "1",
-            "-i", "pipe:0",
-            "-b:a", "96k",
-            "-f", "mp3",
-            str(temp_cache_file)
-        ]
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        proc.communicate(input=raw_pcm)
+    # 2. Try local Kokoro if requested, models exist, and ffmpeg is installed
+    elif engine == "kokoro" and has_kokoro() and shutil.which("ffmpeg"):
+        try:
+            kokoro = get_kokoro()
+            with _kokoro_lock:
+                samples, sample_rate = kokoro.create(
+                    clean_text,
+                    voice=valid_voice,
+                    speed=speed,
+                    lang=resolved_lang
+                )
 
-        if proc.returncode != 0 or not temp_cache_file.is_file():
-            raise RuntimeError("ffmpeg failed to encode Kokoro audio to MP3")
+            import numpy as np
+            raw_pcm = samples.astype(np.float32).tobytes()
 
-        duration = len(samples) / sample_rate
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "f32le",
+                "-ar", str(sample_rate),
+                "-ac", "1",
+                "-i", "pipe:0",
+                "-b:a", "96k",
+                "-f", "mp3",
+                str(temp_cache_file)
+            ]
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            proc.communicate(input=raw_pcm)
+
+            if proc.returncode == 0 and temp_cache_file.is_file() and temp_cache_file.stat().st_size > 0:
+                duration = len(samples) / sample_rate
+                use_edge = False
+        except Exception as ke:
+            logger.warning(f"Kokoro local synthesis failed, falling back to Edge-TTS: {ke}")
+            use_edge = True
+
+    # 3. High-Fidelity Edge Neural TTS (Zero-dependency, studio quality, no ffmpeg needed)
+    if use_edge:
+        edge_voice = EDGE_VOICE_MAP.get(valid_voice, "ru-RU-DmitryNeural" if text_has_cyrillic else "en-US-GuyNeural")
+        synthesize_edge(clean_text, edge_voice, speed, temp_cache_file)
+        if not temp_cache_file.is_file() or temp_cache_file.stat().st_size == 0:
+            raise RuntimeError(f"Edge-TTS failed to produce speech audio for voice: {edge_voice}")
+        duration = max(0.5, round(temp_cache_file.stat().st_size / (96 * 1024 / 8), 2))
+        engine = "edge-tts"
 
     temp_cache_file.replace(cache_file)
 
