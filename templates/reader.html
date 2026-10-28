@@ -328,7 +328,7 @@
 
     {% if fmt == 'epub' %}
       <!-- EPUB Viewport Container (Configurable Width) -->
-      <div id="viewer-container" class="w-full h-full px-4 sm:px-14 transition-all duration-200 overflow-hidden">
+      <div id="viewer-container" class="w-full h-full px-4 sm:px-14 transition-all duration-200">
         <div id="viewer" class="w-full h-full"></div>
       </div>
 
@@ -582,7 +582,7 @@
     function applyWidthStyles() {
       const container = document.getElementById('viewer-container');
       if (!container) return;
-      container.className = "h-full transition-all duration-200 overflow-hidden ";
+      container.className = "h-full transition-all duration-200 ";
       if (currentWidth === "medium") {
         container.className += "w-full max-w-4xl mx-auto px-4 sm:px-12";
       } else if (currentWidth === "wide") {
@@ -674,17 +674,6 @@
         try {
           const doc = contents.document;
           if (!doc) return;
-
-          // Prevent horizontal overflow inside the chapter document
-          if (doc.documentElement) {
-            doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
-            doc.documentElement.style.setProperty('max-width', '100%', 'important');
-          }
-          if (doc.body) {
-            doc.body.style.setProperty('overflow-x', 'hidden', 'important');
-            doc.body.style.setProperty('max-width', '100%', 'important');
-            doc.body.style.setProperty('box-sizing', 'border-box', 'important');
-          }
 
           // 1. Normalize SVG covers (specifically Calibre's preserveAspectRatio="none")
           const svgs = doc.querySelectorAll('svg');
