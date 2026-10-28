@@ -28,7 +28,7 @@
     {% endif %}
 
     <!-- Top Floating Badges (Language, Shelves & Formats) -->
-    <div class="absolute top-2 right-2 flex flex-wrap justify-end gap-1 pointer-events-none">
+    <div class="absolute top-2 right-2 left-11 flex flex-wrap justify-end gap-1 pointer-events-none z-[5]">
       {% if book.reading_status == 'reading' %}
       <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/90 text-white shadow-sm backdrop-blur-sm" title="{{ t('sidebar.shelf_reading') }}">{{ t('card.reading') }}</span>
       {% elif book.reading_status == 'finished' %}

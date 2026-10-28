@@ -25,67 +25,60 @@
     #viewer iframe {
       border: none !important;
       display: block !important;
-      max-width: 100% !important;
     }
     
     /* Flow specific styles */
     .flow-paginated #viewer {
-      overflow: hidden !important;
+      overflow: hidden;
       width: 100%;
       height: 100%;
     }
     .flow-scroll #viewer {
-      overflow: hidden !important;
-      width: 100%;
-      height: 100%;
-    }
-    .flow-scroll .epub-container {
       overflow-y: auto !important;
       overflow-x: hidden !important;
       -webkit-overflow-scrolling: touch;
-      width: 100% !important;
-      height: 100% !important;
-      overscroll-behavior-y: contain;
+      width: 100%;
+      height: 100%;
     }
-    .flow-scroll .epub-view {
-      overflow-x: hidden !important;
-      width: 100% !important;
-    }
-    .flow-scroll .epub-view iframe {
-      overflow-x: hidden !important;
-      width: 100% !important;
+    .flow-scroll #viewer iframe {
+      border: none !important;
       display: block !important;
+      width: 100% !important;
     }
     .flow-scroll #prev-btn, .flow-scroll #next-btn {
-      display: none !important;
+      opacity: 0.6;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .flow-scroll #prev-btn:hover, .flow-scroll #next-btn:hover {
+      opacity: 1;
     }
 
-    /* Custom smooth scrollbar for continuous reading */
-    .flow-scroll .epub-container::-webkit-scrollbar {
+    /* Custom smooth scrollbar for scrolled reading */
+    .flow-scroll #viewer::-webkit-scrollbar {
       width: 8px;
     }
-    .flow-scroll .epub-container::-webkit-scrollbar-track {
+    .flow-scroll #viewer::-webkit-scrollbar-track {
       background: transparent;
     }
-    body.theme-dark .flow-scroll .epub-container::-webkit-scrollbar-thumb {
+    body.theme-dark .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(148, 163, 184, 0.25);
       border-radius: 4px;
     }
-    body.theme-dark .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover {
+    body.theme-dark .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(148, 163, 184, 0.45);
     }
-    body.theme-light .flow-scroll .epub-container::-webkit-scrollbar-thumb {
+    body.theme-light .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(100, 116, 139, 0.25);
       border-radius: 4px;
     }
-    body.theme-light .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover {
+    body.theme-light .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(100, 116, 139, 0.45);
     }
-    body.theme-sepia .flow-scroll .epub-container::-webkit-scrollbar-thumb {
+    body.theme-sepia .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(120, 80, 40, 0.25);
       border-radius: 4px;
     }
-    body.theme-sepia .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover {
+    body.theme-sepia .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(120, 80, 40, 0.45);
     }
 
@@ -566,6 +559,7 @@
 
     let book, rendition, bookBuffer;
     let bookNavigationToc = null;
+    let isChapterTransitioning = false;
     let currentFontSize = parseInt(localStorage.getItem(STORAGE_KEY_FONT_SIZE)) || 100;
     let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || "dark";
     let currentLayout = localStorage.getItem(STORAGE_KEY_LAYOUT) || "single"; // default: 1 column full page
@@ -628,24 +622,20 @@
       // Setup layout mode parameters
       let spreadSetting = "none";
       let flowSetting = "paginated";
-      let managerSetting = "default";
 
       if (currentLayout === "double") {
         spreadSetting = "always";
         flowSetting = "paginated";
-        managerSetting = "default";
         document.body.classList.remove('flow-scroll');
         document.body.classList.add('flow-paginated');
       } else if (currentLayout === "scroll") {
         spreadSetting = "none";
-        flowSetting = "scrolled";
-        managerSetting = "continuous";
+        flowSetting = "scrolled-doc";
         document.body.classList.remove('flow-paginated');
         document.body.classList.add('flow-scroll');
       } else { // "single"
         spreadSetting = "none";
         flowSetting = "paginated";
-        managerSetting = "default";
         document.body.classList.remove('flow-scroll');
         document.body.classList.add('flow-paginated');
       }
@@ -655,90 +645,70 @@
         width: "100%",
         height: "100%",
         spread: spreadSetting,
-        flow: flowSetting,
-        manager: managerSetting
+        flow: flowSetting
       });
 
-      // Hook to enforce box-sizing, prevent horizontal scrollbars, and constrain wide images
-      rendition.hooks.content.register(function(contents) {
-        contents.addStylesheetRules({
-          "html": {
-            "box-sizing": "border-box !important",
-            "overflow-x": "hidden !important"
-          },
-          "*, *:before, *:after": {
-            "box-sizing": "border-box !important"
-          },
-          "body": {
-            "box-sizing": "border-box !important",
-            "overflow-x": "hidden !important",
-            "max-width": "100% !important",
-            "word-break": "break-word !important"
-          },
-          "img, image, svg": {
-            "max-width": "100% !important",
-            "height": "auto !important"
+      if (currentLayout === "scroll") {
+        function checkTransitionWheel(e) {
+          if (isChapterTransitioning) return;
+          if (e.deltaY > 0 && viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 10) {
+            isChapterTransitioning = true;
+            nextPage();
+            setTimeout(() => { isChapterTransitioning = false; }, 800);
+          } else if (e.deltaY < 0 && viewer.scrollTop <= 0) {
+            isChapterTransitioning = true;
+            prevPage();
+            setTimeout(() => { isChapterTransitioning = false; }, 800);
           }
-        });
-      });
+        }
+        viewer.onwheel = checkTransitionWheel;
+        rendition.on("wheel", checkTransitionWheel);
+      } else {
+        viewer.onwheel = null;
+      }
 
-      // Register Themes with border-box and proper typography
+      // Register Themes with clean typography and box-sizing
       rendition.themes.register("dark", {
-        "html": { "box-sizing": "border-box !important", "overflow-x": "hidden !important" },
-        "*, *:before, *:after": { "box-sizing": "border-box !important" },
         "body": {
-          "box-sizing": "border-box !important",
-          "overflow-x": "hidden !important",
           "color": "#e2e8f0 !important",
           "background": "#0b0f19 !important",
           "font-family": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important",
           "line-height": "1.75 !important",
-          "padding": "24px 32px !important",
-          "max-width": "100% !important",
-          "word-break": "break-word !important"
+          "padding": "20px 40px !important",
+          "box-sizing": "border-box !important"
         },
         "p": { "color": "#e2e8f0 !important" },
         "a": { "color": "#818cf8 !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#ffffff !important" },
-        "img, image, svg": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "height": "auto !important" }
       });
       rendition.themes.register("light", {
-        "html": { "box-sizing": "border-box !important", "overflow-x": "hidden !important" },
-        "*, *:before, *:after": { "box-sizing": "border-box !important" },
         "body": {
-          "box-sizing": "border-box !important",
-          "overflow-x": "hidden !important",
           "color": "#1e293b !important",
           "background": "#ffffff !important",
           "font-family": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important",
           "line-height": "1.75 !important",
-          "padding": "24px 32px !important",
-          "max-width": "100% !important",
-          "word-break": "break-word !important"
+          "padding": "20px 40px !important",
+          "box-sizing": "border-box !important"
         },
         "p": { "color": "#1e293b !important" },
         "a": { "color": "#4f46e5 !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#0f172a !important" },
-        "img, image, svg": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "height": "auto !important" }
       });
       rendition.themes.register("sepia", {
-        "html": { "box-sizing": "border-box !important", "overflow-x": "hidden !important" },
-        "*, *:before, *:after": { "box-sizing": "border-box !important" },
         "body": {
-          "box-sizing": "border-box !important",
-          "overflow-x": "hidden !important",
           "color": "#433422 !important",
           "background": "#fbf0d9 !important",
           "font-family": "Georgia, Cambria, serif !important",
           "line-height": "1.75 !important",
-          "padding": "24px 32px !important",
-          "max-width": "100% !important",
-          "word-break": "break-word !important"
+          "padding": "20px 40px !important",
+          "box-sizing": "border-box !important"
         },
         "p": { "color": "#433422 !important" },
         "a": { "color": "#8f4b1e !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#2c2216 !important" },
-        "img, image, svg": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "height": "auto !important" }
       });
 
       rendition.themes.default({
@@ -829,11 +799,15 @@
                 if (ttsChap) ttsChap.innerText = labelText;
               }
             }
-            setTimeout(ttsScanParagraphs, 150);
+            if (ttsIsPlaying || ttsPlayerVisible) {
+              setTimeout(ttsScanParagraphs, 150);
+            }
           });
 
           rendition.on("rendered", function() {
-            setTimeout(ttsScanParagraphs, 150);
+            if (ttsIsPlaying || ttsPlayerVisible) {
+              setTimeout(ttsScanParagraphs, 150);
+            }
           });
 
           // Text Selection Handler for Highlights & Notes
@@ -1006,19 +980,28 @@
         return;
       }
       if (currentLayout === "scroll") {
-        const scroller = document.querySelector("#viewer .epub-container") || document.getElementById("viewer");
+        const viewer = document.getElementById("viewer");
+        if (!viewer) return;
         const scrollDelta = window.innerHeight * 0.75;
         if (e.key === "ArrowDown") {
-          if (scroller) scroller.scrollBy({ top: 120, behavior: 'smooth' });
+          viewer.scrollBy({ top: 120, behavior: 'smooth' });
           e.preventDefault();
         } else if (e.key === "ArrowUp") {
-          if (scroller) scroller.scrollBy({ top: -120, behavior: 'smooth' });
+          viewer.scrollBy({ top: -120, behavior: 'smooth' });
           e.preventDefault();
         } else if (e.key === "PageDown" || (e.key === " " && !e.shiftKey)) {
-          if (scroller) scroller.scrollBy({ top: scrollDelta, behavior: 'smooth' });
+          if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 40) {
+            nextPage();
+          } else {
+            viewer.scrollBy({ top: scrollDelta, behavior: 'smooth' });
+          }
           e.preventDefault();
         } else if (e.key === "PageUp" || (e.key === " " && e.shiftKey)) {
-          if (scroller) scroller.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
+          if (viewer.scrollTop <= 15) {
+            prevPage();
+          } else {
+            viewer.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
+          }
           e.preventDefault();
         }
         return;
@@ -1031,11 +1014,25 @@
     }
 
     function prevPage() {
-      if (rendition) rendition.prev();
+      if (rendition) {
+        rendition.prev().then(() => {
+          if (currentLayout === 'scroll') {
+            const v = document.getElementById("viewer");
+            if (v) v.scrollTop = v.scrollHeight;
+          }
+        });
+      }
     }
 
     function nextPage() {
-      if (rendition) rendition.next();
+      if (rendition) {
+        rendition.next().then(() => {
+          if (currentLayout === 'scroll') {
+            const v = document.getElementById("viewer");
+            if (v) v.scrollTop = 0;
+          }
+        });
+      }
     }
 
     function toggleToc() {
@@ -1365,25 +1362,29 @@
         const target = ttsParagraphs[idx];
         target.classList.add("tts-active-highlight");
         try {
-          if (currentLayout === 'scroll') {
-            target.scrollIntoView({ behavior: "smooth", block: "center" });
-          } else if (rendition) {
-            const contents = rendition.getContents();
-            if (contents && contents[0] && contents[0].cfiFromNode) {
-              const cfi = contents[0].cfiFromNode(target);
-              if (cfi) {
-                const rect = target.getBoundingClientRect();
-                const winW = window.innerWidth;
-                const winH = window.innerHeight;
-                // If element is not currently visible on the active page, turn to its CFI
-                if (rect.left < 0 || rect.right > winW || rect.top < 0 || rect.bottom > winH) {
-                  rendition.display(cfi);
+          if (ttsIsPlaying) {
+            if (currentLayout === 'scroll') {
+              target.scrollIntoView({ behavior: "smooth", block: "center" });
+            } else if (rendition) {
+              const contents = rendition.getContents();
+              if (contents && contents[0] && contents[0].cfiFromNode) {
+                const cfi = contents[0].cfiFromNode(target);
+                if (cfi) {
+                  const rect = target.getBoundingClientRect();
+                  const winW = window.innerWidth;
+                  const winH = window.innerHeight;
+                  // If element is not currently visible on the active page, turn to its CFI
+                  if (rect.left < 0 || rect.right > winW || rect.top < 0 || rect.bottom > winH) {
+                    rendition.display(cfi);
+                  }
                 }
               }
             }
           }
         } catch (e) {
-          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (ttsIsPlaying) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
         }
       }
     }
