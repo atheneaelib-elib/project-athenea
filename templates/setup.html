@@ -42,7 +42,7 @@
           class="setup-lang-btn px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer {% if get_current_lang() == lang.code %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80{% endif %}"
           title="{{ lang.name }}"
         >
-          <span class="text-sm leading-none">{{ lang.flag }}</span>
+          <span class="font-mono uppercase font-bold text-[10px] text-indigo-300 bg-slate-900/60 px-1 rounded">{{ lang.code }}</span>
           <span>{{ lang.native }}</span>
         </button>
         {% endfor %}

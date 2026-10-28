@@ -181,10 +181,10 @@
           <button 
             type="button" 
             onclick="filterByLanguage({{ lang.id }}, '{{ lang.name|escape }}')"
-            class="px-2 py-1 rounded-lg text-[11px] font-medium transition-all bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/80 hover:border-indigo-500 cursor-pointer flex items-center gap-1 shadow-sm"
+            class="px-2 py-1 rounded-lg text-[11px] font-medium transition-all bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/80 hover:border-indigo-500 cursor-pointer flex items-center gap-1.5 shadow-sm"
             title="{{ lang.name }} ({{ lang.count }} books)"
           >
-            <span>{{ lang.flag }}</span>
+            <span class="font-mono text-[9px] font-bold uppercase text-indigo-400 bg-indigo-950/60 px-1 rounded">{{ lang.code }}</span>
             <span>{{ lang.name }}</span>
           </button>
           {% endif %}
@@ -213,7 +213,6 @@
           class="lang-item flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group cursor-pointer"
         >
           <span class="truncate flex items-center gap-1.5">
-            <span class="text-sm leading-none">{{ lang.flag }}</span>
             <span class="px-1 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono">{{ lang.code }}</span>
             <span>{{ lang.name }}</span>
           </span>
