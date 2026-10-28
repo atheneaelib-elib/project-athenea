@@ -1793,17 +1793,17 @@ def download_book(
     fmt: str,
     db: Session = Depends(get_db)
 ):
-    # Role-Based Permission Check: Downloads require Power User or Admin role
+    # Authentication required to download book files
     user = get_current_user(request, db)
     if not user:
         raise HTTPException(
             status_code=401,
             detail="Authentication required. Please sign in to download book files."
         )
-    if not user["can_download"]:
+    if not user.get("can_download", True):
         raise HTTPException(
             status_code=403,
-            detail="Downloads are restricted to Power Users and Administrators. Standard Users have online reading access."
+            detail="Downloads are disabled for this account."
         )
 
     fmt_upper = fmt.upper()
@@ -2093,7 +2093,7 @@ def api_send_book_email(
     user = get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
-    if not user["can_download"]:
+    if not user.get("can_download", True):
         raise HTTPException(status_code=403, detail="Sending books requires download permissions")
 
     email_target = req.recipient_email.strip()

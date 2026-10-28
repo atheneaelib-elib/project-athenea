@@ -193,7 +193,7 @@ def get_user_from_session(db: Session, session_id: str | None):
         "is_active": row.is_active,
         "is_admin": (row.role == "admin"),
         "is_power_user": (row.role in ("admin", "power_user")),
-        "can_download": (row.role in ("admin", "power_user")),
+        "can_download": True,
         "created_at": row.created_at,
         "last_login": row.last_login,
     }
