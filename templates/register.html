@@ -8,8 +8,62 @@
 <div class="flex items-center justify-center min-h-[75vh] py-12 px-4 sm:px-6 lg:px-8">
   <div class="max-w-md w-full space-y-6 bg-slate-900/80 p-8 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur relative">
     
-    <!-- Top-Right Language Selector -->
-    <div class="absolute top-4 right-4">
+    <!-- Top-Right Theme & Language Selectors -->
+    <div class="absolute top-4 right-4 flex items-center gap-1.5">
+      <!-- UI Theme Selector Dropdown -->
+      <div class="relative inline-block text-left" id="theme-dropdown-wrapper">
+        <button 
+          type="button" 
+          onclick="toggleThemeDropdown(event)" 
+          id="theme-menu-btn"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium transition-all cursor-pointer shadow-sm"
+          title="UI Theme"
+        >
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+          <span id="theme-active-swatch" class="w-2.5 h-2.5 rounded-full border border-slate-600" style="background: linear-gradient(135deg, #0f172a 50%, #6366f1 50%);"></span>
+          <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+
+        <div 
+          id="theme-dropdown-menu" 
+          class="hidden absolute right-0 mt-2 w-48 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
+        >
+          <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            UI Theme
+          </div>
+          <div class="py-1 space-y-0.5">
+            <button type="button" onclick="setUiTheme('slate')" data-theme-opt="slate" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-slate-600" style="background: linear-gradient(135deg, #0f172a 50%, #6366f1 50%);"></span><span>Midnight Slate</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('light')" data-theme-opt="light" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-slate-500" style="background: linear-gradient(135deg, #f8fafc 50%, #4f46e5 50%);"></span><span>Daylight Crisp</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('sepia')" data-theme-opt="sepia" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-amber-700/50" style="background: linear-gradient(135deg, #f5ecd8 50%, #b45309 50%);"></span><span>Warm Parchment</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('nord')" data-theme-opt="nord" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-slate-600" style="background: linear-gradient(135deg, #2e3440 50%, #88c0d0 50%);"></span><span>Nordic Frost</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('forest')" data-theme-opt="forest" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-emerald-800" style="background: linear-gradient(135deg, #0b1c15 50%, #10b981 50%);"></span><span>Emerald Forest</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('dracula')" data-theme-opt="dracula" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-purple-800" style="background: linear-gradient(135deg, #1c162c 50%, #a855f7 50%);"></span><span>Velvet Plum</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+            <button type="button" onclick="setUiTheme('oled')" data-theme-opt="oled" class="theme-opt-btn w-full flex items-center justify-between px-3 py-1.5 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+              <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-zinc-600" style="background: linear-gradient(135deg, #000000 50%, #6366f1 50%);"></span><span>OLED Pitch Black</span></span>
+              <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="relative inline-block text-left" id="lang-dropdown-wrapper">
         <button 
           type="button" 

@@ -1,14 +1,28 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="slate">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Athenea{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/athenea-icon.svg">
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" id="meta-theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script>
+    // Apply saved UI theme immediately before paint to prevent FOUC
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('athenea_ui_theme') || 'slate';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'light' || savedTheme === 'sepia') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script>
@@ -24,12 +38,38 @@
       theme: {
         extend: {
           colors: {
+            slate: {
+              50:  'rgb(var(--c-slate-50) / <alpha-value>)',
+              100: 'rgb(var(--c-slate-100) / <alpha-value>)',
+              200: 'rgb(var(--c-slate-200) / <alpha-value>)',
+              300: 'rgb(var(--c-slate-300) / <alpha-value>)',
+              400: 'rgb(var(--c-slate-400) / <alpha-value>)',
+              500: 'rgb(var(--c-slate-500) / <alpha-value>)',
+              600: 'rgb(var(--c-slate-600) / <alpha-value>)',
+              700: 'rgb(var(--c-slate-700) / <alpha-value>)',
+              800: 'rgb(var(--c-slate-800) / <alpha-value>)',
+              900: 'rgb(var(--c-slate-900) / <alpha-value>)',
+              950: 'rgb(var(--c-slate-950) / <alpha-value>)',
+            },
+            indigo: {
+              50:  'rgb(var(--c-accent-50) / <alpha-value>)',
+              100: 'rgb(var(--c-accent-100) / <alpha-value>)',
+              200: 'rgb(var(--c-accent-200) / <alpha-value>)',
+              300: 'rgb(var(--c-accent-300) / <alpha-value>)',
+              400: 'rgb(var(--c-accent-400) / <alpha-value>)',
+              500: 'rgb(var(--c-accent-500) / <alpha-value>)',
+              600: 'rgb(var(--c-accent-600) / <alpha-value>)',
+              700: 'rgb(var(--c-accent-700) / <alpha-value>)',
+              800: 'rgb(var(--c-accent-800) / <alpha-value>)',
+              900: 'rgb(var(--c-accent-900) / <alpha-value>)',
+              950: 'rgb(var(--c-accent-950) / <alpha-value>)',
+            },
             brand: {
-              50: '#eef2ff',
-              100: '#e0e7ff',
-              500: '#6366f1',
-              600: '#4f46e5',
-              700: '#4338ca',
+              50:  'rgb(var(--c-accent-50) / <alpha-value>)',
+              100: 'rgb(var(--c-accent-100) / <alpha-value>)',
+              500: 'rgb(var(--c-accent-500) / <alpha-value>)',
+              600: 'rgb(var(--c-accent-600) / <alpha-value>)',
+              700: 'rgb(var(--c-accent-700) / <alpha-value>)',
             }
           }
         }
@@ -37,20 +77,262 @@
     }
   </script>
   <style>
+    /* ==========================================================================
+       Athenea Multi-Theme Palette System (CSS Custom Properties in RGB channels)
+       ========================================================================== */
+    :root,
+    html[data-theme="slate"] {
+      --c-slate-50:  248 250 252;
+      --c-slate-100: 241 245 249;
+      --c-slate-200: 226 232 240;
+      --c-slate-300: 203 213 225;
+      --c-slate-400: 148 163 184;
+      --c-slate-500: 100 116 139;
+      --c-slate-600: 71 85 105;
+      --c-slate-700: 51 65 85;
+      --c-slate-800: 30 41 59;
+      --c-slate-900: 15 23 42;
+      --c-slate-950: 2 6 23;
+
+      --c-accent-50:  238 242 255;
+      --c-accent-100: 224 231 255;
+      --c-accent-200: 199 210 254;
+      --c-accent-300: 165 180 252;
+      --c-accent-400: 129 140 248;
+      --c-accent-500: 99 102 241;
+      --c-accent-600: 79 70 229;
+      --c-accent-700: 67 56 202;
+      --c-accent-800: 55 48 163;
+      --c-accent-900: 49 46 129;
+      --c-accent-950: 30 27 75;
+    }
+
+    /* 2. Daylight Crisp (Clean Light Mode) */
+    html[data-theme="light"] {
+      --c-slate-50:  2 6 23;
+      --c-slate-100: 15 23 42;
+      --c-slate-200: 30 41 59;
+      --c-slate-300: 51 65 85;
+      --c-slate-400: 100 116 139;
+      --c-slate-500: 148 163 184;
+      --c-slate-600: 148 163 184;
+      --c-slate-700: 203 213 225;
+      --c-slate-800: 238 242 246;
+      --c-slate-900: 255 255 255;
+      --c-slate-950: 241 245 249;
+
+      --c-accent-50:  30 27 75;
+      --c-accent-100: 49 46 129;
+      --c-accent-200: 67 56 202;
+      --c-accent-300: 79 70 229;
+      --c-accent-400: 79 70 229;
+      --c-accent-500: 99 102 241;
+      --c-accent-600: 79 70 229;
+      --c-accent-700: 67 56 202;
+      --c-accent-800: 199 210 254;
+      --c-accent-900: 224 231 255;
+      --c-accent-950: 238 242 255;
+    }
+
+    /* 3. Warm Parchment (Sepia Library Mode) */
+    html[data-theme="sepia"] {
+      --c-slate-50:  24 16 8;
+      --c-slate-100: 42 30 18;
+      --c-slate-200: 64 48 31;
+      --c-slate-300: 92 71 48;
+      --c-slate-400: 128 104 76;
+      --c-slate-500: 161 138 108;
+      --c-slate-600: 184 163 133;
+      --c-slate-700: 214 198 172;
+      --c-slate-800: 236 225 204;
+      --c-slate-900: 251 246 236;
+      --c-slate-950: 243 234 216;
+
+      --c-accent-50:  69 26 3;
+      --c-accent-100: 120 53 15;
+      --c-accent-200: 146 64 14;
+      --c-accent-300: 180 83 9;
+      --c-accent-400: 180 83 9;
+      --c-accent-500: 217 119 6;
+      --c-accent-600: 180 83 9;
+      --c-accent-700: 146 64 14;
+      --c-accent-800: 253 230 138;
+      --c-accent-900: 254 243 199;
+      --c-accent-950: 255 251 235;
+    }
+
+    /* 4. Nordic Frost (Arctic Polar Night & Ice Blue) */
+    html[data-theme="nord"] {
+      --c-slate-50:  236 239 244;
+      --c-slate-100: 229 233 240;
+      --c-slate-200: 216 222 233;
+      --c-slate-300: 192 201 216;
+      --c-slate-400: 143 156 179;
+      --c-slate-500: 108 122 147;
+      --c-slate-600: 76 86 106;
+      --c-slate-700: 67 76 94;
+      --c-slate-800: 59 66 82;
+      --c-slate-900: 46 52 64;
+      --c-slate-950: 34 39 49;
+
+      --c-accent-50:  240 249 255;
+      --c-accent-100: 224 242 254;
+      --c-accent-200: 186 230 253;
+      --c-accent-300: 136 192 208;
+      --c-accent-400: 129 161 193;
+      --c-accent-500: 94 129 172;
+      --c-accent-600: 76 111 156;
+      --c-accent-700: 62 93 135;
+      --c-accent-800: 49 75 110;
+      --c-accent-900: 39 59 89;
+      --c-accent-950: 27 42 64;
+    }
+
+    /* 5. Emerald Forest (Botanical Pine & Jade) */
+    html[data-theme="forest"] {
+      --c-slate-50:  240 253 244;
+      --c-slate-100: 232 247 238;
+      --c-slate-200: 209 235 220;
+      --c-slate-300: 176 214 194;
+      --c-slate-400: 124 168 146;
+      --c-slate-500: 84 128 107;
+      --c-slate-600: 46 89 69;
+      --c-slate-700: 30 64 49;
+      --c-slate-800: 19 44 33;
+      --c-slate-900: 11 28 21;
+      --c-slate-950: 5 15 11;
+
+      --c-accent-50:  236 253 245;
+      --c-accent-100: 209 250 229;
+      --c-accent-200: 167 243 208;
+      --c-accent-300: 110 231 183;
+      --c-accent-400: 52 211 153;
+      --c-accent-500: 16 185 129;
+      --c-accent-600: 5 150 105;
+      --c-accent-700: 4 120 87;
+      --c-accent-800: 6 95 70;
+      --c-accent-900: 6 78 59;
+      --c-accent-950: 2 44 34;
+    }
+
+    /* 6. Velvet Plum (Dracula / Midnight Amethyst) */
+    html[data-theme="dracula"] {
+      --c-slate-50:  250 248 255;
+      --c-slate-100: 244 240 255;
+      --c-slate-200: 228 220 245;
+      --c-slate-300: 202 190 228;
+      --c-slate-400: 152 138 186;
+      --c-slate-500: 112 98 148;
+      --c-slate-600: 84 71 118;
+      --c-slate-700: 64 53 94;
+      --c-slate-800: 44 36 66;
+      --c-slate-900: 28 22 44;
+      --c-slate-950: 16 12 26;
+
+      --c-accent-50:  250 245 255;
+      --c-accent-100: 243 232 255;
+      --c-accent-200: 233 213 255;
+      --c-accent-300: 216 180 254;
+      --c-accent-400: 192 132 252;
+      --c-accent-500: 168 85 247;
+      --c-accent-600: 147 51 234;
+      --c-accent-700: 126 34 206;
+      --c-accent-800: 107 33 168;
+      --c-accent-900: 88 28 135;
+      --c-accent-950: 59 7 100;
+    }
+
+    /* 7. OLED Pitch Black (True #000000 High-Contrast) */
+    html[data-theme="oled"] {
+      --c-slate-50:  250 250 250;
+      --c-slate-100: 244 244 245;
+      --c-slate-200: 228 228 231;
+      --c-slate-300: 212 212 216;
+      --c-slate-400: 161 161 170;
+      --c-slate-500: 113 113 122;
+      --c-slate-600: 63 63 70;
+      --c-slate-700: 39 39 42;
+      --c-slate-800: 20 20 23;
+      --c-slate-900: 10 10 12;
+      --c-slate-950: 0 0 0;
+
+      --c-accent-50:  238 242 255;
+      --c-accent-100: 224 231 255;
+      --c-accent-200: 199 210 254;
+      --c-accent-300: 165 180 252;
+      --c-accent-400: 129 140 248;
+      --c-accent-500: 99 102 241;
+      --c-accent-600: 79 70 229;
+      --c-accent-700: 67 56 202;
+      --c-accent-800: 55 48 163;
+      --c-accent-900: 49 46 129;
+      --c-accent-950: 24 22 64;
+    }
+
+    /* Light & Sepia Mode Contrast Refinements for hardcoded utility classes */
+    html[data-theme="light"] .text-white:not([class*="bg-indigo-5"]):not([class*="bg-indigo-6"]):not([class*="bg-indigo-7"]):not([class*="bg-rose-"]):not([class*="bg-emerald-"]):not([class*="bg-amber-"]):not([class*="bg-sky-"]):not([class*="bg-purple-"]):not([class*="bg-red-"]),
+    html[data-theme="sepia"] .text-white:not([class*="bg-indigo-5"]):not([class*="bg-indigo-6"]):not([class*="bg-indigo-7"]):not([class*="bg-rose-"]):not([class*="bg-emerald-"]):not([class*="bg-amber-"]):not([class*="bg-sky-"]):not([class*="bg-purple-"]):not([class*="bg-red-"]) {
+      color: rgb(var(--c-slate-100)) !important;
+    }
+
+    html[data-theme="light"] .hover\:text-white:hover:not([class*="bg-indigo-5"]):not([class*="bg-indigo-6"]):not([class*="bg-rose-"]):not([class*="bg-emerald-"]),
+    html[data-theme="sepia"] .hover\:text-white:hover:not([class*="bg-indigo-5"]):not([class*="bg-indigo-6"]):not([class*="bg-rose-"]):not([class*="bg-emerald-"]) {
+      color: rgb(var(--c-slate-100)) !important;
+    }
+
+    html[data-theme="light"] [class*="bg-indigo-5"] .text-white,
+    html[data-theme="light"] [class*="bg-indigo-6"] .text-white,
+    html[data-theme="light"] [class*="bg-rose-"] .text-white,
+    html[data-theme="light"] [class*="bg-emerald-"] .text-white,
+    html[data-theme="light"] [class*="bg-amber-"] .text-white,
+    html[data-theme="light"] [class*="bg-sky-"] .text-white,
+    html[data-theme="sepia"] [class*="bg-indigo-5"] .text-white,
+    html[data-theme="sepia"] [class*="bg-indigo-6"] .text-white,
+    html[data-theme="sepia"] [class*="bg-rose-"] .text-white,
+    html[data-theme="sepia"] [class*="bg-emerald-"] .text-white,
+    html[data-theme="sepia"] [class*="bg-amber-"] .text-white,
+    html[data-theme="sepia"] [class*="bg-sky-"] .text-white {
+      color: #ffffff !important;
+    }
+
+    /* Brand wordmark gradient in Light & Sepia modes */
+    html[data-theme="light"] .brand-title-gradient,
+    html[data-theme="sepia"] .brand-title-gradient {
+      background-image: linear-gradient(to right, rgb(var(--c-slate-100)), rgb(var(--c-accent-600))) !important;
+    }
+
+    /* Surprise Me button readability in Light & Sepia modes */
+    html[data-theme="light"] .text-purple-200,
+    html[data-theme="sepia"] .text-purple-200 {
+      color: #6b21a8 !important;
+    }
+
+    /* Modal backdrop dim in Light & Sepia modes */
+    html[data-theme="light"] #book-modal,
+    html[data-theme="light"] #upload-modal,
+    html[data-theme="light"] #password-modal,
+    html[data-theme="light"] #reading-stats-modal,
+    html[data-theme="sepia"] #book-modal,
+    html[data-theme="sepia"] #upload-modal,
+    html[data-theme="sepia"] #password-modal,
+    html[data-theme="sepia"] #reading-stats-modal {
+      background-color: rgba(15, 23, 42, 0.55) !important;
+    }
+
     /* Smooth transitions & custom scrollbar */
     ::-webkit-scrollbar {
       width: 8px;
       height: 8px;
     }
     ::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: rgb(var(--c-slate-950));
     }
     ::-webkit-scrollbar-thumb {
-      background: #334155;
+      background: rgb(var(--c-slate-700));
       border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #475569;
+      background: rgb(var(--c-slate-600));
     }
     .htmx-indicator {
       opacity: 0;
@@ -80,7 +362,7 @@
             <img src="/static/athenea-icon.svg" alt="Athenea Logo" class="w-full h-full object-cover" />
           </div>
           <div>
-            <h1 class="text-sm sm:text-base font-bold bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent leading-tight tracking-tight">Athenea</h1>
+            <h1 class="brand-title-gradient text-sm sm:text-base font-bold bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent leading-tight tracking-tight">Athenea</h1>
             <p class="text-[10px] sm:text-xs text-slate-400 font-mono leading-none">{{ total_books_count | default(get_library_total_books(), true) }} {{ t('general.books') }}</p>
           </div>
         </a>
@@ -193,6 +475,83 @@
             </a>
             {% endif %}
 
+          </div>
+
+          <!-- UI Theme Selector Dropdown -->
+          <div class="relative inline-block text-left flex-shrink-0 z-50" id="theme-dropdown-wrapper">
+            <button 
+              type="button" 
+              onclick="toggleThemeDropdown(event)" 
+              id="theme-menu-btn"
+              class="h-9 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer shadow-sm select-none"
+              title="UI Theme"
+            >
+              <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+              <span id="theme-active-swatch" class="w-2.5 h-2.5 rounded-full border border-slate-600" style="background: linear-gradient(135deg, #0f172a 50%, #6366f1 50%);"></span>
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+
+            <!-- Theme Dropdown Menu -->
+            <div 
+              id="theme-dropdown-menu" 
+              class="hidden absolute right-0 mt-2 w-52 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
+            >
+              <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                <span>UI Theme</span>
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+              </div>
+              <div class="py-1 space-y-0.5" id="theme-options-list">
+                <button type="button" onclick="setUiTheme('slate')" data-theme-opt="slate" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-slate-600 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #0f172a 50%, #6366f1 50%);"></span>
+                    <span>Midnight Slate</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('light')" data-theme-opt="light" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-slate-500 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #f8fafc 50%, #4f46e5 50%);"></span>
+                    <span>Daylight Crisp</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('sepia')" data-theme-opt="sepia" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-amber-700/50 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #f5ecd8 50%, #b45309 50%);"></span>
+                    <span>Warm Parchment</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('nord')" data-theme-opt="nord" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-slate-600 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #2e3440 50%, #88c0d0 50%);"></span>
+                    <span>Nordic Frost</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('forest')" data-theme-opt="forest" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-emerald-800 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #0b1c15 50%, #10b981 50%);"></span>
+                    <span>Emerald Forest</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('dracula')" data-theme-opt="dracula" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-purple-800 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #1c162c 50%, #a855f7 50%);"></span>
+                    <span>Velvet Plum</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button type="button" onclick="setUiTheme('oled')" data-theme-opt="oled" class="theme-opt-btn w-full flex items-center justify-between px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors cursor-pointer">
+                  <span class="flex items-center gap-2.5">
+                    <span class="w-4 h-4 rounded-full border border-zinc-600 shadow-sm flex-shrink-0" style="background: linear-gradient(135deg, #000000 50%, #6366f1 50%);"></span>
+                    <span>OLED Pitch Black</span>
+                  </span>
+                  <svg class="theme-check w-3.5 h-3.5 text-indigo-400 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- UI Language Selector Dropdown (Fixed on right, outside scroll container so never clipped!) -->
@@ -379,11 +738,72 @@
   </footer>
 
   <script>
+    const UI_THEMES = {
+      slate:   { swatch: 'linear-gradient(135deg, #0f172a 50%, #6366f1 50%)', meta: '#0f172a', dark: true },
+      light:   { swatch: 'linear-gradient(135deg, #f8fafc 50%, #4f46e5 50%)', meta: '#ffffff', dark: false },
+      sepia:   { swatch: 'linear-gradient(135deg, #f5ecd8 50%, #b45309 50%)', meta: '#fbf6ec', dark: false },
+      nord:    { swatch: 'linear-gradient(135deg, #2e3440 50%, #88c0d0 50%)', meta: '#2e3440', dark: true },
+      forest:  { swatch: 'linear-gradient(135deg, #0b1c15 50%, #10b981 50%)', meta: '#0b1c15', dark: true },
+      dracula: { swatch: 'linear-gradient(135deg, #1c162c 50%, #a855f7 50%)', meta: '#1c162c', dark: true },
+      oled:    { swatch: 'linear-gradient(135deg, #000000 50%, #6366f1 50%)', meta: '#000000', dark: true }
+    };
+
+    function syncThemeDropdownState(themeId) {
+      const cfg = UI_THEMES[themeId] || UI_THEMES.slate;
+      document.querySelectorAll('#theme-active-swatch, .theme-active-swatch').forEach(el => {
+        el.style.background = cfg.swatch;
+      });
+      const metaColor = document.getElementById('meta-theme-color');
+      if (metaColor) metaColor.setAttribute('content', cfg.meta);
+
+      document.querySelectorAll('.theme-opt-btn').forEach(btn => {
+        const isMatch = btn.getAttribute('data-theme-opt') === themeId;
+        btn.classList.toggle('bg-indigo-600/30', isMatch);
+        btn.classList.toggle('text-indigo-300', isMatch);
+        btn.classList.toggle('font-semibold', isMatch);
+        const chk = btn.querySelector('.theme-check');
+        if (chk) chk.classList.toggle('hidden', !isMatch);
+      });
+    }
+
+    function setUiTheme(themeId) {
+      if (!UI_THEMES[themeId]) themeId = 'slate';
+      document.documentElement.setAttribute('data-theme', themeId);
+      if (UI_THEMES[themeId].dark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      try {
+        localStorage.setItem('athenea_ui_theme', themeId);
+      } catch (e) {}
+      syncThemeDropdownState(themeId);
+      const menu = document.getElementById('theme-dropdown-menu');
+      if (menu) menu.classList.add('hidden');
+    }
+    window.setUiTheme = setUiTheme;
+
+    function toggleThemeDropdown(e) {
+      if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+      }
+      const langMenu = document.getElementById('lang-dropdown-menu');
+      if (langMenu) langMenu.classList.add('hidden');
+      const menu = document.getElementById('theme-dropdown-menu');
+      if (menu) {
+        menu.classList.toggle('hidden');
+      }
+    }
+    window.toggleThemeDropdown = toggleThemeDropdown;
+
     function toggleLangDropdown(e) {
       if (e) {
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
         if (typeof e.preventDefault === 'function') e.preventDefault();
       }
+      const themeMenu = document.getElementById('theme-dropdown-menu');
+      if (themeMenu) themeMenu.classList.add('hidden');
       const menu = document.getElementById('lang-dropdown-menu');
       if (menu) {
         menu.classList.toggle('hidden');
@@ -391,11 +811,21 @@
     }
     window.toggleLangDropdown = toggleLangDropdown;
 
+    document.addEventListener('DOMContentLoaded', function() {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'slate';
+      syncThemeDropdownState(currentTheme);
+    });
+
     document.addEventListener('click', function(e) {
       const wrapper = document.getElementById('lang-dropdown-wrapper');
       const menu = document.getElementById('lang-dropdown-menu');
       if (wrapper && menu && !wrapper.contains(e.target)) {
         menu.classList.add('hidden');
+      }
+      const themeWrapper = document.getElementById('theme-dropdown-wrapper');
+      const themeMenu = document.getElementById('theme-dropdown-menu');
+      if (themeWrapper && themeMenu && !themeWrapper.contains(e.target)) {
+        themeMenu.classList.add('hidden');
       }
     });
 
@@ -404,6 +834,8 @@
       if (e.key === 'Escape') {
         const menu = document.getElementById('lang-dropdown-menu');
         if (menu) menu.classList.add('hidden');
+        const themeMenu = document.getElementById('theme-dropdown-menu');
+        if (themeMenu) themeMenu.classList.add('hidden');
       }
     });
 
