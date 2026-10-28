@@ -667,6 +667,51 @@
         viewer.onwheel = null;
       }
 
+      // Normalize covers and illustrations to prevent stretching or distortion
+      rendition.hooks.content.register(function(contents) {
+        try {
+          const doc = contents.document;
+          if (!doc) return;
+
+          // 1. Normalize SVG covers (specifically Calibre's preserveAspectRatio="none")
+          const svgs = doc.querySelectorAll('svg');
+          svgs.forEach(svg => {
+            const par = svg.getAttribute('preserveAspectRatio');
+            if (!par || par.trim() === 'none') {
+              svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            }
+            svg.style.setProperty('max-height', '95vh', 'important');
+            svg.style.setProperty('max-width', '100%', 'important');
+            svg.style.setProperty('margin-left', 'auto', 'important');
+            svg.style.setProperty('margin-right', 'auto', 'important');
+            svg.style.setProperty('display', 'block', 'important');
+            if (svg.parentElement) {
+              svg.parentElement.style.setProperty('text-align', 'center', 'important');
+            }
+          });
+
+          // 2. Normalize raster images and SVG image elements
+          const images = doc.querySelectorAll('image, img');
+          images.forEach(img => {
+            img.style.setProperty('object-fit', 'contain', 'important');
+            img.style.setProperty('max-height', '95vh', 'important');
+          });
+
+          // 3. Ensure cover pages center nicely
+          const isCover = doc.querySelector('meta[name="calibre:cover"]') ||
+                          (doc.title && doc.title.toLowerCase().includes('cover')) ||
+                          doc.querySelector('.calibre_cover') ||
+                          doc.querySelector('#titlepage');
+          if (isCover && doc.body) {
+            doc.body.style.setProperty('text-align', 'center', 'important');
+            doc.body.style.setProperty('margin', '0 auto', 'important');
+            doc.body.style.setProperty('padding', '0', 'important');
+          }
+        } catch (e) {
+          console.warn("Cover normalization error:", e);
+        }
+      });
+
       // Register Themes with clean typography and box-sizing
       rendition.themes.register("dark", {
         "body": {
@@ -680,7 +725,9 @@
         "p": { "color": "#e2e8f0 !important" },
         "a": { "color": "#818cf8 !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#ffffff !important" },
-        "img": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "max-height": "95vh !important", "height": "auto !important", "object-fit": "contain !important" },
+        "svg": { "max-width": "100% !important", "max-height": "95vh !important", "margin": "0 auto !important", "display": "block !important" },
+        "svg image": { "max-height": "95vh !important" }
       });
       rendition.themes.register("light", {
         "body": {
@@ -694,7 +741,9 @@
         "p": { "color": "#1e293b !important" },
         "a": { "color": "#4f46e5 !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#0f172a !important" },
-        "img": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "max-height": "95vh !important", "height": "auto !important", "object-fit": "contain !important" },
+        "svg": { "max-width": "100% !important", "max-height": "95vh !important", "margin": "0 auto !important", "display": "block !important" },
+        "svg image": { "max-height": "95vh !important" }
       });
       rendition.themes.register("sepia", {
         "body": {
@@ -708,10 +757,31 @@
         "p": { "color": "#433422 !important" },
         "a": { "color": "#8f4b1e !important" },
         "h1, h2, h3, h4, h5, h6": { "color": "#2c2216 !important" },
-        "img": { "max-width": "100% !important", "height": "auto !important" }
+        "img": { "max-width": "100% !important", "max-height": "95vh !important", "height": "auto !important", "object-fit": "contain !important" },
+        "svg": { "max-width": "100% !important", "max-height": "95vh !important", "margin": "0 auto !important", "display": "block !important" },
+        "svg image": { "max-height": "95vh !important" }
       });
 
       rendition.themes.default({
+        "svg": {
+          "max-height": "95vh !important",
+          "max-width": "100% !important",
+          "margin-left": "auto !important",
+          "margin-right": "auto !important",
+          "display": "block !important"
+        },
+        "svg image": {
+          "max-height": "95vh !important"
+        },
+        "img": {
+          "max-width": "100% !important",
+          "max-height": "95vh !important",
+          "height": "auto !important",
+          "object-fit": "contain !important",
+          "margin-left": "auto !important",
+          "margin-right": "auto !important",
+          "display": "block !important"
+        },
         ".tts-active-highlight": {
           "background-color": "rgba(99, 102, 241, 0.24) !important",
           "border-left": "4px solid #6366f1 !important",
@@ -805,6 +875,22 @@
           });
 
           rendition.on("rendered", function() {
+            try {
+              const contents = rendition.getContents ? rendition.getContents() : null;
+              if (contents && contents.length) {
+                contents.forEach(cnt => {
+                  const doc = cnt.document;
+                  if (!doc) return;
+                  const svgs = doc.querySelectorAll('svg');
+                  svgs.forEach(svg => {
+                    const par = svg.getAttribute('preserveAspectRatio');
+                    if (!par || par.trim() === 'none') {
+                      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    }
+                  });
+                });
+              }
+            } catch (e) {}
             if (ttsIsPlaying || ttsPlayerVisible) {
               setTimeout(ttsScanParagraphs, 150);
             }

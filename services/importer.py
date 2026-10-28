@@ -809,7 +809,7 @@ def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | Non
     if shutil.which("ebook-convert"):
         try:
             env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
-            cmd = ["ebook-convert", str(fb2_path), str(output_epub_path)]
+            cmd = ["ebook-convert", str(fb2_path), str(output_epub_path), "--preserve-cover-aspect-ratio"]
             if title:
                 cmd.extend(["--title", title])
             if author:
