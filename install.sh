@@ -112,6 +112,9 @@ if [ "$OS_FAMILY" == "debian" ]; then
         build-essential \
         calibre \
         ffmpeg \
+        p7zip-full \
+        libarchive-tools \
+        djvulibre-bin \
         python3 \
         python3-venv \
         python3-pip \
@@ -139,7 +142,10 @@ elif [ "$OS_FAMILY" == "rhel" ]; then
         postgresql-contrib \
         libpq-devel \
         libjpeg-turbo-devel \
-        zlib-devel
+        zlib-devel \
+        bsdtar \
+        p7zip \
+        p7zip-plugins || true
     if ! postgresql-setup --status &>/dev/null; then
         postgresql-setup --initdb || true
     fi
@@ -169,9 +175,10 @@ fi
 # Check if database already exists
 DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" || echo "0")
 if [ "$DB_EXISTS" != "1" ]; then
+    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' TEMPLATE template0;" || \
     sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
     sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
-    success "Created PostgreSQL database: $DB_NAME"
+    success "Created PostgreSQL database: $DB_NAME (UTF-8)"
 fi
 
 sudo -u postgres psql -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
@@ -201,6 +208,7 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR" && git remote set-url origin https://github.com/atheneaelib-elib/project-athenea.git
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
+    chmod +x "$INSTALL_DIR"/cli/*.sh 2>/dev/null || true
     success "Cloned Athenea repository."
 else
     info "Athenea repository found at $INSTALL_DIR. Pulling latest updates..."
@@ -208,6 +216,7 @@ else
     git fetch origin
     git reset --hard origin/main
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
+    chmod +x "$INSTALL_DIR"/cli/*.sh 2>/dev/null || true
     success "Repository updated."
 fi
 

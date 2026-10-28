@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>{{ book.title }} - Manga &amp; Comic Reader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body.canvas-pitch { background-color: #070a12; color: #e2e8f0; }
+    body.canvas-slate { background-color: #182234; color: #e2e8f0; }
+    body.canvas-light { background-color: #f1f5f9; color: #1e293b; }
+
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+
+    .comic-page-img {
+      user-select: none;
+      -webkit-user-drag: none;
+      transition: transform 0.15s ease;
+    }
+
+    /* Fit modes for single / double page */
+    .fit-height .comic-page-img {
+      max-height: calc(100vh - 7.5rem);
+      width: auto;
+      object-fit: contain;
+    }
+    .header-hidden .fit-height .comic-page-img {
+      max-height: 100vh;
+    }
+    .fit-width .comic-page-img {
+      width: 100%;
+      max-width: 1100px;
+      height: auto;
+      object-fit: contain;
+    }
+    .fit-original .comic-page-img {
+      max-width: none;
+      max-height: none;
+    }
+
+    /* Double page spread alignment */
+    .spread-ltr .page-left { object-position: right center; }
+    .spread-ltr .page-right { object-position: left center; }
+    .spread-rtl .page-left { object-position: left center; }
+    .spread-rtl .page-right { object-position: right center; }
+
+    /* RTL Range slider flip */
+    input[type="range"].rtl-slider {
+      direction: rtl;
+    }
+  </style>
+</head>
+<body class="canvas-pitch h-full flex flex-col overflow-hidden select-none transition-colors duration-200">
+
+  <!-- Top Navigation & Controls Bar -->
+  <header id="top-bar" class="h-14 border-b border-slate-800/80 px-3 sm:px-5 flex items-center justify-between bg-slate-900/95 backdrop-blur-md z-30 shrink-0 transition-all duration-200">
+    <!-- Left: Back + Title + Series Nav -->
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <a href="/" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5 shrink-0" title="Back to Library">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span class="text-sm font-medium hidden md:inline">Library</span>
+      </a>
+
+      <div class="h-4 w-[1px] bg-slate-800 hidden sm:block"></div>
+
+      <div class="min-w-0 flex flex-col">
+        <div class="flex items-center gap-2">
+          <span id="direction-badge" class="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">CBZ</span>
+          <h1 class="text-sm font-semibold text-white truncate max-w-[140px] sm:max-w-xs md:max-w-md" title="{{ book.title }}">{{ book.title }}</h1>
+        </div>
+        {% if book.series %}
+        <span class="text-[11px] text-slate-400 truncate">
+          {{ book.series }}{% if book.series_index is not none %} #{{ '%g' % book.series_index }}{% endif %}
+        </span>
+        {% endif %}
+      </div>
+
+      {% if book.prev_series_book or book.next_series_book %}
+      <div class="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-slate-800">
+        {% if book.prev_series_book %}
+        <a href="/reader/{{ book.prev_series_book.id }}?fmt={{ book.prev_series_book.fmt }}"
+           class="px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 flex items-center gap-1 transition"
+           title="Previous Volume: {{ book.prev_series_book.title }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          <span>Vol. {{ '%g' % book.prev_series_book.series_index if book.prev_series_book.series_index is not none else 'Prev' }}</span>
+        </a>
+        {% endif %}
+        {% if book.next_series_book %}
+        <a href="/reader/{{ book.next_series_book.id }}?fmt={{ book.next_series_book.fmt }}"
+           class="px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-xs text-indigo-300 flex items-center gap-1 transition"
+           title="Next Volume: {{ book.next_series_book.title }}">
+          <span>Vol. {{ '%g' % book.next_series_book.series_index if book.next_series_book.series_index is not none else 'Next' }}</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Center/Right Controls -->
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <!-- View Mode Switcher -->
+      <div class="hidden sm:flex items-center bg-slate-950/90 p-0.5 rounded-lg border border-slate-800">
+        <button id="mode-single-btn" onclick="setViewMode('single')" class="px-2.5 py-1 text-xs font-medium rounded-md transition flex items-center gap-1 bg-indigo-600 text-white" title="Single Page Mode (M)">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="1" stroke-width="2"/></svg>
+          <span class="hidden md:inline">Single</span>
+        </button>
+        <button id="mode-double-btn" onclick="setViewMode('double')" class="px-2.5 py-1 text-xs font-medium rounded-md transition flex items-center gap-1 text-slate-400 hover:text-white" title="2-Page Spread Mode (M)">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          <span class="hidden md:inline">Spread</span>
+        </button>
+        <button id="mode-webtoon-btn" onclick="setViewMode('webtoon')" class="px-2.5 py-1 text-xs font-medium rounded-md transition flex items-center gap-1 text-slate-400 hover:text-white" title="Vertical Webtoon Continuous Scroll (M)">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+          <span class="hidden md:inline">Webtoon</span>
+        </button>
+      </div>
+
+      <!-- Reading Direction Toggle (LTR vs RTL) -->
+      <button id="dir-toggle-btn" onclick="toggleDirection()" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700/80 transition flex items-center gap-1.5" title="Toggle Reading Direction: Left-to-Right (Comics) vs Right-to-Left (Manga) (D)">
+        <span id="dir-label">LTR →</span>
+      </button>
+
+      <!-- Fit Mode Button -->
+      <button id="fit-toggle-btn" onclick="cycleFitMode()" class="hidden md:flex px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700/80 transition items-center gap-1" title="Cycle Image Fit (Height / Width / Original)">
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        <span id="fit-label">Fit Height</span>
+      </button>
+
+      <!-- Zoom Controls -->
+      <div class="hidden lg:flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+        <button onclick="adjustZoom(-15)" class="p-1 text-slate-400 hover:text-white rounded transition" title="Zoom Out (-)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+        </button>
+        <span id="zoom-label" onclick="resetZoom()" class="text-[11px] font-mono text-slate-300 px-1.5 cursor-pointer hover:text-white" title="Click to reset zoom">100%</span>
+        <button onclick="adjustZoom(15)" class="p-1 text-slate-400 hover:text-white rounded transition" title="Zoom In (+)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        </button>
+      </div>
+
+      <!-- Page Grid / Thumbnail Drawer Toggle -->
+      <button onclick="toggleGridModal()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="All Pages Grid">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+      </button>
+
+      <!-- Bookmark Current Page Button -->
+      <button id="bookmark-quick-btn" onclick="addBookmarkCurrentPage()" class="p-2 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition" title="Bookmark Current Page">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+      </button>
+
+      <!-- Settings / Options Drawer Button -->
+      <button onclick="toggleSettingsDrawer()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Reader Settings &amp; Bookmarks">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+      </button>
+
+      <!-- Fullscreen Toggle -->
+      <button onclick="toggleFullscreen()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition hidden sm:flex" title="Fullscreen (F)">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Reader Viewport -->
+  <main id="viewport" class="flex-1 relative overflow-auto flex items-center justify-center fit-height">
+    <!-- Loading Indicator -->
+    <div id="loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 z-20 transition-opacity duration-200">
+      <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+      <p id="loading-text" class="text-xs font-medium text-slate-300">Loading pages...</p>
+    </div>
+
+    <!-- Single / Double Page Stage -->
+    <div id="paged-stage" class="relative w-full h-full flex items-center justify-center overflow-auto">
+      <!-- Left Click Zone -->
+      <div id="zone-left" onclick="onLeftZoneClick()" class="fixed left-0 top-14 bottom-12 w-1/4 z-10 cursor-pointer group flex items-center justify-start pl-4">
+        <div class="p-2.5 rounded-full bg-slate-900/75 text-white opacity-0 group-hover:opacity-90 transition shadow-lg border border-slate-700/60">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </div>
+      </div>
+
+      <!-- Center Tap Zone (Toggles Bars on Mobile) -->
+      <div id="zone-center" onclick="toggleChrome()" class="fixed left-1/4 right-1/4 top-14 bottom-12 z-10 cursor-pointer"></div>
+
+      <!-- Right Click Zone -->
+      <div id="zone-right" onclick="onRightZoneClick()" class="fixed right-0 top-14 bottom-12 w-1/4 z-10 cursor-pointer group flex items-center justify-end pr-4">
+        <div class="p-2.5 rounded-full bg-slate-900/75 text-white opacity-0 group-hover:opacity-90 transition shadow-lg border border-slate-700/60">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+
+      <!-- Image Container -->
+      <div id="spread-container" class="flex items-center justify-center gap-0.5 my-auto mx-auto transition-transform duration-150">
+        <img id="page-img-primary" class="comic-page-img shadow-2xl" src="" alt="Comic Page" />
+        <img id="page-img-secondary" class="comic-page-img shadow-2xl hidden" src="" alt="Comic Second Page" />
+      </div>
+    </div>
+
+    <!-- Webtoon Continuous Vertical Stage -->
+    <div id="webtoon-stage" class="hidden w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center scroll-smooth">
+      <div id="webtoon-pages" class="w-full max-w-3xl flex flex-col items-center"></div>
+    </div>
+  </main>
+
+  <!-- Bottom Progress & Scrubber Bar -->
+  <footer id="bottom-bar" class="h-12 border-t border-slate-800/80 px-4 sm:px-6 flex items-center justify-between gap-4 bg-slate-900/95 backdrop-blur-md z-30 shrink-0 transition-all duration-200">
+    <!-- Left Step Button -->
+    <button onclick="onLeftZoneClick()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0" title="Left Action">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+
+    <!-- Page Scrubber Slider -->
+    <div class="flex-1 flex items-center gap-3 max-w-3xl mx-auto">
+      <span id="page-counter" class="text-xs font-mono text-slate-300 whitespace-nowrap min-w-[85px]">Page 1 / 1</span>
+      <input id="page-slider" type="range" min="0" max="0" value="0"
+             oninput="onSliderInput(this.value)" onchange="goToPage(parseInt(this.value, 10))"
+             class="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+      <span id="progress-pct" class="text-xs font-mono text-indigo-400 whitespace-nowrap min-w-[42px] text-right">0%</span>
+    </div>
+
+    <!-- Right Step Button -->
+    <button onclick="onRightZoneClick()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0" title="Right Action">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  </footer>
+
+  <!-- Right Settings & Bookmarks Drawer -->
+  <aside id="settings-drawer" class="fixed top-14 right-0 bottom-0 w-80 max-w-full bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 z-40 transform translate-x-full transition-transform duration-200 flex flex-col shadow-2xl">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-white uppercase tracking-wider">Reader Settings</h2>
+      <button onclick="toggleSettingsDrawer()" class="p-1 text-slate-400 hover:text-white rounded-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="p-4 space-y-5 overflow-y-auto flex-1 text-xs">
+      <!-- Layout Mode (also accessible on mobile) -->
+      <div>
+        <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-2">Layout Mode</label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button onclick="setViewMode('single')" id="drawer-mode-single" class="py-2 px-2 rounded-lg border border-slate-700 font-medium text-center">Single</button>
+          <button onclick="setViewMode('double')" id="drawer-mode-double" class="py-2 px-2 rounded-lg border border-slate-700 font-medium text-center">2-Page</button>
+          <button onclick="setViewMode('webtoon')" id="drawer-mode-webtoon" class="py-2 px-2 rounded-lg border border-slate-700 font-medium text-center">Webtoon</button>
+        </div>
+      </div>
+
+      <!-- Reading Direction -->
+      <div>
+        <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-2">Reading Direction</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="setDirection('ltr')" id="drawer-dir-ltr" class="py-2 px-3 rounded-lg border border-slate-700 font-medium flex items-center justify-center gap-1.5">
+            <span>Comics (LTR →)</span>
+          </button>
+          <button onclick="setDirection('rtl')" id="drawer-dir-rtl" class="py-2 px-3 rounded-lg border border-slate-700 font-medium flex items-center justify-center gap-1.5">
+            <span>Manga (← RTL)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Spread Cover Offset -->
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-slate-200 font-medium">Keep Cover Page Solo</p>
+          <p class="text-[11px] text-slate-400">Aligns 2-page spreads after page 1</p>
+        </div>
+        <input id="cover-solo-checkbox" type="checkbox" checked onchange="toggleCoverSolo(this.checked)" class="w-4 h-4 accent-indigo-500 rounded cursor-pointer" />
+      </div>
+
+      <!-- Fit Mode -->
+      <div>
+        <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-2">Page Scaling</label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button onclick="setFitMode('height')" id="drawer-fit-height" class="py-2 px-2 rounded-lg border border-slate-700 font-medium">Fit Height</button>
+          <button onclick="setFitMode('width')" id="drawer-fit-width" class="py-2 px-2 rounded-lg border border-slate-700 font-medium">Fit Width</button>
+          <button onclick="setFitMode('original')" id="drawer-fit-original" class="py-2 px-2 rounded-lg border border-slate-700 font-medium">Original</button>
+        </div>
+      </div>
+
+      <!-- Canvas Backdrop -->
+      <div>
+        <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-2">Backdrop Theme</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="setCanvasTheme('pitch')" class="py-2 rounded-lg bg-[#070a12] text-slate-200 border border-slate-700 font-medium">Pitch</button>
+          <button onclick="setCanvasTheme('slate')" class="py-2 rounded-lg bg-[#182234] text-slate-200 border border-slate-700 font-medium">Slate</button>
+          <button onclick="setCanvasTheme('light')" class="py-2 rounded-lg bg-[#f1f5f9] text-slate-900 border border-slate-300 font-medium">Light</button>
+        </div>
+      </div>
+
+      <!-- Bookmarks Section -->
+      <div class="pt-3 border-t border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-slate-400 font-semibold uppercase tracking-wider">Bookmarks</label>
+          <button onclick="addBookmarkCurrentPage()" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
+            <span>+ Bookmark Page</span>
+          </button>
+        </div>
+        <div id="bookmarks-list" class="space-y-1.5 max-h-52 overflow-y-auto">
+          <p class="text-slate-500 italic">No bookmarks yet.</p>
+        </div>
+      </div>
+
+      <!-- Keyboard Shortcuts Legend -->
+      <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+        <p class="font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Shortcuts</p>
+        <div class="flex justify-between"><span>Turn Page</span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">← / → / Space</kbd></div>
+        <div class="flex justify-between"><span>View Mode</span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">M</kbd></div>
+        <div class="flex justify-between"><span>Toggle LTR / RTL</span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">D</kbd></div>
+        <div class="flex justify-between"><span>Fullscreen</span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">F</kbd></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Page Thumbnail / Quick Jump Modal -->
+  <div id="grid-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex-col">
+    <div class="h-14 px-6 border-b border-slate-800 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Page Navigator</h2>
+        <span id="grid-total-badge" class="px-2 py-0.5 text-xs rounded-full bg-slate-800 text-slate-300"></span>
+      </div>
+      <button onclick="toggleGridModal()" class="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800/80">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="grid-container" class="flex-1 overflow-y-auto p-6 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 max-w-7xl mx-auto w-full">
+    </div>
+  </div>
+
+  <script>
+    const BOOK_ID = {{ book.id }};
+    const STORAGE_PREFIX = `athenea_comic_${BOOK_ID}_`;
+
+    let totalPages = 0;
+    let currentPage = 0;
+    let viewMode = localStorage.getItem('athenea_comic_view_mode') || 'single'; // 'single' | 'double' | 'webtoon'
+    let readingDirection = localStorage.getItem(STORAGE_PREFIX + 'dir') || null; // 'ltr' | 'rtl'
+    let fitMode = localStorage.getItem('athenea_comic_fit_mode') || 'height'; // 'height' | 'width' | 'original'
+    let coverSolo = localStorage.getItem('athenea_comic_cover_solo') !== 'false';
+    let zoomLevel = 100;
+    let preloadCache = new Map();
+    let webtoonBuilt = false;
+    let webtoonObserver = null;
+    let shelfMarkedReading = false;
+    let shelfMarkedRead = false;
+
+    const pageUrl = (idx) => `/api/books/${BOOK_ID}/cbz/page/${idx}`;
+
+    async function initComicReader() {
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/cbz/manifest`);
+        if (!res.ok) throw new Error('Failed to load comic manifest');
+        const manifest = await res.json();
+        totalPages = manifest.total_pages || 0;
+
+        if (!readingDirection) {
+          readingDirection = manifest.reading_direction || 'ltr';
+        }
+
+        const slider = document.getElementById('page-slider');
+        slider.max = Math.max(0, totalPages - 1);
+        document.getElementById('grid-total-badge').textContent = `${totalPages} Pages`;
+
+        // Restore saved progress from server
+        let startPage = 0;
+        try {
+          const progRes = await fetch(`/api/progress/${BOOK_ID}`);
+          if (progRes.ok) {
+            const prog = await progRes.json();
+            if (prog && prog.cfi && prog.cfi.startsWith('cbz:page:')) {
+              const savedIdx = parseInt(prog.cfi.replace('cbz:page:', ''), 10);
+              if (!isNaN(savedIdx) && savedIdx >= 0 && savedIdx < totalPages) {
+                startPage = savedIdx;
+              }
+            } else if (prog && prog.percentage > 0 && totalPages > 1) {
+              startPage = Math.min(totalPages - 1, Math.round((prog.percentage / 100) * (totalPages - 1)));
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load saved progress:', e);
+        }
+
+        const savedTheme = localStorage.getItem('athenea_comic_canvas') || 'pitch';
+        setCanvasTheme(savedTheme);
+        document.getElementById('cover-solo-checkbox').checked = coverSolo;
+
+        updateControlStates();
+        await goToPage(startPage, false);
+        loadBookmarks();
+      } catch (err) {
+        console.error(err);
+        document.getElementById('loading-text').textContent = 'Error loading comic archive.';
+      }
+    }
+
+    function getSpreadPair(index) {
+      if (viewMode !== 'double' || totalPages <= 1) return [index];
+      if (coverSolo && index === 0) return [0];
+
+      // Align pairs consistently: if coverSolo is true, pairs start at (1,2), (3,4), etc.
+      // If coverSolo is false, pairs start at (0,1), (2,3), etc.
+      const offset = coverSolo ? 1 : 0;
+      const adjusted = index - offset;
+      const pairStart = adjusted % 2 === 0 ? index : index - 1;
+      if (pairStart < 0) return [0];
+      if (pairStart + 1 < totalPages) {
+        return [pairStart, pairStart + 1];
+      }
+      return [pairStart];
+    }
+
+    async function goToPage(index, save = true) {
+      if (totalPages === 0) return;
+      const target = Math.max(0, Math.min(totalPages - 1, index));
+      currentPage = target;
+
+      if (viewMode === 'webtoon') {
+        ensureWebtoonBuilt();
+        const pageEl = document.getElementById(`webtoon-page-${target}`);
+        if (pageEl) {
+          pageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+        document.getElementById('loading-overlay').classList.add('hidden');
+      } else {
+        const pair = getSpreadPair(target);
+        currentPage = pair[0];
+        await renderPagedSpread(pair);
+      }
+
+      updateFooterUI();
+      preloadUpcomingPages(currentPage);
+
+      if (save) {
+        saveProgress(currentPage);
+      }
+    }
+
+    async function renderPagedSpread(pair) {
+      const primaryImg = document.getElementById('page-img-primary');
+      const secondaryImg = document.getElementById('page-img-secondary');
+      const spreadContainer = document.getElementById('spread-container');
+      const overlay = document.getElementById('loading-overlay');
+
+      // Set visual flex order for LTR vs RTL spreads
+      spreadContainer.classList.remove('flex-row', 'flex-row-reverse', 'spread-ltr', 'spread-rtl');
+      if (readingDirection === 'rtl') {
+        spreadContainer.classList.add('flex-row-reverse', 'spread-rtl');
+      } else {
+        spreadContainer.classList.add('flex-row', 'spread-ltr');
+      }
+
+      const loadImg = (imgEl, idx) => new Promise((resolve) => {
+        const url = pageUrl(idx);
+        imgEl.onload = () => resolve();
+        imgEl.onerror = () => resolve();
+        imgEl.src = url;
+      });
+
+      const timer = setTimeout(() => overlay.classList.remove('hidden'), 120);
+
+      if (pair.length === 2) {
+        secondaryImg.classList.remove('hidden');
+        primaryImg.classList.add('page-left', 'max-w-[50vw]');
+        secondaryImg.classList.add('page-right', 'max-w-[50vw]');
+        await Promise.all([
+          loadImg(primaryImg, pair[0]),
+          loadImg(secondaryImg, pair[1])
+        ]);
+      } else {
+        secondaryImg.classList.add('hidden');
+        secondaryImg.src = '';
+        primaryImg.classList.remove('page-left', 'max-w-[50vw]');
+        await loadImg(primaryImg, pair[0]);
+      }
+
+      clearTimeout(timer);
+      overlay.classList.add('hidden');
+
+      // Scroll viewport back to top on page flip
+      const stage = document.getElementById('paged-stage');
+      stage.scrollTop = 0;
+      stage.scrollLeft = 0;
+    }
+
+    function preloadUpcomingPages(fromIndex) {
+      for (let i = 1; i <= 4; i++) {
+        const nextIdx = fromIndex + i;
+        if (nextIdx < totalPages && !preloadCache.has(nextIdx)) {
+          const img = new Image();
+          img.src = pageUrl(nextIdx);
+          preloadCache.set(nextIdx, img);
+          // Keep cache bounded
+          if (preloadCache.size > 12) {
+            const oldestKey = preloadCache.keys().next().value;
+            preloadCache.delete(oldestKey);
+          }
+        }
+      }
+    }
+
+    function stepForward() {
+      if (viewMode === 'double') {
+        const pair = getSpreadPair(currentPage);
+        const step = pair.length;
+        if (currentPage + step < totalPages) {
+          goToPage(currentPage + step);
+        } else {
+          promptNextVolumeIfAtEnd();
+        }
+      } else {
+        if (currentPage + 1 < totalPages) {
+          goToPage(currentPage + 1);
+        } else {
+          promptNextVolumeIfAtEnd();
+        }
+      }
+    }
+
+    function stepBackward() {
+      if (viewMode === 'double') {
+        if (currentPage > 0) {
+          const prevTarget = Math.max(0, currentPage - 1);
+          const prevPair = getSpreadPair(prevTarget);
+          goToPage(prevPair[0]);
+        }
+      } else {
+        if (currentPage > 0) {
+          goToPage(currentPage - 1);
+        }
+      }
+    }
+
+    function onLeftZoneClick() {
+      if (readingDirection === 'rtl') {
+        stepForward();
+      } else {
+        stepBackward();
+      }
+    }
+
+    function onRightZoneClick() {
+      if (readingDirection === 'rtl') {
+        stepBackward();
+      } else {
+        stepForward();
+      }
+    }
+
+    function promptNextVolumeIfAtEnd() {
+      {% if book.next_series_book %}
+      if (confirm("You've reached the end of this volume! Continue to {{ book.next_series_book.title | replace('\"', '\\\"') }}?")) {
+        window.location.href = "/reader/{{ book.next_series_book.id }}?fmt={{ book.next_series_book.fmt }}";
+      }
+      {% endif %}
+    }
+
+    function updateFooterUI() {
+      const pair = viewMode === 'double' ? getSpreadPair(currentPage) : [currentPage];
+      const lastInView = pair[pair.length - 1];
+      const pct = totalPages > 1 ? Math.round((lastInView / (totalPages - 1)) * 100) : 100;
+
+      const label = pair.length === 2
+        ? `Pages ${pair[0] + 1}-${pair[1] + 1} / ${totalPages}`
+        : `Page ${currentPage + 1} / ${totalPages}`;
+
+      document.getElementById('page-counter').textContent = label;
+      document.getElementById('progress-pct').textContent = `${pct}%`;
+
+      const slider = document.getElementById('page-slider');
+      slider.value = currentPage;
+    }
+
+    function onSliderInput(val) {
+      const idx = parseInt(val, 10);
+      document.getElementById('page-counter').textContent = `Page ${idx + 1} / ${totalPages}`;
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      localStorage.setItem('athenea_comic_view_mode', mode);
+
+      const pagedStage = document.getElementById('paged-stage');
+      const webtoonStage = document.getElementById('webtoon-stage');
+
+      if (mode === 'webtoon') {
+        pagedStage.classList.add('hidden');
+        webtoonStage.classList.remove('hidden');
+        ensureWebtoonBuilt();
+      } else {
+        webtoonStage.classList.add('hidden');
+        pagedStage.classList.remove('hidden');
+      }
+
+      updateControlStates();
+      goToPage(currentPage, false);
+    }
+
+    function ensureWebtoonBuilt() {
+      if (webtoonBuilt) return;
+      const container = document.getElementById('webtoon-pages');
+      container.innerHTML = '';
+
+      if (webtoonObserver) webtoonObserver.disconnect();
+      webtoonObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const idx = parseInt(entry.target.dataset.index, 10);
+            if (!isNaN(idx) && idx !== currentPage) {
+              currentPage = idx;
+              updateFooterUI();
+              saveProgress(currentPage);
+            }
+          }
+        });
+      }, { root: document.getElementById('webtoon-stage'), threshold: 0.45 });
+
+      for (let i = 0; i < totalPages; i++) {
+        const img = document.createElement('img');
+        img.id = `webtoon-page-${i}`;
+        img.dataset.index = i;
+        img.loading = 'lazy';
+        img.src = pageUrl(i);
+        img.alt = `Page ${i + 1}`;
+        img.className = 'w-full h-auto block select-none';
+        container.appendChild(img);
+        webtoonObserver.observe(img);
+      }
+      webtoonBuilt = true;
+    }
+
+    function toggleDirection() {
+      setDirection(readingDirection === 'rtl' ? 'ltr' : 'rtl');
+    }
+
+    function setDirection(dir) {
+      readingDirection = dir;
+      localStorage.setItem(STORAGE_PREFIX + 'dir', dir);
+      updateControlStates();
+      if (viewMode !== 'webtoon') {
+        goToPage(currentPage, false);
+      }
+    }
+
+    function toggleCoverSolo(checked) {
+      coverSolo = checked;
+      localStorage.setItem('athenea_comic_cover_solo', checked ? 'true' : 'false');
+      if (viewMode === 'double') {
+        goToPage(currentPage, false);
+      }
+    }
+
+    function cycleFitMode() {
+      const order = ['height', 'width', 'original'];
+      const next = order[(order.indexOf(fitMode) + 1) % order.length];
+      setFitMode(next);
+    }
+
+    function setFitMode(mode) {
+      fitMode = mode;
+      localStorage.setItem('athenea_comic_fit_mode', mode);
+      const viewport = document.getElementById('viewport');
+      viewport.classList.remove('fit-height', 'fit-width', 'fit-original');
+      viewport.classList.add(`fit-${mode}`);
+      updateControlStates();
+    }
+
+    function adjustZoom(delta) {
+      zoomLevel = Math.max(50, Math.min(250, zoomLevel + delta));
+      applyZoom();
+    }
+
+    function resetZoom() {
+      zoomLevel = 100;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      document.getElementById('zoom-label').textContent = `${zoomLevel}%`;
+      const container = document.getElementById('spread-container');
+      const webtoonPages = document.getElementById('webtoon-pages');
+      if (zoomLevel === 100) {
+        container.style.transform = '';
+        webtoonPages.style.maxWidth = '';
+      } else {
+        container.style.transform = `scale(${zoomLevel / 100})`;
+        container.style.transformOrigin = 'top center';
+        webtoonPages.style.maxWidth = `${Math.round(768 * (zoomLevel / 100))}px`;
+      }
+    }
+
+    function setCanvasTheme(theme) {
+      document.body.classList.remove('canvas-pitch', 'canvas-slate', 'canvas-light');
+      document.body.classList.add(`canvas-${theme}`);
+      localStorage.setItem('athenea_comic_canvas', theme);
+    }
+
+    function updateControlStates() {
+      // Direction badges & slider orientation
+      const isRtl = readingDirection === 'rtl';
+      document.getElementById('dir-label').textContent = isRtl ? '← RTL (Manga)' : 'LTR → (Comic)';
+      document.getElementById('direction-badge').textContent = isRtl ? 'MANGA • RTL' : 'COMIC • LTR';
+      const slider = document.getElementById('page-slider');
+      if (isRtl) slider.classList.add('rtl-slider');
+      else slider.classList.remove('rtl-slider');
+
+      // Top bar mode buttons
+      ['single', 'double', 'webtoon'].forEach(m => {
+        const btn = document.getElementById(`mode-${m}-btn`);
+        const dBtn = document.getElementById(`drawer-mode-${m}`);
+        if (m === viewMode) {
+          btn?.classList.add('bg-indigo-600', 'text-white');
+          btn?.classList.remove('text-slate-400');
+          dBtn?.classList.add('bg-indigo-600', 'text-white', 'border-indigo-500');
+        } else {
+          btn?.classList.remove('bg-indigo-600', 'text-white');
+          btn?.classList.add('text-slate-400');
+          dBtn?.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-500');
+        }
+      });
+
+      // Drawer direction buttons
+      ['ltr', 'rtl'].forEach(d => {
+        const dBtn = document.getElementById(`drawer-dir-${d}`);
+        if (d === readingDirection) {
+          dBtn?.classList.add('bg-indigo-600', 'text-white', 'border-indigo-500');
+        } else {
+          dBtn?.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-500');
+        }
+      });
+
+      // Fit mode buttons
+      const fitMap = { height: 'Fit Height', width: 'Fit Width', original: 'Original' };
+      document.getElementById('fit-label').textContent = fitMap[fitMode] || 'Fit Height';
+      ['height', 'width', 'original'].forEach(f => {
+        const fBtn = document.getElementById(`drawer-fit-${f}`);
+        if (f === fitMode) {
+          fBtn?.classList.add('bg-indigo-600', 'text-white', 'border-indigo-500');
+        } else {
+          fBtn?.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-500');
+        }
+      });
+    }
+
+    let saveTimeout = null;
+    function saveProgress(pageIdx) {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(async () => {
+        const pair = viewMode === 'double' ? getSpreadPair(pageIdx) : [pageIdx];
+        const lastInView = pair[pair.length - 1];
+        const pct = totalPages > 1 ? Math.round((lastInView / (totalPages - 1)) * 100) : 100;
+
+        try {
+          await fetch(`/api/progress/${BOOK_ID}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cfi: `cbz:page:${pageIdx}`,
+              percentage: pct
+            })
+          });
+
+          if (pct >= 98 && !shelfMarkedRead) {
+            shelfMarkedRead = true;
+            await fetch(`/api/shelves/${BOOK_ID}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'finished' })
+            });
+          } else if (pct > 0 && pct < 98 && !shelfMarkedReading) {
+            shelfMarkedReading = true;
+            await fetch(`/api/shelves/${BOOK_ID}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'reading' })
+            });
+          }
+        } catch (e) {
+          console.warn('Progress sync error:', e);
+        }
+      }, 350);
+    }
+
+    // Bookmarks
+    async function loadBookmarks() {
+      try {
+        const res = await fetch(`/api/books/${BOOK_ID}/bookmarks`);
+        if (!res.ok) return;
+        const items = await res.json();
+        const list = document.getElementById('bookmarks-list');
+        if (!items.length) {
+          list.innerHTML = '<p class="text-slate-500 italic">No bookmarks yet.</p>';
+          return;
+        }
+        list.innerHTML = items.map(b => {
+          const pageMatch = (b.cfi || '').match(/cbz:page:(\d+)/);
+          const pIdx = pageMatch ? parseInt(pageMatch[1], 10) : 0;
+          return `
+            <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/70 hover:bg-slate-800 transition">
+              <button onclick="goToPage(${pIdx})" class="text-left flex-1 truncate text-slate-200 hover:text-indigo-300 font-medium">
+                ${b.label || `Page ${pIdx + 1}`}
+              </button>
+              <button onclick="deleteBookmark(${b.id})" class="text-slate-500 hover:text-rose-400 p-1">✕</button>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {}
+    }
+
+    async function addBookmarkCurrentPage() {
+      const pair = viewMode === 'double' ? getSpreadPair(currentPage) : [currentPage];
+      const lastInView = pair[pair.length - 1];
+      const pct = totalPages > 1 ? Math.round((lastInView / (totalPages - 1)) * 100) : 100;
+      const label = `Page ${currentPage + 1} (${pct}%)`;
+      try {
+        await fetch(`/api/books/${BOOK_ID}/bookmarks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cfi: `cbz:page:${currentPage}`,
+            label: label,
+            percentage: pct
+          })
+        });
+        const btn = document.getElementById('bookmark-quick-btn');
+        btn.classList.add('text-amber-400');
+        setTimeout(() => btn.classList.remove('text-amber-400'), 1000);
+        loadBookmarks();
+      } catch (e) {}
+    }
+
+    async function deleteBookmark(id) {
+      try {
+        await fetch(`/api/bookmarks/${id}`, { method: 'DELETE' });
+        loadBookmarks();
+      } catch (e) {}
+    }
+
+    function toggleSettingsDrawer() {
+      const drawer = document.getElementById('settings-drawer');
+      drawer.classList.toggle('translate-x-full');
+    }
+
+    function toggleGridModal() {
+      const modal = document.getElementById('grid-modal');
+      const isHidden = modal.classList.contains('hidden');
+      if (isHidden) {
+        const container = document.getElementById('grid-container');
+        if (!container.children.length && totalPages > 0) {
+          const frag = document.createDocumentFragment();
+          for (let i = 0; i < totalPages; i++) {
+            const card = document.createElement('button');
+            card.className = 'group flex flex-col items-center bg-slate-900/90 border border-slate-800 hover:border-indigo-500 rounded-xl p-2 transition overflow-hidden';
+            card.onclick = () => {
+              toggleGridModal();
+              goToPage(i);
+            };
+            card.innerHTML = `
+              <div class="w-full aspect-[2/3] bg-slate-950 rounded-lg overflow-hidden mb-1.5 flex items-center justify-center">
+                <img src="${pageUrl(i)}" loading="lazy" class="w-full h-full object-contain group-hover:scale-105 transition" alt="Page ${i + 1}" />
+              </div>
+              <span class="text-xs font-mono text-slate-300 group-hover:text-indigo-400">Page ${i + 1}</span>
+            `;
+            frag.appendChild(card);
+          }
+          container.appendChild(frag);
+        }
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function toggleChrome() {
+      const top = document.getElementById('top-bar');
+      const bottom = document.getElementById('bottom-bar');
+      top.classList.toggle('hidden');
+      bottom.classList.toggle('hidden');
+      document.body.classList.toggle('header-hidden');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    }
+
+    // Keyboard Navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        onLeftZoneClick();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        onRightZoneClick();
+      } else if (e.key === ' ' || e.key === 'PageDown') {
+        if (viewMode !== 'webtoon') {
+          e.preventDefault();
+          stepForward();
+        }
+      } else if (e.key === 'PageUp') {
+        if (viewMode !== 'webtoon') {
+          e.preventDefault();
+          stepBackward();
+        }
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToPage(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToPage(totalPages - 1);
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        toggleDirection();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        const modes = ['single', 'double', 'webtoon'];
+        setViewMode(modes[(modes.indexOf(viewMode) + 1) % modes.length]);
+      } else if (e.key === 'Escape') {
+        document.getElementById('grid-modal').classList.add('hidden');
+        document.getElementById('settings-drawer').classList.add('translate-x-full');
+      }
+    });
+
+    // Touch Swipe Support for Mobile / Tablet
+    let touchStartX = null;
+    let touchStartY = null;
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (touchStartX === null || viewMode === 'webtoon' || zoomLevel > 105) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      touchStartX = null;
+      touchStartY = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx < 0) {
+          // Swiped left -> click right side
+          onRightZoneClick();
+        } else {
+          // Swiped right -> click left side
+          onLeftZoneClick();
+        }
+      }
+    }, { passive: true });
+
+    document.addEventListener('DOMContentLoaded', initComicReader);
+  </script>
+</body>
+</html>

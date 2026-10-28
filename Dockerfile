@@ -18,6 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
     ca-certificates \
+    calibre \
+    ffmpeg \
+    p7zip-full \
+    libarchive-tools \
+    djvulibre-bin \
+    pigz \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Builder stage for dependency compilation

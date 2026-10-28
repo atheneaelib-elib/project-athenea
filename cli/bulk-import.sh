@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# High-Performance Ebook Library Bulk Importer & Converter Runner
+# High-Performance Athenea Library Bulk Importer & Converter Runner
 set -e
 
-export PYTHONPATH="/opt/bookserver/api:${PYTHONPATH}"
-cd /opt/bookserver/api
+export PYTHONUNBUFFERED=1
+export PYTHONPATH="/opt/athenea:${PYTHONPATH}"
+cd /opt/athenea
 
-PYTHON_BIN="/opt/bookserver/api/venv/bin/python"
+PYTHON_BIN="/opt/athenea/venv/bin/python"
 if [ ! -x "$PYTHON_BIN" ]; then
     PYTHON_BIN="python3"
 fi
 
-exec "$PYTHON_BIN" -m app.cli.bulk_import "$@"
+exec "$PYTHON_BIN" -u -m cli.bulk_import "$@"

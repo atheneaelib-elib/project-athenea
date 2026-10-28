@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-High-Performance Standalone CLI FB2/EPUB Bulk Importer & Converter
-Designed for massive libraries (800,000+ books).
+High-Performance Standalone CLI FB2/EPUB/PDF/MOBI Bulk Importer & Converter
+Designed for massive libraries (800,000+ books) and full parity with the GUI importer.
 
 Key Features:
 - Multi-process concurrency utilizing all CPU cores.
-- Blazing-fast FB2 to EPUB conversion using native fb2c (sub-50ms).
-- Complete metadata extraction: covers, descriptions, publishers, series, tags.
-- O(1) duplicate checks using PostgreSQL MD5 hash index.
-- In-memory author/publisher/series/tag caching to eliminate sequential DB scans.
+- Blazing-fast FB2 to EPUB conversion using fb2c, Calibre ebook-convert (--preserve-cover-aspect-ratio),
+  or built-in pure-Python native converter fallback.
+- Complete metadata extraction: titles, authors, covers, descriptions, publishers, pubdates (<year>/<date>),
+  series, tags, ISBN, and language codes.
+- Supports .fb2, .fbz, .zip (containing fb2/epub/pdf/mobi/azw3), .epub, .pdf, .mobi, .azw3.
+- O(1) duplicate checks using PostgreSQL MD5 hash index and ISBN lookup.
+- In-memory author/publisher/series/tag/language caching to eliminate sequential DB scans.
 - SQLite-backed persistent checkpointing for seamless resume across runs.
 - Automatic overwrite of duplicate books with updated files & metadata.
 - Streaming generator scanning to handle millions of files without RAM bloat.
@@ -28,6 +31,7 @@ import uuid
 import signal
 import base64
 import subprocess
+import unicodedata
 import multiprocessing as mp
 from queue import Empty
 import xml.etree.ElementTree as ET
@@ -38,11 +42,13 @@ from typing import Optional, Dict, Any, List
 import psycopg2
 from psycopg2.extras import DictCursor
 
-# Ensure project app can be imported
+# Ensure project root (/opt/athenea) can be imported
 APP_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(APP_DIR.parent))
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
-from app.settings import settings
+from settings import settings
+from services import importer as importer_service
 
 CYRILLIC_TO_LATIN = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
@@ -50,33 +56,45 @@ CYRILLIC_TO_LATIN = {
     'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
     'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
     'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'iu', 'я': 'ia',
+    'і': 'i', 'ї': 'yi', 'є': 'ye', 'ґ': 'g',
     'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
     'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'К': 'K', 'Л': 'L', 'М': 'M',
     'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
     'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
-    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Iu', 'Я': 'Ia'
+    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Iu', 'Я': 'Ia',
+    'І': 'I', 'Ї': 'Yi', 'Є': 'Ye', 'Ґ': 'G',
+    '«': '', '»': '', '“': '', '”': '', '’': "'", '`': "'", '—': '-', '–': '-',
+    '№': 'No'
 }
 
-BOOKS_UID = None
-BOOKS_GID = None
+ATHENEA_UID = None
+ATHENEA_GID = None
 try:
     import pwd, grp
-    BOOKS_UID = pwd.getpwnam("books").pw_uid
-    BOOKS_GID = grp.getgrnam("books").gr_gid
+    ATHENEA_UID = pwd.getpwnam("athenea").pw_uid
+    ATHENEA_GID = grp.getgrnam("athenea").gr_gid
 except Exception:
     pass
 
+
 def fix_ownership(path: Path):
-    """Ensure created files & directories are owned by books:books."""
-    if BOOKS_UID is not None and BOOKS_GID is not None:
+    """Ensure created files & directories are owned by athenea:athenea."""
+    if ATHENEA_UID is not None and ATHENEA_GID is not None:
         try:
-            os.chown(path, BOOKS_UID, BOOKS_GID)
+            os.chown(path, ATHENEA_UID, ATHENEA_GID)
         except Exception:
             pass
 
+
 def transliterate(text_str: str) -> str:
-    """Transliterate Cyrillic characters to Latin for Calibre path layout."""
-    return "".join(CYRILLIC_TO_LATIN.get(ch, ch) for ch in text_str)
+    """Transliterate Cyrillic, Ukrainian and accented characters to safe ASCII for Calibre filesystem paths."""
+    res = []
+    for ch in str(text_str or ""):
+        res.append(CYRILLIC_TO_LATIN.get(ch, ch))
+    text = "".join(res)
+    normalized = unicodedata.normalize('NFKD', text)
+    return "".join(c for c in normalized if ord(c) < 128)
+
 
 def sanitize_filename(name: str, max_len: int = 64) -> str:
     """Sanitize string for safe filesystem usage."""
@@ -89,28 +107,56 @@ def sanitize_filename(name: str, max_len: int = 64) -> str:
         clean = "Unknown"
     return clean[:max_len].strip()
 
+
 def parse_pubdate(val: Optional[str]) -> Optional[datetime]:
     """Parse various date strings (e.g. '2012', '2012-05-10', '26 декабря 2021') into a valid datetime."""
     if not val:
         return None
     val = str(val).strip()
-    # Check 4-digit year first
+    if not val:
+        return None
+
+    # Try ISO / standard datetime first
+    try:
+        clean_iso = val.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(clean_iso)
+        if dt.year > 101:
+            return dt
+    except Exception:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y/%m/%d",
+        "%d.%m.%Y",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%B %Y",
+        "%b %Y",
+        "%Y",
+    ):
+        try:
+            dt = datetime.strptime(val[:19], fmt)
+            if dt.year > 101:
+                return dt
+        except Exception:
+            pass
+
+    # Fallback to 4-digit year (1800-2099)
     m_year = re.search(r'\b(1[89]\d\d|20\d\d)\b', val)
     if m_year:
         try:
             return datetime(int(m_year.group(1)), 1, 1)
         except Exception:
             pass
-    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d", "%d.%m.%Y"):
-        try:
-            return datetime.strptime(val[:19], fmt)
-        except Exception:
-            pass
     return None
 
+
 def get_db_connection():
-    """Create a direct psycopg2 connection."""
-    return psycopg2.connect(
+    """Create a direct psycopg2 connection with UTF-8 client encoding."""
+    conn = psycopg2.connect(
         host=settings.DB_HOST,
         port=settings.DB_PORT,
         dbname=settings.DB_NAME,
@@ -118,6 +164,9 @@ def get_db_connection():
         password=settings.DB_PASSWORD,
         cursor_factory=DictCursor
     )
+    conn.set_client_encoding('UTF8')
+    return conn
+
 
 def ensure_indexes_and_sequences(conn):
     """Ensure high-performance indexes and sequences exist."""
@@ -131,12 +180,13 @@ def ensure_indexes_and_sequences(conn):
             ("tags", "tags_id_seq"),
             ("publishers", "publishers_id_seq"),
             ("identifiers", "identifiers_id_seq"),
+            ("languages", "languages_id_seq"),
         ]:
             cur.execute("SELECT 1 FROM pg_sequences WHERE sequencename = %s", (seq,))
             if not cur.fetchone():
                 cur.execute(f"SELECT COALESCE(MAX(id), 0) FROM {tbl}")
                 max_val = cur.fetchone()[0] or 0
-                cur.execute(f"CREATE SEQUENCE {seq} OWNED BY {tbl}.id")
+                cur.execute(f"CREATE SEQUENCE IF NOT EXISTS {seq} OWNED BY {tbl}.id")
                 cur.execute(f"SELECT setval('{seq}', %s + 1, false)", (max_val,))
                 cur.execute(f"ALTER TABLE {tbl} ALTER COLUMN id SET DEFAULT nextval('{seq}')")
 
@@ -161,6 +211,17 @@ def ensure_indexes_and_sequences(conn):
             cur.execute("SELECT 1 FROM pg_indexes WHERE tablename = %s AND indexname = %s", (tbl, idx))
             if not cur.fetchone():
                 cur.execute(f"CREATE INDEX {idx} ON {tbl} (LOWER(name))")
+
+        # Unique index on languages(lang_code) and data(book_id, format)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_lang_code ON languages (lang_code)")
+        cur.execute("""
+            DELETE FROM data a
+            USING data b
+            WHERE a.id > b.id
+              AND a.book_id = b.book_id
+              AND UPPER(a.format) = UPPER(b.format)
+        """)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_book_format ON data (book_id, format)")
     conn.commit()
 
 
@@ -168,7 +229,9 @@ def ensure_indexes_and_sequences(conn):
 def parse_fb2_fast(fb2_path: Path) -> dict:
     """
     High-speed, namespace-safe FB2 parser. Reads XML header and description,
-    extracts title, clean authors, series, publisher, annotation, and cover image.
+    extracts title, clean authors, series, publisher, pubdate (<year>/<date>),
+    annotation, ISBN, language, and cover image.
+    Matches services/importer.py metadata extraction rules.
     """
     meta = {
         "title": None,
@@ -210,11 +273,12 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
             # Strip XML namespace prefixes so ElementTree will never fail on unbound prefixes (e.g. l:href)
             clean_desc = re.sub(r'(</?)[a-zA-Z0-9_-]+:([a-zA-Z0-9_-]+)', r'\1\2', desc_content)
             clean_desc = re.sub(r'(\s)[a-zA-Z0-9_-]+:([a-zA-Z0-9_-]+)=', r'\1\2=', clean_desc)
+            clean_desc = re.sub(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', '&amp;', clean_desc)
 
             try:
                 root = ET.fromstring(f"<description>{clean_desc}</description>")
                 for elem in root.iter():
-                    tag = elem.tag.lower()
+                    tag = elem.tag.split("}")[-1].lower()
 
                     if tag == "book-title" and elem.text and not meta["title"]:
                         meta["title"] = elem.text.strip()
@@ -222,7 +286,7 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
                     elif tag == "author":
                         first, middle, last, nick = "", "", "", ""
                         for child in elem:
-                            ctag = child.tag.lower()
+                            ctag = child.tag.split("}")[-1].lower()
                             if ctag == "first-name" and child.text:
                                 first = child.text.strip()
                             elif ctag == "middle-name" and child.text:
@@ -257,18 +321,34 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
                             meta["comments"] = "\n\n".join(texts)
 
                     elif tag == "publisher" and not meta["publisher"]:
-                        texts = [p.text.strip() for p in elem.iter() if p.tag.lower() != "id" and p.text and p.text.strip()]
-                        if texts:
-                            meta["publisher"] = " ".join(texts)
+                        if elem.text and elem.text.strip():
+                            meta["publisher"] = elem.text.strip()
+                        else:
+                            texts = [p.text.strip() for p in elem.iter() if p.tag.lower() != "id" and p.text and p.text.strip()]
+                            if texts:
+                                meta["publisher"] = " ".join(texts)
 
-                    elif tag == "isbn" and elem.text:
+                    elif tag == "isbn" and elem.text and not meta["isbn"]:
                         meta["isbn"] = elem.text.strip().replace("-", "")
 
-                    elif (tag == "lang" or tag == "language") and elem.text and not meta["language"]:
+                    elif tag in ("lang", "language") and elem.text and not meta["language"]:
                         meta["language"] = elem.text.strip().lower()[:10]
 
-                    elif tag == "date" and elem.text and not meta["pubdate"]:
+                    elif tag == "date" and not meta["pubdate"]:
+                        d_val = elem.attrib.get("value") or (elem.text.strip() if elem.text else None)
+                        if d_val:
+                            meta["pubdate"] = d_val.strip()
+
+                    elif tag == "year" and elem.text and elem.text.strip():
+                        # <publish-info><year> is the canonical publication year in FB2
                         meta["pubdate"] = elem.text.strip()
+
+                    elif tag == "coverpage":
+                        for img in elem.iter():
+                            if img.tag.split("}")[-1].lower() == "image":
+                                for k, v in img.attrib.items():
+                                    if k.lower().endswith("href"):
+                                        meta["cover_id"] = v.lstrip("#")
 
                     elif tag == "image" and not meta["cover_id"]:
                         for k, v in elem.attrib.items():
@@ -277,7 +357,7 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
             except Exception:
                 pass
 
-        # Regex fallback for title, publisher, annotation, and coverpage if ElementTree missed them
+        # Regex fallbacks if ElementTree missed fields due to malformed XML in <description>
         if not meta["title"]:
             m_t = re.search(r'<book-title[^>]*>(.*?)</book-title>', header_text, re.DOTALL | re.IGNORECASE)
             if m_t:
@@ -289,6 +369,30 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
                 clean_pub = re.sub(r'<[^>]+>', '', m_pub.group(1)).strip()
                 if clean_pub:
                     meta["publisher"] = clean_pub
+
+        if not meta["pubdate"]:
+            m_year = re.search(r'<year[^>]*>(.*?)</year>', header_text, re.DOTALL | re.IGNORECASE)
+            if m_year:
+                clean_y = re.sub(r'<[^>]+>', '', m_year.group(1)).strip()
+                if clean_y:
+                    meta["pubdate"] = clean_y
+            if not meta["pubdate"]:
+                m_date = re.search(r'<date[^>]*value=[\'"]([^\'"]+)[\'"]', header_text, re.IGNORECASE)
+                if m_date:
+                    meta["pubdate"] = m_date.group(1).strip()
+                else:
+                    m_date2 = re.search(r'<date[^>]*>(.*?)</date>', header_text, re.DOTALL | re.IGNORECASE)
+                    if m_date2:
+                        clean_d = re.sub(r'<[^>]+>', '', m_date2.group(1)).strip()
+                        if clean_d:
+                            meta["pubdate"] = clean_d
+
+        if not meta["isbn"]:
+            m_isbn = re.search(r'<isbn[^>]*>(.*?)</isbn>', header_text, re.DOTALL | re.IGNORECASE)
+            if m_isbn:
+                clean_i = re.sub(r'<[^>]+>', '', m_isbn.group(1)).strip().replace("-", "")
+                if clean_i:
+                    meta["isbn"] = clean_i
 
         if not meta["language"]:
             m_lang = re.search(r'<lang[^>]*>(.*?)</lang>', header_text, re.DOTALL | re.IGNORECASE)
@@ -328,7 +432,7 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
         if meta["authors"]:
             meta["author"] = meta["authors"][0]
         else:
-            meta["author"] = "Unknown Author"
+            meta["author"] = meta.get("author") or "Unknown Author"
             meta["authors"] = [meta["author"]]
 
         # Extract Cover Image Bytes from FB2
@@ -373,6 +477,20 @@ def parse_fb2_fast(fb2_path: Path) -> dict:
     return meta
 
 
+def get_cli_book_metadata(file_path: Path, ext: str) -> dict:
+    """Extract metadata for any supported ebook format (.fb2, .epub, .pdf, .mobi, .azw3)."""
+    ext_clean = ext.lower().lstrip(".")
+    if ext_clean in ("fb2", "fbz"):
+        return parse_fb2_fast(file_path)
+    elif ext_clean == "epub":
+        meta = importer_service.parse_epub_metadata(file_path)
+        if not meta.get("title") or not meta.get("author"):
+            meta = importer_service.get_book_metadata(file_path, "epub")
+        return meta
+    else:
+        return importer_service.get_book_metadata(file_path, ext_clean)
+
+
 # Converter Dispatcher
 def find_fb2c_binary() -> Optional[str]:
     """Look for fb2c in common locations or system PATH."""
@@ -388,6 +506,7 @@ def find_fb2c_binary() -> Optional[str]:
             return c
     return None
 
+
 def convert_fb2_to_epub_fast(
     fb2c_path: Optional[str],
     fb2_file: Path,
@@ -397,7 +516,8 @@ def convert_fb2_to_epub_fast(
     author: Optional[str] = None
 ) -> Optional[Path]:
     """
-    Convert an FB2 to EPUB using fb2c (sub-50ms) with Calibre fallback.
+    Convert an FB2 to EPUB using fb2c (sub-50ms), Calibre ebook-convert (--preserve-cover-aspect-ratio),
+    or pure-Python native converter fallback.
     Returns path to generated EPUB or None if failed.
     """
     target_epub = out_dir / f"{expected_epub_name}.epub"
@@ -424,20 +544,13 @@ def convert_fb2_to_epub_fast(
         except Exception:
             pass
 
-    # 2. Fallback to Calibre ebook-convert if available
-    ebook_convert = shutil.which("ebook-convert")
-    if ebook_convert:
-        try:
-            cmd = [ebook_convert, str(fb2_file), str(target_epub)]
-            if title:
-                cmd.extend(["--title", title])
-            if author:
-                cmd.extend(["--authors", author])
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+    # 2. Fallback to Calibre ebook-convert (with --preserve-cover-aspect-ratio) or pure-Python native converter
+    try:
+        if importer_service.convert_fb2_to_epub(fb2_file, target_epub, title=title, author=author):
             if target_epub.is_file() and target_epub.stat().st_size > 0:
                 return target_epub
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     return None
 
@@ -535,8 +648,13 @@ class FKCache:
         lower = clean.lower()
         if lower in self.authors:
             return self.authors[lower]
-        cur.execute("INSERT INTO authors (name) VALUES (%s) RETURNING id", (clean,))
-        aid = cur.fetchone()[0]
+        cur.execute("SELECT id FROM authors WHERE LOWER(name) = LOWER(%s) LIMIT 1", (clean,))
+        row = cur.fetchone()
+        if row:
+            aid = row[0]
+        else:
+            cur.execute("INSERT INTO authors (name) VALUES (%s) RETURNING id", (clean,))
+            aid = cur.fetchone()[0]
         self.authors[lower] = aid
         return aid
 
@@ -545,8 +663,13 @@ class FKCache:
         lower = clean.lower()
         if lower in self.series:
             return self.series[lower]
-        cur.execute("INSERT INTO series (name) VALUES (%s) RETURNING id", (clean,))
-        sid = cur.fetchone()[0]
+        cur.execute("SELECT id FROM series WHERE LOWER(name) = LOWER(%s) LIMIT 1", (clean,))
+        row = cur.fetchone()
+        if row:
+            sid = row[0]
+        else:
+            cur.execute("INSERT INTO series (name) VALUES (%s) RETURNING id", (clean,))
+            sid = cur.fetchone()[0]
         self.series[lower] = sid
         return sid
 
@@ -555,8 +678,13 @@ class FKCache:
         lower = clean.lower()
         if lower in self.tags:
             return self.tags[lower]
-        cur.execute("INSERT INTO tags (name) VALUES (%s) RETURNING id", (clean,))
-        tid = cur.fetchone()[0]
+        cur.execute("SELECT id FROM tags WHERE LOWER(name) = LOWER(%s) LIMIT 1", (clean,))
+        row = cur.fetchone()
+        if row:
+            tid = row[0]
+        else:
+            cur.execute("INSERT INTO tags (name) VALUES (%s) RETURNING id", (clean,))
+            tid = cur.fetchone()[0]
         self.tags[lower] = tid
         return tid
 
@@ -565,8 +693,13 @@ class FKCache:
         lower = clean.lower()
         if lower in self.publishers:
             return self.publishers[lower]
-        cur.execute("INSERT INTO publishers (name) VALUES (%s) RETURNING id", (clean,))
-        pid = cur.fetchone()[0]
+        cur.execute("SELECT id FROM publishers WHERE LOWER(name) = LOWER(%s) LIMIT 1", (clean,))
+        row = cur.fetchone()
+        if row:
+            pid = row[0]
+        else:
+            cur.execute("INSERT INTO publishers (name) VALUES (%s) RETURNING id", (clean,))
+            pid = cur.fetchone()[0]
         self.publishers[lower] = pid
         return pid
 
@@ -581,8 +714,13 @@ class FKCache:
         if row:
             lid = row[0]
         else:
-            cur.execute("INSERT INTO languages (lang_code) VALUES (%s) RETURNING id", (clean,))
-            lid = cur.fetchone()[0]
+            cur.execute("INSERT INTO languages (lang_code) VALUES (%s) ON CONFLICT (lang_code) DO NOTHING RETURNING id", (clean,))
+            res = cur.fetchone()
+            if res:
+                lid = res[0]
+            else:
+                cur.execute("SELECT id FROM languages WHERE lang_code = %s", (clean,))
+                lid = cur.fetchone()[0]
         self.languages[clean] = lid
         return lid
 
@@ -596,7 +734,8 @@ def process_single_book(
     library_root: Path,
     do_convert: bool = True,
     overwrite_existing: bool = True,
-    keep_all_languages: bool = True
+    keep_all_languages: bool = True,
+    keep_fb2: bool = True
 ) -> Dict[str, Any]:
     """
     Ingest or overwrite a single book into Calibre directory and Postgres database.
@@ -608,18 +747,95 @@ def process_single_book(
     work_dir = Path(tempfile.mkdtemp(prefix="cli_imp_"))
     try:
         actual_file = file_path
-        if ext in ("zip", "fbz"):
-            with zipfile.ZipFile(file_path, "r") as zf:
-                fb2_names = [n for n in zf.namelist() if n.lower().endswith(".fb2")]
-                if fb2_names:
-                    extracted = zf.extract(fb2_names[0], path=work_dir)
-                    actual_file = Path(extracted)
-                else:
-                    return {"status": "skipped", "reason": "No FB2 in archive"}
+        effective_ext = ext
+        if effective_ext == "djv":
+            effective_ext = "djvu"
+        extracted_audio_tracks = []
+        archive_cover_bytes = None
 
-        meta = parse_fb2_fast(actual_file)
-        title = (meta.get("title") or file_path.stem).strip()
-        primary_author = (meta.get("author") or "Unknown Author").strip()
+        if ext in ("cbr", "cb7", "cbt"):
+            converted_cbz = work_dir / f"{file_path.stem}.cbz"
+            if importer_service.convert_cbr_to_cbz(file_path, converted_cbz):
+                actual_file = converted_cbz
+                effective_ext = "cbz"
+        elif ext in ("zip", "fbz", "rar", "7z"):
+            is_epub_zip = False
+            if ext in ("zip", "fbz") and zipfile.is_zipfile(file_path):
+                try:
+                    with zipfile.ZipFile(file_path, "r") as zf:
+                        namelist = zf.namelist()
+                        if "mimetype" in namelist or any(n.lower().endswith(".opf") for n in namelist):
+                            is_epub_zip = True
+                except Exception:
+                    pass
+
+            if is_epub_zip:
+                actual_file = file_path
+                effective_ext = "epub"
+            else:
+                unpack_dir = work_dir / "unpacked"
+                if importer_service.extract_generic_archive(file_path, unpack_dir):
+                    all_files = sorted(
+                        [
+                            p for p in unpack_dir.rglob("*")
+                            if p.is_file() and not p.name.startswith(".") and "__MACOSX" not in p.parts
+                        ],
+                        key=lambda p: importer_service.natural_sort_key(p.as_posix())
+                    )
+                    ebook_priority = (".epub", ".fb2", ".pdf", ".djvu", ".djv", ".mobi", ".azw3", ".azw", ".prc", ".docx", ".rtf", ".odt", ".txt")
+                    found_ebook = None
+                    for p_ext in ebook_priority:
+                        matches = [p for p in all_files if p.suffix.lower() == p_ext]
+                        if matches:
+                            found_ebook = matches[0]
+                            break
+
+                    audio_matches = [p for p in all_files if p.suffix.lower() in importer_service.AUDIO_EXTS]
+                    image_matches = [p for p in all_files if p.suffix.lower() in importer_service.IMAGE_EXTS]
+
+                    if found_ebook:
+                        actual_file = found_ebook
+                        effective_ext = found_ebook.suffix.lower().lstrip(".")
+                        if effective_ext == "djv":
+                            effective_ext = "djvu"
+                    elif audio_matches:
+                        extracted_audio_tracks = audio_matches
+                        actual_file = audio_matches[0]
+                        effective_ext = audio_matches[0].suffix.lower().lstrip(".")
+                        if image_matches:
+                            try:
+                                archive_cover_bytes = image_matches[0].read_bytes()
+                            except Exception:
+                                pass
+                    elif image_matches:
+                        if ext == "zip" and zipfile.is_zipfile(file_path):
+                            actual_file = file_path
+                            effective_ext = "cbz"
+                        else:
+                            converted_cbz = work_dir / f"{file_path.stem}.cbz"
+                            if importer_service.convert_cbr_to_cbz(file_path, converted_cbz):
+                                actual_file = converted_cbz
+                                effective_ext = "cbz"
+                    else:
+                        return {"status": "skipped", "reason": "No supported files in archive"}
+                else:
+                    return {"status": "skipped", "reason": "Could not unpack archive"}
+
+        meta = get_cli_book_metadata(actual_file, effective_ext)
+        if archive_cover_bytes and not meta.get("cover_bytes"):
+            meta["cover_bytes"] = archive_cover_bytes
+
+        raw_title = (meta.get("title") or "").strip()
+        if not raw_title or not re.search(r'[\w\u0400-\u04FF]', raw_title):
+            title = Path(orig_name).stem
+        else:
+            title = raw_title
+
+        raw_author = (meta.get("author") or "").strip()
+        if not raw_author or not re.search(r'[\w\u0400-\u04FF]', raw_author):
+            primary_author = "Unknown Author"
+        else:
+            primary_author = raw_author
 
         # Resolve Language Code
         lang_code = meta.get("language")
@@ -654,7 +870,7 @@ def process_single_book(
                     existing_cover = row[2] or 0
 
         # 2. Match by Title Hash and Author token similarity (handles "Last, First" vs "First Last")
-        if not is_duplicate and title and primary_author:
+        if not is_duplicate and title and primary_author and primary_author.lower() != "unknown author":
             clean_t = title.strip().lower()
             clean_a = primary_author.strip().lower()
             author_words = {w for w in re.split(r'[\s,._-]+', clean_a) if len(w) >= 3}
@@ -726,8 +942,9 @@ def process_single_book(
                 cur.execute("SELECT nextval('books_id_seq')")
                 book_id = cur.fetchone()[0]
 
-            author_folder = sanitize_filename(primary_author, max_len=64)
-            title_folder = f"{sanitize_filename(title, max_len=64)} ({book_id})"
+            author_folder = sanitize_filename(primary_author, max_len=64) or "Unknown Author"
+            clean_title_part = sanitize_filename(title, max_len=64) or f"Book_{book_id}"
+            title_folder = f"{clean_title_part} ({book_id})"
             rel_path = f"{author_folder}/{title_folder}"
             dest_dir = library_root / author_folder / title_folder
 
@@ -739,36 +956,147 @@ def process_single_book(
         # On overwrite: clean out older ebook files with outdated naming in this book's directory
         if is_duplicate and dest_dir.exists():
             for old_file in dest_dir.iterdir():
-                if old_file.is_file() and old_file.suffix.lower() in ('.epub', '.fb2', '.fbz', '.zip', '.mobi', '.pdf'):
+                if old_file.is_file() and old_file.suffix.lower() in importer_service.SUPPORTED_IMPORT_EXTS:
                     try:
                         old_file.unlink()
                     except OSError:
                         pass
 
-        base_file_name = sanitize_filename(f"{title} - {primary_author}", max_len=96)
+        base_file_name = sanitize_filename(f"{title} - {primary_author}", max_len=96) or f"book_{book_id}"
         formats_imported = []
 
-        # 1. Convert to EPUB if requested
-        epub_path = None
-        if do_convert:
-            epub_path = convert_fb2_to_epub_fast(
-                fb2c_path=fb2c_path,
-                fb2_file=actual_file,
-                out_dir=dest_dir,
-                expected_epub_name=base_file_name,
-                title=title,
-                author=primary_author
-            )
-            if epub_path and epub_path.is_file():
-                fix_ownership(epub_path)
+        # 1. Handle FB2 / FBZ files (convert to EPUB + optionally keep FB2)
+        if effective_ext in ("fb2", "fbz"):
+            epub_path = None
+            if do_convert:
+                epub_path = convert_fb2_to_epub_fast(
+                    fb2c_path=fb2c_path,
+                    fb2_file=actual_file,
+                    out_dir=dest_dir,
+                    expected_epub_name=base_file_name,
+                    title=title,
+                    author=primary_author
+                )
+                if epub_path and epub_path.is_file():
+                    fix_ownership(epub_path)
+                    formats_imported.append({
+                        "format": "EPUB",
+                        "size": epub_path.stat().st_size,
+                        "name": base_file_name
+                    })
+                    # Extract cover from generated EPUB if FB2 cover extraction missed it
+                    if not meta.get("cover_bytes"):
+                        try:
+                            epub_meta = importer_service.parse_epub_metadata(epub_path)
+                            if epub_meta.get("cover_bytes"):
+                                meta["cover_bytes"] = epub_meta["cover_bytes"]
+                        except Exception:
+                            pass
+
+            # Keep original FB2 if keep_fb2 is True, or if EPUB conversion was skipped/failed
+            if keep_fb2 or not formats_imported:
+                fb2_dest = dest_dir / f"{base_file_name}.fb2"
+                if actual_file.resolve() != fb2_dest.resolve():
+                    shutil.copy2(actual_file, fb2_dest)
+                fix_ownership(fb2_dest)
                 formats_imported.append({
-                    "format": "EPUB",
-                    "size": epub_path.stat().st_size,
+                    "format": "FB2",
+                    "size": fb2_dest.stat().st_size,
                     "name": base_file_name
                 })
 
-        # 2. Do not keep original FB2 (FB2 is converted to EPUB to keep library format clean)
-        pass
+        # 2. Handle DOCX, RTF, ODT, TXT, MOBI, AZW3, AZW, PRC (convert to EPUB + keep original)
+        elif effective_ext in importer_service.CONVERTIBLE_TO_EPUB_EXTS:
+            if do_convert:
+                target_epub = dest_dir / f"{base_file_name}.epub"
+                if importer_service.convert_ebook_to_epub(actual_file, target_epub, title=title, author=primary_author):
+                    fix_ownership(target_epub)
+                    formats_imported.append({
+                        "format": "EPUB",
+                        "size": target_epub.stat().st_size,
+                        "name": base_file_name
+                    })
+            dest_file = dest_dir / f"{base_file_name}.{effective_ext}"
+            if actual_file.resolve() != dest_file.resolve():
+                shutil.copy2(actual_file, dest_file)
+            fix_ownership(dest_file)
+            formats_imported.append({
+                "format": effective_ext.upper(),
+                "size": dest_file.stat().st_size,
+                "name": base_file_name
+            })
+
+        # 3. Handle DJVU (convert to PDF + keep DJVU)
+        elif effective_ext == "djvu":
+            if do_convert:
+                target_pdf = dest_dir / f"{base_file_name}.pdf"
+                if importer_service.convert_djvu_to_pdf(actual_file, target_pdf):
+                    fix_ownership(target_pdf)
+                    formats_imported.append({
+                        "format": "PDF",
+                        "size": target_pdf.stat().st_size,
+                        "name": base_file_name
+                    })
+            dest_file = dest_dir / f"{base_file_name}.djvu"
+            if actual_file.resolve() != dest_file.resolve():
+                shutil.copy2(actual_file, dest_file)
+            fix_ownership(dest_file)
+            formats_imported.append({
+                "format": "DJVU",
+                "size": dest_file.stat().st_size,
+                "name": base_file_name
+            })
+
+        # 4. Handle Audiobook files / archives
+        elif f".{effective_ext}" in importer_service.AUDIO_EXTS:
+            dest_file = dest_dir / f"{base_file_name}.{effective_ext}"
+            if actual_file.resolve() != dest_file.resolve():
+                shutil.copy2(actual_file, dest_file)
+            fix_ownership(dest_file)
+            total_audio_size = dest_file.stat().st_size
+            if len(extracted_audio_tracks) > 1:
+                tracks_dir = dest_dir / "audiobook_tracks"
+                if tracks_dir.exists():
+                    shutil.rmtree(tracks_dir, ignore_errors=True)
+                tracks_dir.mkdir(parents=True, exist_ok=True)
+                fix_ownership(tracks_dir)
+                total_audio_size = 0
+                for idx, trk in enumerate(extracted_audio_tracks, 1):
+                    safe_trk = sanitize_filename(trk.stem, max_len=64) or f"track_{idx:03d}"
+                    t_dest = tracks_dir / f"{idx:03d}_{safe_trk}{trk.suffix.lower()}"
+                    shutil.copy2(trk, t_dest)
+                    fix_ownership(t_dest)
+                    total_audio_size += t_dest.stat().st_size
+            formats_imported.append({
+                "format": effective_ext.upper(),
+                "size": total_audio_size,
+                "name": base_file_name
+            })
+
+        # 5. Handle native EPUB, PDF, CBZ, CBR, CB7, CBT files
+        elif effective_ext in ("epub", "pdf", "cbz", "cbr", "cb7", "cbt"):
+            dest_file = dest_dir / f"{base_file_name}.{effective_ext}"
+            if actual_file.resolve() != dest_file.resolve():
+                shutil.copy2(actual_file, dest_file)
+            fix_ownership(dest_file)
+            formats_imported.append({
+                "format": effective_ext.upper(),
+                "size": dest_file.stat().st_size,
+                "name": base_file_name
+            })
+        elif ext not in ("fb2", "fbz", "zip", "rar", "7z"):
+            dest_file = dest_dir / f"{base_file_name}.{ext}"
+            if file_path.resolve() != dest_file.resolve():
+                shutil.copy2(file_path, dest_file)
+            fix_ownership(dest_file)
+            formats_imported.append({
+                "format": ext.upper(),
+                "size": dest_file.stat().st_size,
+                "name": base_file_name
+            })
+
+        if not formats_imported:
+            return {"status": "skipped", "reason": "No formats could be imported"}
 
         # 3. Save Cover image if present
         has_cover = existing_cover
@@ -843,6 +1171,8 @@ def process_single_book(
             if is_duplicate:
                 cur.execute("DELETE FROM book_authors WHERE book_id = %s", (book_id,))
             for a_name in authors_to_link:
+                if not a_name or not a_name.strip():
+                    continue
                 aid = fk_cache.get_or_create_author(cur, a_name)
                 cur.execute("""
                     INSERT INTO book_authors (book_id, author_id)
@@ -857,6 +1187,9 @@ def process_single_book(
                 cur.execute("""
                     INSERT INTO data (book_id, format, uncompressed_size, name)
                     VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (book_id, format) DO UPDATE
+                    SET uncompressed_size = EXCLUDED.uncompressed_size,
+                        name = EXCLUDED.name
                 """, (book_id, fmt_info["format"], fmt_info["size"], fmt_info["name"]))
 
             # Comments (Book Description)
@@ -894,6 +1227,8 @@ def process_single_book(
                 if is_duplicate:
                     cur.execute("DELETE FROM book_tags WHERE book_id = %s", (book_id,))
                 for tag_name in meta["tags"]:
+                    if not tag_name or not tag_name.strip():
+                        continue
                     tid = fk_cache.get_or_create_tag(cur, tag_name)
                     cur.execute("""
                         INSERT INTO book_tags (book_id, tag_id)
@@ -948,7 +1283,8 @@ def worker_loop(
     do_convert: bool,
     overwrite: bool,
     batch_size: int,
-    keep_all_languages: bool = True
+    keep_all_languages: bool = True,
+    keep_fb2: bool = True
 ):
     """Worker process loop consuming file paths from queue and updating database."""
     conn = None
@@ -972,7 +1308,8 @@ def worker_loop(
                     library_root=library_root,
                     do_convert=do_convert,
                     overwrite_existing=overwrite,
-                    keep_all_languages=keep_all_languages
+                    keep_all_languages=keep_all_languages,
+                    keep_fb2=keep_fb2
                 )
                 pending_commits += 1
                 result_queue.put({
@@ -1032,10 +1369,12 @@ def scan_source_files(source_path: Path):
         yield source_path
         return
 
-    exts = {".fb2", ".fbz", ".zip"}
+    exts = importer_service.SUPPORTED_IMPORT_EXTS
     stack = [str(source_path)]
     while stack:
         curr_dir = stack.pop()
+        if "audiobook_tracks" in Path(curr_dir).parts:
+            continue
         try:
             with os.scandir(curr_dir) as it:
                 for entry in it:
@@ -1063,12 +1402,13 @@ def format_seconds(seconds: float) -> str:
 # Main Controller
 def main():
     parser = argparse.ArgumentParser(
-        description="High-Speed Standalone FB2/EPUB Bulk Importer for Calibre/FastAPI Library"
+        description="High-Speed Standalone FB2/EPUB/PDF/MOBI Bulk Importer for Athenea Library"
     )
-    parser.add_argument("source", type=str, help="Source directory containing FB2 files or archives")
+    parser.add_argument("source", type=str, help="Source file or directory containing ebook files or archives")
     parser.add_argument("--workers", "-w", type=int, default=4, help="Number of parallel worker processes (default: 4)")
     parser.add_argument("--batch-size", "-b", type=int, default=50, help="DB commit batch size per worker (default: 50)")
     parser.add_argument("--no-convert", action="store_true", help="Skip FB2 to EPUB conversion (import raw FB2 only)")
+    parser.add_argument("--no-keep-fb2", action="store_true", help="Do not retain original FB2 file after converting to EPUB")
     parser.add_argument("--no-overwrite", action="store_true", help="Skip existing duplicate books instead of overwriting")
     parser.add_argument("--keep-all-languages", action="store_true", default=True, help="Keep different language editions of books with the same title & author (default: True)")
     parser.add_argument("--no-keep-all-languages", action="store_false", dest="keep_all_languages", help="Overwrite existing book even if language differs")
@@ -1092,7 +1432,7 @@ def main():
     print(f" Source:       {source_path}")
     print(f" Library:      {library_root}")
     print(f" Workers:      {args.workers} parallel processes")
-    print(f" Convert EPUB: {'No (--no-convert)' if args.no_convert else 'Yes (using fb2c)'}")
+    print(f" Convert EPUB: {'No (--no-convert)' if args.no_convert else 'Yes (fb2c / Calibre / Native)'}")
     print(f" Overwrite:    {'No (--no-overwrite)' if args.no_overwrite else 'Yes (update duplicate metadata & files)'}")
     print(f" Keep Languages:{'Yes (preserve all language editions)' if args.keep_all_languages else 'No (overwrite duplicate title & author regardless of language)'}")
     print("=" * 76)
@@ -1102,8 +1442,10 @@ def main():
     if not args.no_convert:
         if fb2c_path:
             print(f"[✓] Found ultra-fast fb2c converter: {fb2c_path}")
+        elif shutil.which("ebook-convert"):
+            print("[✓] Found Calibre ebook-convert (--preserve-cover-aspect-ratio enabled)")
         else:
-            print("[!] Warning: fb2c binary not found, will fall back to ebook-convert if available.")
+            print("[✓] Using built-in pure-Python FB2-to-EPUB converter")
 
     # Initialize Database Connection & Schema Check
     print("[*] Connecting to PostgreSQL database...")
@@ -1117,7 +1459,7 @@ def main():
     if args.no_resume and ckpt_file.exists():
         ckpt_file.unlink()
         print("[*] Cleared checkpoint (--no-resume)")
-    
+
     ckpt = CheckpointStore(ckpt_file)
     initial_processed = ckpt.count()
     if initial_processed > 0:
@@ -1125,7 +1467,11 @@ def main():
 
     # Error Log File
     err_log_path = Path.cwd() / "import_errors.log"
-    err_file = open(err_log_path, "a", encoding="utf-8")
+    try:
+        err_file = open(err_log_path, "a", encoding="utf-8")
+    except PermissionError:
+        err_log_path = Path("/tmp/import_errors.log")
+        err_file = open(err_log_path, "a", encoding="utf-8")
 
     # Multiprocessing Queues & Workers
     num_workers = max(1, args.workers)
@@ -1145,7 +1491,8 @@ def main():
                 not args.no_convert,
                 not args.no_overwrite,
                 args.batch_size,
-                args.keep_all_languages
+                args.keep_all_languages,
+                not args.no_keep_fb2
             ),
             daemon=True
         )
@@ -1314,6 +1661,7 @@ def main():
     print(f" Errors:           {stats['errors']:,} (logged to {err_log_path.name})")
     print(f" Checkpoint:       {ckpt_file}")
     print("=" * 76)
+
 
 if __name__ == "__main__":
     main()

@@ -111,7 +111,7 @@
               type="file" 
               id="file-input-files" 
               multiple 
-              accept=".epub,.fb2,.fbz,.pdf,.mobi,.azw3,.azw,.zip,.djvu,.djv,.txt" 
+              accept=".epub,.fb2,.fbz,.pdf,.djvu,.djv,.mobi,.azw3,.azw,.prc,.docx,.rtf,.odt,.txt,.cbz,.cbr,.cb7,.cbt,.zip,.rar,.7z,.m4b,.mp3,.m4a,.ogg,.opus,.flac,.wav,.aac" 
               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
               onclick="this.value=null"
               onchange="handleRawFilesList(this.files, 'files')"
@@ -120,8 +120,8 @@
               <div id="drop-zone-files-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-800 group-hover:bg-indigo-600/20 text-slate-400 group-hover:text-indigo-400 flex items-center justify-center transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
               </div>
-              <p id="drop-zone-files-title" class="text-sm font-semibold text-slate-200">Click to choose individual or multiple ebook files</p>
-              <p id="drop-zone-files-sub" class="text-xs text-slate-500 mt-1">Supports EPUB, FB2, FB2.ZIP, PDF, MOBI, AZW3, ZIP</p>
+              <p id="drop-zone-files-title" class="text-sm font-semibold text-slate-200">Click to choose eBooks, Manga/Comics, DjVu, Docs, or Audiobooks</p>
+              <p id="drop-zone-files-sub" class="text-xs text-slate-500 mt-1">Supports EPUB, FB2, PDF, DJVU, CBZ/CBR/CB7/CBT, DOCX/RTF/ODT/TXT, MOBI/AZW3/AZW/PRC, M4B/MP3/FLAC, ZIP/RAR/7Z</p>
             </div>
           </div>
         </div>
@@ -239,7 +239,12 @@
   let uploadCancelled = false;
 
   const SUPPORTED_EXTENSIONS = [
-    '.epub', '.fb2', '.fbz', '.pdf', '.mobi', '.azw3', '.azw', '.zip', '.djvu', '.djv', '.txt', '.cbr', '.cbz'
+    '.epub', '.fb2', '.fbz', '.pdf', '.djvu', '.djv',
+    '.mobi', '.azw3', '.azw', '.prc',
+    '.docx', '.rtf', '.odt', '.txt',
+    '.cbz', '.cbr', '.cb7', '.cbt',
+    '.zip', '.rar', '.7z',
+    '.m4b', '.mp3', '.m4a', '.ogg', '.opus', '.flac', '.wav', '.aac'
   ];
 
   function isEbookFile(filename) {

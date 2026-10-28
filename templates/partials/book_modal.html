@@ -125,11 +125,24 @@
         </div>
         {% endif %}
 
-        <!-- Primary Read Online Action if EPUB or PDF available -->
-        {% set ns = namespace(has_epub=false, has_pdf=false) %}
+        <!-- Primary Read Online / Listen Actions -->
+        {% set ns = namespace(has_epub=false, has_pdf=false, has_djvu=false, has_convertible=false, conv_fmt='', has_comic=false, comic_fmt='cbz', has_audio=false, audio_fmt='') %}
         {% for fmt in book.formats %}
           {% if fmt.format == 'EPUB' %}{% set ns.has_epub = true %}{% endif %}
           {% if fmt.format == 'PDF' %}{% set ns.has_pdf = true %}{% endif %}
+          {% if fmt.format in ('DJVU', 'DJV') %}{% set ns.has_djvu = true %}{% endif %}
+          {% if fmt.format in ('FB2', 'FBZ', 'DOCX', 'RTF', 'ODT', 'TXT', 'MOBI', 'AZW3', 'AZW', 'PRC') %}
+            {% set ns.has_convertible = true %}
+            {% set ns.conv_fmt = fmt.format %}
+          {% endif %}
+          {% if fmt.format in ('CBZ', 'CBR', 'CB7', 'CBT') %}
+            {% set ns.has_comic = true %}
+            {% if fmt.format == 'CBZ' or not ns.comic_fmt %}{% set ns.comic_fmt = fmt.format|lower %}{% endif %}
+          {% endif %}
+          {% if fmt.format in ('M4B', 'MP3', 'M4A', 'OGG', 'OPUS', 'FLAC', 'WAV', 'AAC') %}
+            {% set ns.has_audio = true %}
+            {% set ns.audio_fmt = fmt.format %}
+          {% endif %}
         {% endfor %}
 
         {% if ns.has_epub %}
@@ -141,15 +154,74 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
           {{ t('modal.read_online') }} (EPUB)
         </a>
-        {% elif ns.has_pdf %}
+        {% elif ns.has_comic %}
         <a 
-          href="/reader/{{ book.id }}?fmt=pdf" 
+          href="/reader/{{ book.id }}?fmt={{ ns.comic_fmt }}" 
+          target="_blank"
+          class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 via-orange-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 shadow-lg shadow-orange-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer mb-3"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          {{ t('modal.read_online') }} ({{ ns.comic_fmt|upper }})
+        </a>
+        {% elif ns.has_pdf or ns.has_djvu %}
+        <a 
+          href="/reader/{{ book.id }}?fmt={{ 'pdf' if ns.has_pdf else 'djvu' }}" 
           target="_blank"
           class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 shadow-lg shadow-rose-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer mb-3"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          {{ t('modal.read_online') }} (PDF)
+          {{ t('modal.read_online') }} ({{ 'PDF' if ns.has_pdf else 'DJVU → PDF' }})
         </a>
+        {% elif ns.has_convertible %}
+        <a 
+          href="/reader/{{ book.id }}" 
+          target="_blank"
+          class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer mb-3"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+          {{ t('modal.read_online') }} ({{ ns.conv_fmt }})
+        </a>
+        {% endif %}
+
+        {% if ns.has_audio %}
+        <div class="w-full bg-slate-900/90 border border-indigo-500/40 rounded-xl p-2.5 space-y-2 mb-3">
+          <div class="flex items-center justify-between text-[11px] font-semibold text-indigo-300">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+              Audiobook ({{ ns.audio_fmt }})
+            </span>
+            <select id="modal-audio-speed" onchange="const a=document.getElementById('modal-audio-el'); if(a) a.playbackRate=parseFloat(this.value);" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-200">
+              <option value="0.85">0.85x</option>
+              <option value="1" selected>1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2.0x</option>
+            </select>
+          </div>
+          <select id="modal-audio-tracks" onchange="const a=document.getElementById('modal-audio-el'); if(a){a.src=this.value; a.play();}" class="hidden w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-200"></select>
+          <audio id="modal-audio-el" controls preload="metadata" src="/api/books/{{ book.id }}/audiobook/track/0" class="w-full h-8"></audio>
+          <script>
+            (function(){
+              fetch('/api/books/{{ book.id }}/audiobook/manifest')
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                  if (!data || !data.tracks || data.tracks.length <= 1) return;
+                  const sel = document.getElementById('modal-audio-tracks');
+                  const aud = document.getElementById('modal-audio-el');
+                  if (!sel || !aud) return;
+                  sel.innerHTML = data.tracks.map(t => `<option value="${t.url}">Track ${t.index + 1}: ${t.name}</option>`).join('');
+                  sel.classList.remove('hidden');
+                  aud.onended = () => {
+                    if (sel.selectedIndex + 1 < sel.options.length) {
+                      sel.selectedIndex += 1;
+                      aud.src = sel.value;
+                      aud.play();
+                    }
+                  };
+                }).catch(() => {});
+            })();
+          </script>
+        </div>
         {% endif %}
 
         <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">{{ t('modal.download') }}</p>

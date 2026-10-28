@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# High-Speed Calibre Library & Storage Synchronization Scanner Runner
+# High-Speed Athenea Library & Storage Synchronization Scanner Runner
 set -e
 
 export PYTHONUNBUFFERED=1
-export PYTHONPATH="/opt/bookserver/api:${PYTHONPATH}"
-cd /opt/bookserver/api
+export PYTHONPATH="/opt/athenea:${PYTHONPATH}"
+cd /opt/athenea
 
-PYTHON_BIN="/opt/bookserver/api/venv/bin/python"
+PYTHON_BIN="/opt/athenea/venv/bin/python"
 if [ ! -x "$PYTHON_BIN" ]; then
     PYTHON_BIN="python3"
 fi
 
-exec "$PYTHON_BIN" -u -m app.cli.sync_library "$@"
+exec "$PYTHON_BIN" -u -m cli.sync_library "$@"

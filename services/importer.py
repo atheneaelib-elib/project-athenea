@@ -434,6 +434,244 @@ def parse_epub_metadata(epub_path: Path) -> dict:
     return meta
 
 
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
+AUDIO_EXTS = (".m4b", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".wav", ".aac")
+CONVERTIBLE_TO_EPUB_EXTS = ("docx", "rtf", "odt", "txt", "mobi", "azw3", "azw", "prc")
+
+
+def natural_sort_key(text_val: str):
+    """Sort strings containing numbers in natural human order (e.g. page_2.jpg before page_10.jpg)."""
+    return [int(tok) if tok.isdigit() else tok.lower() for tok in re.split(r'(\d+)', str(text_val or ""))]
+
+
+def extract_generic_archive(archive_path: Path, extract_dir: Path) -> bool:
+    """
+    Extract a ZIP, RAR, 7Z, CB7, CBT, or TAR archive into extract_dir using zipfile, 7z, bsdtar, unrar, or unar.
+    """
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    if zipfile.is_zipfile(archive_path):
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                zf.extractall(extract_dir)
+            return any(extract_dir.rglob("*"))
+        except Exception:
+            pass
+
+    for cmd_tpl in (
+        ["7z", "x", "-y", f"-o{extract_dir}", str(archive_path)],
+        ["bsdtar", "-xf", str(archive_path), "-C", str(extract_dir)],
+        ["unrar", "x", "-y", str(archive_path), f"{extract_dir}/"],
+        ["unar", "-f", "-o", str(extract_dir), str(archive_path)],
+    ):
+        if shutil.which(cmd_tpl[0]):
+            try:
+                res = subprocess.run(cmd_tpl, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False)
+                if res.returncode == 0 and any(extract_dir.rglob("*")):
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def list_cbz_images(zf: zipfile.ZipFile) -> list[str]:
+    """Return naturally sorted list of image entry names inside a CBZ/ZIP archive."""
+    pages = []
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        name = info.filename
+        if name.startswith("__MACOSX") or Path(name).name.startswith("."):
+            continue
+        if Path(name).suffix.lower() in IMAGE_EXTS:
+            pages.append(name)
+    pages.sort(key=natural_sort_key)
+    return pages
+
+
+def convert_cbr_to_cbz(cbr_path: Path, output_cbz_path: Path) -> bool:
+    """
+    Convert a CBR (RAR), CB7 (7z), or CBT (TAR) comic archive to a standard CBZ (ZIP archive).
+    Also handles cases where a .cbr/.cb7/.cbt file is already a ZIP archive.
+    """
+    if zipfile.is_zipfile(cbr_path):
+        shutil.copy2(cbr_path, output_cbz_path)
+        return True
+
+    extract_dir = Path(tempfile.mkdtemp(prefix="cbr_extract_"))
+    try:
+        if not extract_generic_archive(cbr_path, extract_dir):
+            return False
+
+        output_cbz_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(output_cbz_path, "w", compression=zipfile.ZIP_STORED) as zf:
+            for item in sorted(extract_dir.rglob("*"), key=lambda p: natural_sort_key(p.as_posix())):
+                if item.is_file() and not item.name.startswith("."):
+                    rel_arc = item.relative_to(extract_dir).as_posix()
+                    zf.write(item, arcname=rel_arc)
+        return output_cbz_path.is_file() and output_cbz_path.stat().st_size > 0
+    except Exception as e:
+        logger.warning(f"convert_cbr_to_cbz failed for {cbr_path.name}: {e}")
+        return False
+    finally:
+        shutil.rmtree(extract_dir, ignore_errors=True)
+
+
+def parse_cbz_metadata(cbz_path: Path) -> dict:
+    """
+    Parse metadata and front cover from a CBZ (or ZIP-based comic/manga) archive.
+    Reads ComicInfo.xml if present, parses volume/issue conventions from filename as fallback,
+    and extracts the front cover image bytes.
+    """
+    meta = {
+        "title": None,
+        "author": None,
+        "authors": [],
+        "tags": [],
+        "series": None,
+        "series_index": None,
+        "comments": None,
+        "publisher": None,
+        "pubdate": None,
+        "isbn": None,
+        "language": None,
+        "cover_bytes": None,
+        "is_manga": False,
+    }
+
+    try:
+        if not zipfile.is_zipfile(cbz_path):
+            return meta
+
+        with zipfile.ZipFile(cbz_path, "r") as zf:
+            namelist = zf.namelist()
+            image_pages = list_cbz_images(zf)
+
+            # Look for ComicInfo.xml
+            comic_info_name = next((n for n in namelist if Path(n).name.lower() == "comicinfo.xml"), None)
+            front_cover_index = 0
+
+            if comic_info_name:
+                try:
+                    raw_xml = zf.read(comic_info_name).decode("utf-8", errors="replace")
+                    clean_xml = re.sub(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)', '&amp;', raw_xml)
+                    root = ET.fromstring(clean_xml)
+
+                    year_val, month_val, day_val = None, None, None
+                    for elem in root:
+                        tag = elem.tag.split("}")[-1].lower()
+                        txt = (elem.text or "").strip()
+                        if not txt and tag != "pages":
+                            continue
+
+                        if tag == "title":
+                            meta["title"] = txt
+                        elif tag == "series":
+                            meta["series"] = txt
+                        elif tag in ("number", "volume") and meta["series_index"] is None:
+                            try:
+                                meta["series_index"] = float(re.sub(r'[^0-9.]', '', txt))
+                            except Exception:
+                                pass
+                        elif tag in ("writer", "penciller", "inker", "colorist", "coverartist"):
+                            for person in re.split(r'[,;/]', txt):
+                                p_clean = person.strip()
+                                if p_clean and p_clean not in meta["authors"]:
+                                    meta["authors"].append(p_clean)
+                        elif tag in ("publisher", "imprint") and not meta["publisher"]:
+                            meta["publisher"] = txt
+                        elif tag == "summary" and not meta["comments"]:
+                            meta["comments"] = txt
+                        elif tag in ("genre", "tags"):
+                            for g in re.split(r'[,;/]', txt):
+                                g_clean = g.strip()
+                                if g_clean and g_clean not in meta["tags"]:
+                                    meta["tags"].append(g_clean)
+                        elif tag == "languageiso" and not meta["language"]:
+                            meta["language"] = txt.lower()[:10]
+                        elif tag == "year":
+                            year_val = txt
+                        elif tag == "month":
+                            month_val = txt
+                        elif tag == "day":
+                            day_val = txt
+                        elif tag == "manga" and txt.lower().startswith("yes"):
+                            meta["is_manga"] = True
+                            if "Manga" not in meta["tags"]:
+                                meta["tags"].append("Manga")
+                        elif tag == "pages":
+                            for page_el in elem:
+                                if page_el.tag.split("}")[-1].lower() == "page":
+                                    p_type = page_el.attrib.get("Type", "").lower()
+                                    if "frontcover" in p_type:
+                                        try:
+                                            front_cover_index = int(page_el.attrib.get("Image", 0))
+                                        except Exception:
+                                            pass
+                                        break
+
+                    if year_val and re.match(r'^\d{4}$', year_val):
+                        m_num = int(month_val) if (month_val and month_val.isdigit() and 1 <= int(month_val) <= 12) else 1
+                        d_num = int(day_val) if (day_val and day_val.isdigit() and 1 <= int(day_val) <= 28) else 1
+                        meta["pubdate"] = f"{year_val}-{m_num:02d}-{d_num:02d}"
+                except Exception as xml_err:
+                    logger.warning(f"ComicInfo.xml parse warning in {cbz_path.name}: {xml_err}")
+
+            # Filename heuristics when ComicInfo.xml lacks series/volume/title
+            stem = re.sub(r'\[.*?\]|\(.*?\)', '', cbz_path.stem).strip(' _-')
+            if not stem:
+                stem = cbz_path.stem
+
+            if not meta["series"]:
+                m_vol = re.search(r'^(.*?)\s+(?:v(?:ol(?:ume)?)?\.?\s*|#|ch(?:apter)?\.?\s*|c)(\d+(?:\.\d+)?)', stem, re.IGNORECASE)
+                if m_vol:
+                    meta["series"] = m_vol.group(1).strip(' -_:')
+                    if meta["series_index"] is None:
+                        try:
+                            meta["series_index"] = float(m_vol.group(2))
+                        except Exception:
+                            pass
+
+            if not meta["title"]:
+                if meta["series"] and meta["series_index"] is not None:
+                    idx_fmt = int(meta["series_index"]) if meta["series_index"].is_integer() else meta["series_index"]
+                    meta["title"] = f"{meta['series']} #{idx_fmt:02d}" if isinstance(idx_fmt, int) else f"{meta['series']} #{idx_fmt}"
+                else:
+                    meta["title"] = stem
+
+            if not meta["pubdate"]:
+                m_yr = re.search(r'\((19\d\d|20\d\d)\)', cbz_path.stem)
+                if m_yr:
+                    meta["pubdate"] = f"{m_yr.group(1)}-01-01"
+
+            if not meta["tags"]:
+                meta["tags"].append("Manga" if meta["is_manga"] else "Comics & Manga")
+
+            if meta["authors"]:
+                meta["author"] = meta["authors"][0]
+
+            # Extract Front Cover Image
+            if image_pages:
+                chosen_idx = front_cover_index if 0 <= front_cover_index < len(image_pages) else 0
+                raw_cov = zf.read(image_pages[chosen_idx])
+                if raw_cov and len(raw_cov) > 100:
+                    try:
+                        from PIL import Image
+                        import io
+                        with Image.open(io.BytesIO(raw_cov)) as img:
+                            if img.mode != "RGB":
+                                img = img.convert("RGB")
+                            out_buf = io.BytesIO()
+                            img.save(out_buf, format="JPEG", quality=88)
+                            meta["cover_bytes"] = out_buf.getvalue()
+                    except Exception:
+                        meta["cover_bytes"] = raw_cov
+
+    except Exception as e:
+        logger.warning(f"CBZ parse exception for {cbz_path.name}: {e}")
+
+    return meta
+
+
 def native_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
     """
     Pure-Python converter from FB2 XML to standard EPUB 2/3.
@@ -827,14 +1065,336 @@ def convert_fb2_to_epub(fb2_path: Path, output_epub_path: Path, title: str | Non
     return native_fb2_to_epub(fb2_path, output_epub_path, title=title, author=author)
 
 
+def native_txt_to_epub(txt_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
+    """Pure-Python fallback converter from plain TXT to standard EPUB."""
+    try:
+        raw_bytes = txt_path.read_bytes()
+        text_content = None
+        for enc in ("utf-8", "utf-8-sig", "cp1251", "koi8-r", "latin-1"):
+            try:
+                text_content = raw_bytes.decode(enc)
+                break
+            except Exception:
+                continue
+        if not text_content:
+            text_content = raw_bytes.decode("utf-8", errors="replace")
+
+        book_title = title or txt_path.stem
+        book_author = author or "Unknown Author"
+        book_lang = "ru" if re.search(r'[а-яА-ЯёЁ]', text_content[:4000]) else "en"
+
+        paragraphs = [f"<p>{html.escape(line.strip())}</p>" for line in text_content.splitlines() if line.strip()]
+        if not paragraphs:
+            paragraphs = ["<p>(Empty Document)</p>"]
+
+        body_html = "\n  ".join(paragraphs)
+        xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{book_lang}">
+<head>
+  <title>{html.escape(book_title)}</title>
+  <style type="text/css">body {{ font-family: serif; margin: 5%; line-height: 1.5; }} p {{ text-indent: 1.5em; margin: 0 0 0.5em 0; }}</style>
+</head>
+<body>
+  <h2>{html.escape(book_title)}</h2>
+  {body_html}
+</body>
+</html>'''.encode("utf-8")
+
+        book_uuid = str(uuid.uuid4())
+        container_xml = b'''<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>'''
+        opf_content = f'''<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="BookID">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>{html.escape(book_title)}</dc:title>
+    <dc:creator opf:role="aut">{html.escape(book_author)}</dc:creator>
+    <dc:language>{book_lang}</dc:language>
+    <dc:identifier id="BookID" opf:scheme="UUID">{book_uuid}</dc:identifier>
+  </metadata>
+  <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="ch_0001" href="text/chapter_0001.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch_0001"/>
+  </spine>
+</package>'''.encode("utf-8")
+        ncx_content = f'''<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head><meta name="dtb:uid" content="{book_uuid}"/></head>
+  <docTitle><text>{html.escape(book_title)}</text></docTitle>
+  <navMap>
+    <navPoint id="nav_1" playOrder="1">
+      <navLabel><text>{html.escape(book_title)}</text></navLabel>
+      <content src="text/chapter_0001.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>'''.encode("utf-8")
+
+        output_epub_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(output_epub_path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", container_xml, compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr("OEBPS/text/chapter_0001.xhtml", xhtml, compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr("OEBPS/content.opf", opf_content, compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr("OEBPS/toc.ncx", ncx_content, compress_type=zipfile.ZIP_DEFLATED)
+        return output_epub_path.is_file() and output_epub_path.stat().st_size > 0
+    except Exception as e:
+        logger.warning(f"native_txt_to_epub failed for {txt_path.name}: {e}")
+        return False
+
+
+def convert_ebook_to_epub(src_path: Path, output_epub_path: Path, title: str | None = None, author: str | None = None) -> bool:
+    """Convert DOCX, RTF, ODT, TXT, MOBI, AZW3, AZW, PRC to standard EPUB via Calibre's ebook-convert."""
+    ext_lower = src_path.suffix.lower().lstrip(".")
+    if ext_lower in ("fb2", "fbz"):
+        return convert_fb2_to_epub(src_path, output_epub_path, title=title, author=author)
+
+    if shutil.which("ebook-convert"):
+        try:
+            env = {**os.environ, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}
+            cmd = ["ebook-convert", str(src_path), str(output_epub_path), "--preserve-cover-aspect-ratio"]
+            if title:
+                cmd.extend(["--title", title])
+            if author:
+                cmd.extend(["--authors", author])
+            byte_cmd = [a.encode("utf-8") if isinstance(a, str) else bytes(a) for a in cmd]
+            subprocess.run(byte_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False, env=env)
+            if output_epub_path.is_file() and output_epub_path.stat().st_size > 0:
+                return True
+        except Exception as e:
+            logger.warning(f"ebook-convert failed for {src_path.name}: {e}")
+
+    if ext_lower == "txt":
+        return native_txt_to_epub(src_path, output_epub_path, title=title, author=author)
+    return False
+
+
+def parse_djvu_metadata(djvu_path: Path) -> dict:
+    """Extract metadata and page-1 cover image from a DjVu file using djvulibre-bin (djvused & ddjvu)."""
+    meta = {
+        "title": None,
+        "author": None,
+        "authors": [],
+        "tags": ["DjVu"],
+        "series": None,
+        "series_index": None,
+        "comments": None,
+        "publisher": None,
+        "pubdate": None,
+        "isbn": None,
+        "language": None,
+        "cover_bytes": None,
+    }
+    if shutil.which("djvused"):
+        try:
+            res = subprocess.run(
+                ["djvused", "-e", "print-meta", str(djvu_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", timeout=30, check=False
+            )
+            for line in res.stdout.splitlines():
+                m = re.match(r'^\s*([a-zA-Z0-9_-]+)\s+"(.*)"\s*$', line.strip())
+                if not m:
+                    continue
+                k, v = m.group(1).lower(), m.group(2).strip()
+                if not v:
+                    continue
+                if k == "title" and not meta["title"]:
+                    meta["title"] = v
+                elif k in ("author", "creator") and not meta["authors"]:
+                    meta["authors"] = [a.strip() for a in re.split(r'[,;]', v) if a.strip()]
+                    if meta["authors"]:
+                        meta["author"] = meta["authors"][0]
+                elif k == "publisher" and not meta["publisher"]:
+                    meta["publisher"] = v
+                elif k in ("year", "date") and not meta["pubdate"]:
+                    meta["pubdate"] = v
+                elif k in ("subject", "keywords"):
+                    for t in re.split(r'[,;]', v):
+                        if t.strip() and t.strip() not in meta["tags"]:
+                            meta["tags"].append(t.strip())
+        except Exception as e:
+            logger.warning(f"djvused metadata error for {djvu_path.name}: {e}")
+
+    if shutil.which("ddjvu"):
+        tmp_ppm = Path(tempfile.gettempdir()) / f"djvu_cov_{uuid.uuid4().hex}.ppm"
+        try:
+            subprocess.run(
+                ["ddjvu", "-format=ppm", "-page=1", "-size=800x1200", str(djvu_path), str(tmp_ppm)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45, check=False
+            )
+            if tmp_ppm.is_file() and tmp_ppm.stat().st_size > 100:
+                from PIL import Image
+                import io
+                with Image.open(tmp_ppm) as img:
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG", quality=88)
+                    meta["cover_bytes"] = buf.getvalue()
+        except Exception as e:
+            logger.warning(f"ddjvu cover extraction error for {djvu_path.name}: {e}")
+        finally:
+            if tmp_ppm.is_file():
+                try:
+                    tmp_ppm.unlink()
+                except OSError:
+                    pass
+    return meta
+
+
+def convert_djvu_to_pdf(djvu_path: Path, output_pdf_path: Path) -> bool:
+    """Convert a DjVu document to PDF using ddjvu so it can be read in the browser's PDF reader."""
+    if shutil.which("ddjvu"):
+        try:
+            output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(
+                ["ddjvu", "-format=pdf", "-quality=85", str(djvu_path), str(output_pdf_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240, check=False
+            )
+            if output_pdf_path.is_file() and output_pdf_path.stat().st_size > 100:
+                return True
+        except Exception as e:
+            logger.warning(f"ddjvu PDF conversion failed for {djvu_path.name}: {e}")
+    return False
+
+
+def parse_docx_odt_metadata(doc_path: Path, ext: str) -> dict:
+    """Parse Dublin Core metadata and embedded images directly from DOCX or ODT ZIP containers."""
+    meta = {
+        "title": None,
+        "author": None,
+        "authors": [],
+        "tags": [],
+        "series": None,
+        "series_index": None,
+        "comments": None,
+        "publisher": None,
+        "pubdate": None,
+        "isbn": None,
+        "language": None,
+        "cover_bytes": None,
+    }
+    try:
+        if not zipfile.is_zipfile(doc_path):
+            return meta
+        with zipfile.ZipFile(doc_path, "r") as zf:
+            namelist = zf.namelist()
+            xml_target = "docProps/core.xml" if ext == "docx" else "meta.xml"
+            if xml_target in namelist:
+                root = ET.fromstring(zf.read(xml_target))
+                for elem in root.iter():
+                    tag = elem.tag.split("}")[-1].lower()
+                    txt = (elem.text or "").strip()
+                    if not txt:
+                        continue
+                    if tag == "title" and not meta["title"]:
+                        meta["title"] = txt
+                    elif tag in ("creator", "initial-creator") and txt not in meta["authors"]:
+                        meta["authors"].append(txt)
+                    elif tag in ("description", "comments") and not meta["comments"]:
+                        meta["comments"] = txt
+                    elif tag in ("subject", "keyword", "keywords"):
+                        for k in re.split(r'[,;]', txt):
+                            if k.strip() and k.strip() not in meta["tags"]:
+                                meta["tags"].append(k.strip())
+                    elif tag == "language" and not meta["language"]:
+                        meta["language"] = txt.lower()[:10]
+                    elif tag in ("created", "date", "creation-date") and not meta["pubdate"]:
+                        meta["pubdate"] = txt
+            if meta["authors"]:
+                meta["author"] = meta["authors"][0]
+
+            # Check for embedded cover or first media image
+            img_candidates = [n for n in namelist if Path(n).suffix.lower() in IMAGE_EXTS]
+            if img_candidates:
+                img_candidates.sort(key=natural_sort_key)
+                raw_img = zf.read(img_candidates[0])
+                if raw_img and len(raw_img) > 500:
+                    meta["cover_bytes"] = raw_img
+    except Exception as e:
+        logger.warning(f"DOCX/ODT metadata parse warning for {doc_path.name}: {e}")
+    return meta
+
+
+def parse_audio_metadata(audio_path: Path) -> dict:
+    """Extract ID3 / MP4 / Vorbis tags and embedded cover art from an audiobook file using ffprobe & ffmpeg."""
+    import json
+    meta = {
+        "title": None,
+        "author": None,
+        "authors": [],
+        "tags": ["Audiobook"],
+        "series": None,
+        "series_index": None,
+        "comments": None,
+        "publisher": None,
+        "pubdate": None,
+        "isbn": None,
+        "language": None,
+        "cover_bytes": None,
+    }
+    if shutil.which("ffprobe"):
+        try:
+            proc = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(audio_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", timeout=30, check=False
+            )
+            data = json.loads(proc.stdout or "{}")
+            tags = {k.lower(): str(v).strip() for k, v in (data.get("format", {}).get("tags") or {}).items() if v}
+
+            meta["title"] = tags.get("album") or tags.get("title")
+            artist = tags.get("album_artist") or tags.get("artist") or tags.get("author") or tags.get("composer")
+            if artist:
+                meta["authors"] = [a.strip() for a in re.split(r'[,;/]', artist) if a.strip()]
+                if meta["authors"]:
+                    meta["author"] = meta["authors"][0]
+            meta["comments"] = tags.get("description") or tags.get("comment") or tags.get("synopsis")
+            meta["publisher"] = tags.get("publisher") or tags.get("label")
+            meta["pubdate"] = tags.get("date") or tags.get("year") or tags.get("creation_time")
+            genre = tags.get("genre")
+            if genre:
+                for g in re.split(r'[,;/]', genre):
+                    if g.strip() and g.strip() not in meta["tags"]:
+                        meta["tags"].append(g.strip())
+        except Exception as e:
+            logger.warning(f"ffprobe parse warning for {audio_path.name}: {e}")
+
+    if shutil.which("ffmpeg"):
+        tmp_cov = Path(tempfile.gettempdir()) / f"aud_cov_{uuid.uuid4().hex}.jpg"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(audio_path), "-an", "-vcodec", "mjpeg", "-frames:v", "1", str(tmp_cov)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False
+            )
+            if tmp_cov.is_file() and tmp_cov.stat().st_size > 100:
+                meta["cover_bytes"] = tmp_cov.read_bytes()
+        except Exception:
+            pass
+        finally:
+            if tmp_cov.is_file():
+                try:
+                    tmp_cov.unlink()
+                except OSError:
+                    pass
+    return meta
+
+
 def ensure_book_epub_format(db: Session, book_id: int) -> bool:
-    """If a book only has FB2/FBZ format, convert it to EPUB and register it in the data table."""
+    """If a book only has FB2/FBZ/DOCX/RTF/ODT/TXT/MOBI/AZW3/AZW/PRC format, convert it to EPUB and register it."""
     try:
         formats = db.execute(text("SELECT format, name FROM data WHERE book_id = :bid"), {"bid": book_id}).fetchall()
         fmt_names = {r.format.upper(): r.name for r in formats}
         if "EPUB" in fmt_names:
             return True
-        if "FB2" not in fmt_names and "FBZ" not in fmt_names:
+
+        convertible_upper = {"FB2", "FBZ", "DOCX", "RTF", "ODT", "TXT", "MOBI", "AZW3", "AZW", "PRC"}
+        if not (set(fmt_names.keys()) & convertible_upper):
             return False
 
         book_row = db.execute(text("SELECT title, path FROM books WHERE id = :bid"), {"bid": book_id}).fetchone()
@@ -845,15 +1405,17 @@ def ensure_book_epub_format(db: Session, book_id: int) -> bool:
         if not book_dir.is_dir():
             return False
 
-        fb2_file = None
+        src_file = None
+        src_fmt = None
         for f in book_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in ('.fb2', '.fbz'):
-                fb2_file = f
+            if f.is_file() and f.suffix.lower().lstrip(".") in {x.lower() for x in convertible_upper}:
+                src_file = f
+                src_fmt = f.suffix.upper().lstrip(".")
                 break
-        if not fb2_file:
+        if not src_file:
             return False
 
-        base_name = fmt_names.get("FB2") or fmt_names.get("FBZ") or fb2_file.stem
+        base_name = fmt_names.get(src_fmt) or src_file.stem
         target_epub = book_dir / f"{base_name}.epub"
 
         author_row = db.execute(text("""
@@ -863,7 +1425,7 @@ def ensure_book_epub_format(db: Session, book_id: int) -> bool:
         """), {"bid": book_id}).fetchone()
         author_name = author_row.name if author_row else "Unknown Author"
 
-        if convert_fb2_to_epub(fb2_file, target_epub, title=book_row.title, author=author_name):
+        if convert_ebook_to_epub(src_file, target_epub, title=book_row.title, author=author_name):
             sz = target_epub.stat().st_size
             db.execute(text("DELETE FROM data WHERE book_id = :bid AND UPPER(format) = 'EPUB'"), {"bid": book_id})
             db.execute(text("""
@@ -875,6 +1437,50 @@ def ensure_book_epub_format(db: Session, book_id: int) -> bool:
     except Exception as e:
         db.rollback()
         logger.warning(f"Failed to auto-convert book {book_id} to EPUB: {e}")
+    return False
+
+
+def ensure_book_pdf_format(db: Session, book_id: int) -> bool:
+    """If a book has DJVU/DJV format but no PDF, convert it to PDF via ddjvu and register it."""
+    try:
+        formats = db.execute(text("SELECT format, name FROM data WHERE book_id = :bid"), {"bid": book_id}).fetchall()
+        fmt_names = {r.format.upper(): r.name for r in formats}
+        if "PDF" in fmt_names:
+            return True
+        if "DJVU" not in fmt_names and "DJV" not in fmt_names:
+            return False
+
+        book_row = db.execute(text("SELECT title, path FROM books WHERE id = :bid"), {"bid": book_id}).fetchone()
+        if not book_row or not book_row.path:
+            return False
+
+        book_dir = Path(settings.LIBRARY_ROOT) / book_row.path
+        if not book_dir.is_dir():
+            return False
+
+        djvu_file = None
+        for f in book_dir.iterdir():
+            if f.is_file() and f.suffix.lower() in (".djvu", ".djv"):
+                djvu_file = f
+                break
+        if not djvu_file:
+            return False
+
+        base_name = fmt_names.get("DJVU") or fmt_names.get("DJV") or djvu_file.stem
+        target_pdf = book_dir / f"{base_name}.pdf"
+
+        if convert_djvu_to_pdf(djvu_file, target_pdf):
+            sz = target_pdf.stat().st_size
+            db.execute(text("DELETE FROM data WHERE book_id = :bid AND UPPER(format) = 'PDF'"), {"bid": book_id})
+            db.execute(text("""
+                INSERT INTO data (book_id, format, uncompressed_size, name)
+                VALUES (:bid, 'PDF', :sz, :name)
+            """), {"bid": book_id, "sz": sz, "name": base_name})
+            db.commit()
+            return True
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Failed to auto-convert DjVu book {book_id} to PDF: {e}")
     return False
 
 
@@ -896,12 +1502,20 @@ def convert_all_fb2_books(db: Session):
 
 
 def get_book_metadata(file_path: Path, ext: str) -> dict:
-    """Get metadata by combining direct XML parsing with ebook-meta fallback."""
+    """Get metadata by combining direct XML/archive parsing with ebook-meta fallback."""
     meta = {}
     if ext in ("fb2", "fbz"):
         meta = parse_fb2_metadata(file_path)
     elif ext == "epub":
         meta = parse_epub_metadata(file_path)
+    elif ext in ("cbz", "cbr", "cb7", "cbt"):
+        meta = parse_cbz_metadata(file_path)
+    elif ext in ("djvu", "djv"):
+        meta = parse_djvu_metadata(file_path)
+    elif ext in ("docx", "odt"):
+        meta = parse_docx_odt_metadata(file_path, ext)
+    elif f".{ext}" in AUDIO_EXTS:
+        meta = parse_audio_metadata(file_path)
 
     if (not meta.get("title") or not meta.get("author")) and shutil.which("ebook-meta"):
         try:
@@ -1047,58 +1661,106 @@ def find_duplicate_book(db: Session, title: str, author: str, isbn: str | None =
     return None
 
 
+SUPPORTED_IMPORT_EXTS = {
+    ".epub", ".fb2", ".fbz", ".pdf", ".djvu", ".djv",
+    ".mobi", ".azw3", ".azw", ".prc",
+    ".docx", ".rtf", ".odt", ".txt",
+    ".cbz", ".cbr", ".cb7", ".cbt",
+    ".zip", ".rar", ".7z",
+    ".m4b", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".wav", ".aac",
+}
+
+
 def import_book_file(db: Session, file_path: Path, original_filename: str | None = None) -> dict:
     """
-    Complete ingestion workflow for an individual book file:
-    1. Parse metadata (FB2, EPUB, PDF, MOBI, etc.)
-    2. Convert FB2 / FB2.ZIP to EPUB
-    3. Copy book & cover to standard Calibre directory layout
-    4. Insert and link all database records
+    Complete ingestion workflow for an individual book, comic/manga, or audiobook file/archive:
+    1. Unpack compressed containers (.zip, .fbz, .rar, .7z, .cbr, .cb7, .cbt) if needed
+    2. Parse metadata & cover (FB2, EPUB, CBZ, DJVU, DOCX, ODT, Audio ID3/MP4, Calibre ebook-meta)
+    3. Auto-convert FB2/DOCX/RTF/ODT/TXT/MOBI/AZW3/AZW/PRC -> EPUB and DJVU -> PDF
+    4. Copy files & cover to standard Calibre directory layout and link database records
     """
     ensure_sequences(db)
     orig_name = original_filename or file_path.name
     ext = file_path.suffix.lower().lstrip(".")
+    if ext == "djv":
+        ext = "djvu"
 
     work_dir = Path(tempfile.mkdtemp(prefix="book_import_"))
     try:
         epub_converted_path = None
+        pdf_converted_path = None
         converted_from_fb2 = False
+        extracted_audio_tracks: list[Path] = []
+        archive_cover_bytes: bytes | None = None
 
         actual_file_to_process = file_path
         effective_ext = ext
 
-        if ext in ("zip", "fbz"):
-            try:
-                with zipfile.ZipFile(file_path, "r") as zf:
-                    namelist = zf.namelist()
-                    valid_names = [n for n in namelist if not n.startswith("__MACOSX") and not Path(n).name.startswith(".")]
-                    epub_names = [n for n in valid_names if n.lower().endswith(".epub")]
-                    fb2_names = [n for n in valid_names if n.lower().endswith(".fb2")]
-                    pdf_names = [n for n in valid_names if n.lower().endswith(".pdf")]
-                    mobi_names = [n for n in valid_names if n.lower().endswith((".mobi", ".azw3"))]
+        if ext in ("cbr", "cb7", "cbt"):
+            converted_cbz = work_dir / f"{file_path.stem}.cbz"
+            if convert_cbr_to_cbz(file_path, converted_cbz):
+                actual_file_to_process = converted_cbz
+                effective_ext = "cbz"
 
-                    if epub_names:
-                        extracted = zf.extract(epub_names[0], path=work_dir)
-                        actual_file_to_process = Path(extracted)
-                        effective_ext = "epub"
-                    elif fb2_names:
-                        extracted = zf.extract(fb2_names[0], path=work_dir)
-                        actual_file_to_process = Path(extracted)
-                        effective_ext = "fb2"
-                    elif pdf_names:
-                        extracted = zf.extract(pdf_names[0], path=work_dir)
-                        actual_file_to_process = Path(extracted)
-                        effective_ext = "pdf"
-                    elif mobi_names:
-                        extracted = zf.extract(mobi_names[0], path=work_dir)
-                        actual_file_to_process = Path(extracted)
-                        effective_ext = Path(mobi_names[0]).suffix.lower().lstrip(".")
-                    elif "mimetype" in namelist or any(n.endswith(".opf") for n in namelist):
-                        # The zip file itself is an EPUB archive
-                        effective_ext = "epub"
-                        actual_file_to_process = file_path
-            except Exception:
-                pass
+        elif ext in ("zip", "fbz", "rar", "7z"):
+            is_epub_zip = False
+            is_cbz_zip = False
+            if ext in ("zip", "fbz") and zipfile.is_zipfile(file_path):
+                try:
+                    with zipfile.ZipFile(file_path, "r") as zf:
+                        namelist = zf.namelist()
+                        if "mimetype" in namelist or any(n.lower().endswith(".opf") for n in namelist):
+                            is_epub_zip = True
+                except Exception:
+                    pass
+
+            if is_epub_zip:
+                effective_ext = "epub"
+                actual_file_to_process = file_path
+            else:
+                unpack_dir = work_dir / "unpacked"
+                if extract_generic_archive(file_path, unpack_dir):
+                    all_files = sorted(
+                        [
+                            p for p in unpack_dir.rglob("*")
+                            if p.is_file() and not p.name.startswith(".") and "__MACOSX" not in p.parts
+                        ],
+                        key=lambda p: natural_sort_key(p.as_posix())
+                    )
+                    ebook_priority = (".epub", ".fb2", ".pdf", ".djvu", ".djv", ".mobi", ".azw3", ".azw", ".prc", ".docx", ".rtf", ".odt", ".txt")
+                    found_ebook = None
+                    for p_ext in ebook_priority:
+                        matches = [p for p in all_files if p.suffix.lower() == p_ext]
+                        if matches:
+                            found_ebook = matches[0]
+                            break
+
+                    audio_matches = [p for p in all_files if p.suffix.lower() in AUDIO_EXTS]
+                    image_matches = [p for p in all_files if p.suffix.lower() in IMAGE_EXTS]
+
+                    if found_ebook:
+                        actual_file_to_process = found_ebook
+                        effective_ext = found_ebook.suffix.lower().lstrip(".")
+                        if effective_ext == "djv":
+                            effective_ext = "djvu"
+                    elif audio_matches:
+                        extracted_audio_tracks = audio_matches
+                        actual_file_to_process = audio_matches[0]
+                        effective_ext = audio_matches[0].suffix.lower().lstrip(".")
+                        if image_matches:
+                            try:
+                                archive_cover_bytes = image_matches[0].read_bytes()
+                            except Exception:
+                                pass
+                    elif image_matches:
+                        if ext == "zip" and zipfile.is_zipfile(file_path):
+                            actual_file_to_process = file_path
+                            effective_ext = "cbz"
+                        else:
+                            converted_cbz = work_dir / f"{file_path.stem}.cbz"
+                            if convert_cbr_to_cbz(file_path, converted_cbz):
+                                actual_file_to_process = converted_cbz
+                                effective_ext = "cbz"
 
         if effective_ext in ("fb2", "fbz"):
             actual_fb2 = actual_file_to_process
@@ -1117,8 +1779,45 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
                         meta["cover_bytes"] = epub_meta["cover_bytes"]
             except Exception as ce:
                 logger.warning(f"Error during FB2 to EPUB conversion for {orig_name}: {ce}")
+        elif effective_ext in CONVERTIBLE_TO_EPUB_EXTS:
+            meta = get_book_metadata(actual_file_to_process, effective_ext)
+            title_hint = meta.get("title") or Path(orig_name).stem
+            author_hint = meta.get("author") or "Unknown Author"
+            target_epub = work_dir / f"{actual_file_to_process.stem}.epub"
+            try:
+                if convert_ebook_to_epub(actual_file_to_process, target_epub, title=title_hint, author=author_hint):
+                    epub_converted_path = target_epub
+                    epub_meta = parse_epub_metadata(target_epub)
+                    if epub_meta.get("cover_bytes") and not meta.get("cover_bytes"):
+                        meta["cover_bytes"] = epub_meta["cover_bytes"]
+            except Exception as ce:
+                logger.warning(f"Error during {effective_ext.upper()} to EPUB conversion for {orig_name}: {ce}")
+        elif effective_ext == "djvu":
+            meta = get_book_metadata(actual_file_to_process, "djvu")
+            target_pdf = work_dir / f"{actual_file_to_process.stem}.pdf"
+            try:
+                if convert_djvu_to_pdf(actual_file_to_process, target_pdf):
+                    pdf_converted_path = target_pdf
+            except Exception as de:
+                logger.warning(f"Error during DjVu to PDF conversion for {orig_name}: {de}")
         else:
             meta = get_book_metadata(actual_file_to_process, effective_ext)
+            if archive_cover_bytes and not meta.get("cover_bytes"):
+                meta["cover_bytes"] = archive_cover_bytes
+
+        # If packed multi-track audiobook had generic track title ("Track 01"), prefer archive stem
+        if len(extracted_audio_tracks) > 1 and ext in ("zip", "rar", "7z"):
+            raw_t = (meta.get("title") or "").strip()
+            if not raw_t or re.match(r'^(track|chapter|part|глава|часть|\d+)\b', raw_t, re.IGNORECASE):
+                stem_clean = Path(orig_name).stem
+                if " - " in stem_clean:
+                    p_auth, p_tit = stem_clean.split(" - ", 1)
+                    if not meta.get("author") or meta.get("author") == "Unknown Author":
+                        meta["author"] = p_auth.strip()
+                        meta["authors"] = [meta["author"]]
+                    meta["title"] = p_tit.strip()
+                else:
+                    meta["title"] = stem_clean
 
         raw_title = (meta.get("title") or "").strip()
         if not raw_title or not re.search(r'[\w\u0400-\u04FF]', raw_title):
@@ -1150,9 +1849,8 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
             rel_path = existing_book["path"]
             dest_dir = Path(settings.LIBRARY_ROOT) / rel_path
             dest_dir.mkdir(parents=True, exist_ok=True)
-            # Clean older ebook files with outdated names in this directory
             for old_file in dest_dir.iterdir():
-                if old_file.is_file() and old_file.suffix.lower() in ('.epub', '.fb2', '.fbz', '.zip', '.mobi', '.pdf'):
+                if old_file.is_file() and old_file.suffix.lower() in SUPPORTED_IMPORT_EXTS:
                     try:
                         old_file.unlink()
                     except OSError:
@@ -1169,7 +1867,7 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
         base_file_name = sanitize_filename(f"{title} - {primary_author}", max_len=96) or f"book_{book_id}"
         formats_imported = []
 
-        # Copy converted or extracted ebook format files into book directory
+        # Copy converted or extracted format files into book directory
         if epub_converted_path and epub_converted_path.is_file():
             epub_dest = dest_dir / f"{base_file_name}.epub"
             shutil.copy2(epub_converted_path, epub_dest)
@@ -1178,13 +1876,29 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
                 "size": epub_dest.stat().st_size,
                 "name": base_file_name
             })
-            # Also preserve the original FB2 format file in the directory
-            fb2_dest = dest_dir / f"{base_file_name}.fb2"
-            if actual_file_to_process.resolve() != fb2_dest.resolve():
-                shutil.copy2(actual_file_to_process, fb2_dest)
+            orig_fmt_ext = "fb2" if effective_ext in ("fb2", "fbz") else effective_ext
+            orig_dest = dest_dir / f"{base_file_name}.{orig_fmt_ext}"
+            if actual_file_to_process.resolve() != orig_dest.resolve():
+                shutil.copy2(actual_file_to_process, orig_dest)
             formats_imported.append({
-                "format": "FB2",
-                "size": fb2_dest.stat().st_size,
+                "format": orig_fmt_ext.upper(),
+                "size": orig_dest.stat().st_size,
+                "name": base_file_name
+            })
+        elif pdf_converted_path and pdf_converted_path.is_file():
+            pdf_dest = dest_dir / f"{base_file_name}.pdf"
+            shutil.copy2(pdf_converted_path, pdf_dest)
+            formats_imported.append({
+                "format": "PDF",
+                "size": pdf_dest.stat().st_size,
+                "name": base_file_name
+            })
+            djvu_dest = dest_dir / f"{base_file_name}.djvu"
+            if actual_file_to_process.resolve() != djvu_dest.resolve():
+                shutil.copy2(actual_file_to_process, djvu_dest)
+            formats_imported.append({
+                "format": "DJVU",
+                "size": djvu_dest.stat().st_size,
                 "name": base_file_name
             })
         elif effective_ext in ("fb2", "fbz"):
@@ -1196,7 +1910,28 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
                 "size": fb2_dest.stat().st_size,
                 "name": base_file_name
             })
-        elif effective_ext in ("epub", "pdf", "mobi", "azw3"):
+        elif f".{effective_ext}" in AUDIO_EXTS:
+            dest_file = dest_dir / f"{base_file_name}.{effective_ext}"
+            if actual_file_to_process.resolve() != dest_file.resolve():
+                shutil.copy2(actual_file_to_process, dest_file)
+            total_audio_size = dest_file.stat().st_size
+            if len(extracted_audio_tracks) > 1:
+                tracks_dir = dest_dir / "audiobook_tracks"
+                if tracks_dir.exists():
+                    shutil.rmtree(tracks_dir, ignore_errors=True)
+                tracks_dir.mkdir(parents=True, exist_ok=True)
+                total_audio_size = 0
+                for idx, trk in enumerate(extracted_audio_tracks, 1):
+                    safe_trk = sanitize_filename(trk.stem, max_len=64) or f"track_{idx:03d}"
+                    t_dest = tracks_dir / f"{idx:03d}_{safe_trk}{trk.suffix.lower()}"
+                    shutil.copy2(trk, t_dest)
+                    total_audio_size += t_dest.stat().st_size
+            formats_imported.append({
+                "format": effective_ext.upper(),
+                "size": total_audio_size,
+                "name": base_file_name
+            })
+        elif effective_ext in ("epub", "pdf", "djvu", "mobi", "azw3", "azw", "prc", "docx", "rtf", "odt", "txt", "cbz", "cbr", "cb7", "cbt"):
             dest_file = dest_dir / f"{base_file_name}.{effective_ext}"
             if actual_file_to_process.resolve() != dest_file.resolve():
                 shutil.copy2(actual_file_to_process, dest_file)
@@ -1205,7 +1940,7 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
                 "size": dest_file.stat().st_size,
                 "name": base_file_name
             })
-        elif ext not in ("fb2", "fbz", "fb2.zip", "zip"):
+        elif ext not in ("fb2", "fbz", "fb2.zip", "zip", "rar", "7z"):
             orig_dest_file = dest_dir / f"{base_file_name}.{ext}"
             if file_path.resolve() != orig_dest_file.resolve():
                 shutil.copy2(file_path, orig_dest_file)
@@ -1455,16 +2190,17 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
 
 
 def scan_and_import_directory(db: Session, dir_path: Path) -> dict:
-    """Recursively scan a directory on the server and import all discovered ebook files."""
-    SUPPORTED_EXTS = {".epub", ".fb2", ".fbz", ".pdf", ".mobi", ".azw3", ".zip"}
+    """Recursively scan a directory on the server and import all discovered ebook, comic, and audiobook files."""
     results = {"imported": [], "failed": []}
     if not dir_path.is_dir():
         return {"error": f"Directory not found: {dir_path}"}
 
     for file_path in dir_path.rglob("*"):
         if file_path.is_file():
+            if "audiobook_tracks" in file_path.parts or file_path.name.startswith("."):
+                continue
             ext = file_path.suffix.lower()
-            if ext in SUPPORTED_EXTS or file_path.name.lower().endswith(".fb2.zip"):
+            if ext in SUPPORTED_IMPORT_EXTS or file_path.name.lower().endswith(".fb2.zip"):
                 try:
                     res = import_book_file(db, file_path, file_path.name)
                     results["imported"].append(res)

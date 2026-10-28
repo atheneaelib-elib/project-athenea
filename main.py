@@ -317,11 +317,27 @@ MIME_TYPES = {
     "pdf": "application/pdf",
     "mobi": "application/x-mobipocket-ebook",
     "azw3": "application/vnd.amazon.ebook",
+    "azw": "application/vnd.amazon.ebook",
+    "prc": "application/x-mobipocket-ebook",
     "fb2": "application/x-fictionbook+xml",
     "txt": "text/plain",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "rtf": "application/rtf",
+    "odt": "application/vnd.oasis.opendocument.text",
     "djvu": "image/vnd.djvu",
+    "djv": "image/vnd.djvu",
     "cbz": "application/vnd.comicbook+zip",
     "cbr": "application/vnd.comicbook-rar",
+    "cb7": "application/x-cb7",
+    "cbt": "application/x-cbt",
+    "m4b": "audio/mp4",
+    "m4a": "audio/mp4",
+    "mp3": "audio/mpeg",
+    "ogg": "audio/ogg",
+    "opus": "audio/opus",
+    "flac": "audio/flac",
+    "wav": "audio/wav",
+    "aac": "audio/aac",
 }
 
 
@@ -1465,7 +1481,7 @@ async def process_book_upload(
             for upload in all_uploads:
                 orig_filename = Path(upload.filename).name
                 ext = Path(orig_filename).suffix.lower()
-                if ext not in (".epub", ".fb2", ".fbz", ".pdf", ".mobi", ".azw3", ".zip") and not orig_filename.lower().endswith(".fb2.zip"):
+                if ext not in importer_service.SUPPORTED_IMPORT_EXTS and not orig_filename.lower().endswith(".fb2.zip"):
                     continue
 
                 tmp_file = temp_dir / orig_filename
@@ -1563,7 +1579,7 @@ async def api_upload_books(
             for upload in all_uploads:
                 orig_filename = Path(upload.filename).name
                 ext = Path(orig_filename).suffix.lower()
-                if ext not in (".epub", ".fb2", ".fbz", ".pdf", ".mobi", ".azw3", ".zip") and not orig_filename.lower().endswith(".fb2.zip"):
+                if ext not in importer_service.SUPPORTED_IMPORT_EXTS and not orig_filename.lower().endswith(".fb2.zip"):
                     continue
                 tmp_file = temp_dir / orig_filename
                 with open(tmp_file, "wb") as out_f:
@@ -1624,10 +1640,17 @@ def reader_page(
         chosen_fmt = fmt.lower()
     elif "epub" in available_fmts:
         chosen_fmt = "epub"
+    elif any(c in available_fmts for c in ("cbz", "cbr", "cb7", "cbt")):
+        chosen_fmt = next(c for c in ("cbz", "cbr", "cb7", "cbt") if c in available_fmts)
     elif "pdf" in available_fmts:
         chosen_fmt = "pdf"
-    elif "fb2" in available_fmts or "fbz" in available_fmts:
-        # Auto-convert FB2 to EPUB on the fly for in-browser reading
+    elif any(d in available_fmts for d in ("djvu", "djv")):
+        if importer_service.ensure_book_pdf_format(db, book_id):
+            chosen_fmt = "pdf"
+            book = book_service.get_book_details(db, book_id)
+        else:
+            chosen_fmt = available_fmts[0] if available_fmts else None
+    elif any(c in available_fmts for c in ("fb2", "fbz", "docx", "rtf", "odt", "txt", "mobi", "azw3", "azw", "prc")):
         if importer_service.ensure_book_epub_format(db, book_id):
             chosen_fmt = "epub"
             book = book_service.get_book_details(db, book_id)
@@ -1636,7 +1659,25 @@ def reader_page(
     elif available_fmts:
         chosen_fmt = available_fmts[0]
 
+    # If user explicitly clicked ?fmt=djvu, auto-convert to PDF for web viewing
+    if chosen_fmt in ("djvu", "djv"):
+        if importer_service.ensure_book_pdf_format(db, book_id):
+            chosen_fmt = "pdf"
+            book = book_service.get_book_details(db, book_id)
+
     raw_url = f"/raw/{book_id}/book.{chosen_fmt}" if chosen_fmt else None
+
+    if chosen_fmt in ("cbz", "cbr", "cb7", "cbt"):
+        return templates.TemplateResponse(
+            request=request,
+            name="comic_reader.html",
+            context={
+                "book": book,
+                "fmt": chosen_fmt,
+                "raw_url": raw_url,
+                "current_user": current_user,
+            }
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -1647,6 +1688,209 @@ def reader_page(
             "raw_url": raw_url,
             "current_user": current_user,
         }
+    )
+
+
+def _resolve_cbz_archive_path(db: Session, book_id: int) -> Path:
+    """Locate the CBZ (or CBR/CB7/CBT converted to CBZ) archive on disk for a book."""
+    rows = db.execute(
+        text("""
+            SELECT b.path, d.name, UPPER(d.format) AS fmt
+            FROM books b
+            JOIN data d ON b.id = d.book_id
+            WHERE b.id = :id AND UPPER(d.format) IN ('CBZ', 'CBR', 'CB7', 'CBT')
+            ORDER BY CASE WHEN UPPER(d.format) = 'CBZ' THEN 1 ELSE 2 END
+        """),
+        {"id": book_id}
+    ).fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No CBZ/CBR/CB7/CBT archive found for book #{book_id}")
+
+    lib_root = Path(settings.LIBRARY_ROOT)
+    for row in rows:
+        book_dir = lib_root / row.path
+        assert_safe_path(book_dir, lib_root)
+        for ext_candidate in (row.fmt.lower(), row.fmt.upper()):
+            candidate = book_dir / f"{row.name}.{ext_candidate}"
+            if candidate.is_file():
+                if row.fmt in ("CBR", "CB7", "CBT"):
+                    cbz_target = book_dir / f"{row.name}.cbz"
+                    if not cbz_target.is_file():
+                        if importer_service.convert_cbr_to_cbz(candidate, cbz_target):
+                            sz = cbz_target.stat().st_size
+                            db.execute(
+                                text("""
+                                    INSERT INTO data (book_id, format, uncompressed_size, name)
+                                    VALUES (:bid, 'CBZ', :sz, :name)
+                                    ON CONFLICT DO NOTHING
+                                """),
+                                {"bid": book_id, "sz": sz, "name": row.name}
+                            )
+                            db.commit()
+                    if cbz_target.is_file():
+                        return cbz_target
+                return candidate
+
+        # Fallback: scan book_dir for any .cbz file
+        if book_dir.is_dir():
+            for f in book_dir.iterdir():
+                if f.is_file() and f.suffix.lower() == ".cbz":
+                    return f
+
+    raise HTTPException(status_code=404, detail="Comic/Manga archive file not found on disk")
+
+
+def _resolve_audiobook_tracks(db: Session, book_id: int) -> list[Path]:
+    """Return naturally sorted list of audio track files for a book."""
+    row = db.execute(text("SELECT path FROM books WHERE id = :id"), {"id": book_id}).fetchone()
+    if not row or not row.path:
+        return []
+    lib_root = Path(settings.LIBRARY_ROOT)
+    book_dir = lib_root / row.path
+    assert_safe_path(book_dir, lib_root)
+    if not book_dir.is_dir():
+        return []
+
+    tracks_dir = book_dir / "audiobook_tracks"
+    if tracks_dir.is_dir():
+        multi = sorted(
+            [p for p in tracks_dir.iterdir() if p.is_file() and p.suffix.lower() in importer_service.AUDIO_EXTS],
+            key=lambda p: importer_service.natural_sort_key(p.name)
+        )
+        if multi:
+            return multi
+
+    single = sorted(
+        [p for p in book_dir.iterdir() if p.is_file() and p.suffix.lower() in importer_service.AUDIO_EXTS],
+        key=lambda p: importer_service.natural_sort_key(p.name)
+    )
+    return single
+
+
+@app.get("/api/books/{book_id}/audiobook/manifest")
+def api_audiobook_manifest(book_id: int, db: Session = Depends(get_db)):
+    """Return available native audiobook tracks for in-browser streaming."""
+    tracks = _resolve_audiobook_tracks(db, book_id)
+    if not tracks:
+        raise HTTPException(status_code=404, detail="No audiobook tracks found for this book")
+    return {
+        "book_id": book_id,
+        "total_tracks": len(tracks),
+        "tracks": [
+            {
+                "index": idx,
+                "name": t.stem,
+                "format": t.suffix.lstrip(".").upper(),
+                "size": t.stat().st_size,
+                "url": f"/api/books/{book_id}/audiobook/track/{idx}",
+            }
+            for idx, t in enumerate(tracks)
+        ]
+    }
+
+
+@app.get("/api/books/{book_id}/audiobook/track/{track_index}")
+def api_audiobook_track_stream(book_id: int, track_index: int, db: Session = Depends(get_db)):
+    """Stream an individual audiobook track with HTTP Range support."""
+    tracks = _resolve_audiobook_tracks(db, book_id)
+    if track_index < 0 or track_index >= len(tracks):
+        raise HTTPException(status_code=404, detail="Audiobook track index out of range")
+    track_path = tracks[track_index]
+    ext = track_path.suffix.lower().lstrip(".")
+    media_type = MIME_TYPES.get(ext, "audio/mpeg")
+    return FileResponse(
+        str(track_path),
+        media_type=media_type,
+        headers={"Accept-Ranges": "bytes"}
+    )
+
+
+@app.get("/api/books/{book_id}/cbz/manifest")
+def api_cbz_manifest(
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    """Return page list and reading direction metadata for a CBZ/CBR comic or manga."""
+    import zipfile
+    book = book_service.get_book_details(db, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    archive_path = _resolve_cbz_archive_path(db, book_id)
+    if not zipfile.is_zipfile(archive_path):
+        raise HTTPException(status_code=400, detail="Archive is not a valid ZIP/CBZ container (if CBR, install 7z or bsdtar on server)")
+
+    tag_names = {t["name"].lower() for t in book.get("tags", [])}
+    is_manga = any(k in tag_names for k in ("manga", "манга", "manhwa", "manhua"))
+
+    with zipfile.ZipFile(archive_path, "r") as zf:
+        pages = importer_service.list_cbz_images(zf)
+        if not is_manga:
+            comic_info = next((n for n in zf.namelist() if Path(n).name.lower() == "comicinfo.xml"), None)
+            if comic_info:
+                try:
+                    raw_xml = zf.read(comic_info).decode("utf-8", errors="ignore")
+                    if "<Manga>Yes" in raw_xml or "<Manga>yes" in raw_xml:
+                        is_manga = True
+                except Exception:
+                    pass
+
+    return {
+        "book_id": book_id,
+        "title": book["title"],
+        "author": book["author"],
+        "series_name": book.get("series_name"),
+        "series_index": book.get("series_index"),
+        "prev_series_book": book.get("prev_series_book"),
+        "next_series_book": book.get("next_series_book"),
+        "total_pages": len(pages),
+        "reading_direction": "rtl" if is_manga else "ltr",
+        "pages": [
+            {
+                "index": idx,
+                "name": Path(p).name,
+                "url": f"/api/books/{book_id}/cbz/page/{idx}"
+            }
+            for idx, p in enumerate(pages)
+        ]
+    }
+
+
+@app.get("/api/books/{book_id}/cbz/page/{page_index}")
+def api_cbz_page_image(
+    book_id: int,
+    page_index: int,
+    db: Session = Depends(get_db)
+):
+    """Stream an individual comic/manga page image directly from the CBZ archive."""
+    import zipfile
+    archive_path = _resolve_cbz_archive_path(db, book_id)
+    if not zipfile.is_zipfile(archive_path):
+        raise HTTPException(status_code=400, detail="Invalid CBZ archive")
+
+    with zipfile.ZipFile(archive_path, "r") as zf:
+        pages = importer_service.list_cbz_images(zf)
+        if page_index < 0 or page_index >= len(pages):
+            raise HTTPException(status_code=404, detail=f"Page {page_index} out of range (total {len(pages)})")
+        entry_name = pages[page_index]
+        img_bytes = zf.read(entry_name)
+
+    ext = Path(entry_name).suffix.lower()
+    img_mimes = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".avif": "image/avif",
+        ".bmp": "image/bmp",
+    }
+    media_type = img_mimes.get(ext, "image/jpeg")
+    return Response(
+        content=img_bytes,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=86400, immutable"}
     )
 
 

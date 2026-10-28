@@ -38,6 +38,9 @@ apt-get install -y \
     build-essential \
     calibre \
     ffmpeg \
+    p7zip-full \
+    libarchive-tools \
+    djvulibre-bin \
     python3 \
     python3-venv \
     python3-pip \
@@ -79,9 +82,10 @@ fi
 
 DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" || echo "0")
 if [ "$DB_EXISTS" != "1" ]; then
+    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8' TEMPLATE template0;" || \
     sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
     sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
-    msg_ok "Created database: $DB_NAME"
+    msg_ok "Created database: $DB_NAME (UTF-8)"
 fi
 
 sudo -u postgres psql -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
@@ -116,12 +120,14 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     git remote set-url origin https://github.com/atheneaelib-elib/project-athenea.git
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
+    chmod +x "$INSTALL_DIR"/cli/*.sh 2>/dev/null || true
     msg_ok "Repository cloned to $INSTALL_DIR"
 else
     cd "$INSTALL_DIR"
     git fetch origin
     git reset --hard origin/main
     chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR"
+    chmod +x "$INSTALL_DIR"/cli/*.sh 2>/dev/null || true
     msg_ok "Repository updated."
 fi
 
