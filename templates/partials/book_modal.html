@@ -311,7 +311,6 @@
           <span class="text-slate-400">{{ t('modal.language') }}</span>
           {% if book.language_name and book.language_name != 'Unknown' %}
           <span class="text-slate-200 ml-1 font-medium inline-flex items-center gap-1.5">
-            <span class="text-sm leading-none">{{ book.language_flag or '🌐' }}</span>
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono">{{ book.language_code }}</span>
             <span>{{ book.language_name }}</span>
           </span>
