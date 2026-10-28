@@ -242,7 +242,7 @@ if [ -z "$INSTALL_SCRIPT" ] || echo "$INSTALL_SCRIPT" | grep -q "404"; then
     msg_err "Failed to download provisioning script from GitHub.\nIf the repository is private, supply a valid token with 'repo' scope, or make the repository Public."
 fi
 
-pct exec "$CT_ID" -- env GITHUB_TOKEN="$GITHUB_TOKEN" bash -c "$INSTALL_SCRIPT"
+echo "$INSTALL_SCRIPT" | pct exec "$CT_ID" -- env GITHUB_TOKEN="$GITHUB_TOKEN" bash
 
 # Verify service is running on port 8000 inside the container
 msg_info "Verifying Athenea service on port 8000..."

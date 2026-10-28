@@ -225,7 +225,8 @@ success "Python virtual environment and dependencies installed."
 
 info "Downloading high-fidelity Russian Piper neural voice models..."
 mkdir -p "$INSTALL_DIR/models/piper"
-for v in denis ruslan irina dmitri; do
+mkdir -p "$INSTALL_DIR/cache/tts" "$INSTALL_DIR/cache/thumbs"
+for v in denis ruslan irina; do
     if [ ! -f "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" ]; then
         curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx"
         curl -sSL -o "$INSTALL_DIR/models/piper/ru_RU-${v}-medium.onnx.json" "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/${v}/medium/ru_RU-${v}-medium.onnx.json"
@@ -242,7 +243,9 @@ ln -sf ru_RU-ruslan-medium.onnx "$INSTALL_DIR/models/piper/ru_ruslan.onnx"
 ln -sf ru_RU-ruslan-medium.onnx.json "$INSTALL_DIR/models/piper/ru_ruslan.onnx.json"
 ln -sf ru_RU-irina-medium.onnx "$INSTALL_DIR/models/piper/ru_irina.onnx"
 ln -sf ru_RU-irina-medium.onnx.json "$INSTALL_DIR/models/piper/ru_irina.onnx.json"
-chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR/models"
+ln -sf ru_RU-denis-medium.onnx "$INSTALL_DIR/models/piper/ru_RU-dmitri-medium.onnx"
+ln -sf ru_RU-denis-medium.onnx.json "$INSTALL_DIR/models/piper/ru_RU-dmitri-medium.onnx.json"
+chown -R "$APP_USER:$APP_GROUP" "$INSTALL_DIR/models" "$INSTALL_DIR/cache"
 success "Russian Piper neural TTS voices installed."
 
 # 10. Generate /etc/athenea.env

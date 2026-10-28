@@ -49,3 +49,16 @@ backups/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Runtime execution & system caches
+.cache/
+.config/
+
+# Machine learning models (downloaded dynamically)
+models/
+*.onnx
+*.onnx.json
+
+# Scratch & temporary debug scripts
+check_hashes.py
+test_*.py
