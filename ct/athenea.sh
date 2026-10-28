@@ -187,9 +187,9 @@ pct create "$CT_ID" "$TEMPLATE_PATH" \
     --onboot 1 \
     --description "<div align='center'><a href='http://github.com/atheneaelib-elib/project-athenea'><img src='https://raw.githubusercontent.com/atheneaelib-elib/project-athenea/main/static/img/athenea-logo.png' width='120'/></a><h2>Athenea eBook Library</h2><p>High-Performance Digital Media Server</p></div>"
 
-# Configure Container Features (nesting & keyctl required for modern venv/docker/systemd in unprivileged CT)
-msg_info "Setting container features (nesting=1, keyctl=1)..."
-pct set "$CT_ID" -features nesting=1,keyctl=1
+# Configure Container Features (nesting, keyctl & passwordless Proxmox Web UI shell console)
+msg_info "Setting container features (nesting=1, keyctl=1, cmode=shell)..."
+pct set "$CT_ID" -features nesting=1,keyctl=1 -console 1 -cmode shell
 
 # 6. Start Container & Wait for IP
 msg_info "Starting LXC container $CT_ID..."

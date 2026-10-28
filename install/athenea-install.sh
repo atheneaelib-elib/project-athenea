@@ -31,6 +31,7 @@ apt-get install -y \
     curl \
     wget \
     git \
+    openssh-server \
     rsync \
     pigz \
     sudo \
