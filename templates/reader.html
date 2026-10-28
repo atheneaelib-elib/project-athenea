@@ -520,11 +520,14 @@
           class="bg-slate-800 text-[11px] text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
           title="Playback Speed"
         >
+          <option value="0.75">0.75x</option>
           <option value="0.85">0.85x</option>
           <option value="1.0" selected>1.0x</option>
           <option value="1.15">1.15x</option>
           <option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option>
+          <option value="1.75">1.75x</option>
+          <option value="2.0">2.0x</option>
         </select>
       </div>
 
@@ -1199,14 +1202,29 @@
     let ttsVoicesLoaded = false;
     const ttsPrefetchSet = new Set();
 
+    function syncTtsSpeedSelect() {
+      const speedSelect = document.getElementById("tts-speed-select");
+      if (!speedSelect) return;
+      let matched = false;
+      for (let i = 0; i < speedSelect.options.length; i++) {
+        if (Math.abs(parseFloat(speedSelect.options[i].value) - ttsSpeed) < 0.01) {
+          speedSelect.selectedIndex = i;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        speedSelect.value = "1.0";
+      }
+    }
+
     function initTts() {
       ttsAudio = document.getElementById("tts-audio-elem");
       if (!ttsAudio) return;
 
       const voiceSelect = document.getElementById("tts-voice-select");
       if (voiceSelect) voiceSelect.value = ttsVoice;
-      const speedSelect = document.getElementById("tts-speed-select");
-      if (speedSelect) speedSelect.value = ttsSpeed.toString();
+      syncTtsSpeedSelect();
 
       // Audio Event Listeners
       ttsAudio.addEventListener("timeupdate", () => {
@@ -1294,6 +1312,7 @@
         }
         ttsScanParagraphs();
         loadTtsVoices();
+        syncTtsSpeedSelect();
       } else {
         player.classList.add("translate-y-full", "sm:translate-y-36", "opacity-0", "pointer-events-none");
         player.classList.remove("translate-y-0", "opacity-100", "pointer-events-auto");
@@ -1681,11 +1700,12 @@
     }
 
     function ttsChangeSpeed(spd) {
-      ttsSpeed = parseFloat(spd);
+      ttsSpeed = parseFloat(spd) || 1.0;
       localStorage.setItem(STORAGE_KEY_SPEED, ttsSpeed);
       if (ttsAudio) {
         ttsAudio.playbackRate = ttsSpeed;
       }
+      syncTtsSpeedSelect();
     }
 
     function ttsSeekAudio(e) {
