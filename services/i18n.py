@@ -50,6 +50,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Active",
         "general.none": "None",
         "general.unknown": "Unknown",
+        "general.description": "Description",
         "general.copyright": "Athenea • © 2026 eBook Library",
 
         # Navbar
@@ -412,6 +413,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Activo",
         "general.none": "Ninguno",
         "general.unknown": "Desconocido",
+        "general.description": "Descripción",
         "general.copyright": "Athenea • © 2026 Biblioteca de eBooks",
 
         # Navbar
@@ -774,6 +776,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Actif",
         "general.none": "Aucun",
         "general.unknown": "Inconnu",
+        "general.description": "Description",
         "general.copyright": "Athenea • © 2026 Bibliothèque d'eBooks",
 
         # Navbar
@@ -1136,6 +1139,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Aktiv",
         "general.none": "Keine",
         "general.unknown": "Unbekannt",
+        "general.description": "Beschreibung",
         "general.copyright": "Athenea • © 2026 eBook-Bibliothek",
 
         # Navbar
@@ -1498,6 +1502,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Активно",
         "general.none": "Нет",
         "general.unknown": "Неизвестно",
+        "general.description": "Описание",
         "general.copyright": "Athenea • © 2026 Электронная библиотека",
 
         # Navbar
@@ -1860,6 +1865,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Aktywny",
         "general.none": "Brak",
         "general.unknown": "Nieznany",
+        "general.description": "Opis",
         "general.copyright": "Athenea • © 2026 Biblioteka eBooków",
 
         # Navbar
@@ -2222,6 +2228,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Attivo",
         "general.none": "Nessuno",
         "general.unknown": "Sconosciuto",
+        "general.description": "Descrizione",
         "general.copyright": "Athenea • © 2026 Biblioteca di eBook",
 
         # Navbar
@@ -2584,6 +2591,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "general.active": "Ativo",
         "general.none": "Nenhum",
         "general.unknown": "Desconhecido",
+        "general.description": "Descrição",
         "general.copyright": "Athenea • © 2026 Biblioteca de eBooks",
 
         # Navbar

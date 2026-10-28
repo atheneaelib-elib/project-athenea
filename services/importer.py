@@ -70,17 +70,41 @@ def parse_pubdate(val: str | None) -> datetime | None:
     if not val:
         return None
     val = str(val).strip()
+    if not val:
+        return None
+
+    # Try ISO / standard datetime first
+    try:
+        clean_iso = val.replace("Z", "+00:00")
+        return datetime.fromisoformat(clean_iso)
+    except Exception:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y/%m/%d",
+        "%d.%m.%Y",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%B %Y",
+        "%b %Y",
+        "%Y",
+    ):
+        try:
+            return datetime.strptime(val[:19], fmt)
+        except Exception:
+            pass
+
+    # Fallback to regex 4-digit year (1800-2099)
     m_year = re.search(r'\b(1[89]\d\d|20\d\d)\b', val)
     if m_year:
         try:
             return datetime(int(m_year.group(1)), 1, 1)
         except Exception:
             pass
-    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d", "%d.%m.%Y"):
-        try:
-            return datetime.strptime(val[:19], fmt)
-        except Exception:
-            pass
+
     return None
 
 
@@ -217,6 +241,17 @@ def parse_fb2_metadata(fb2_path: Path) -> dict:
             elif tag in ("lang", "language") and elem.text and not meta["language"]:
                 meta["language"] = elem.text.strip().lower()[:10]
 
+            elif tag == "date" and not meta["pubdate"]:
+                d_val = elem.attrib.get("value") or (elem.text.strip() if elem.text else None)
+                if d_val:
+                    meta["pubdate"] = d_val.strip()
+
+            elif tag == "year" and not meta["pubdate"] and elem.text and elem.text.strip():
+                meta["pubdate"] = elem.text.strip()
+
+            elif tag == "publisher" and not meta["publisher"] and elem.text and elem.text.strip():
+                meta["publisher"] = elem.text.strip()
+
             elif tag == "coverpage":
                 for img in elem.iter():
                     if img.tag.split("}")[-1].lower() == "image":
@@ -259,6 +294,24 @@ def parse_fb2_metadata(fb2_path: Path) -> dict:
                 if full:
                     meta["authors"].append(full)
                     meta["author"] = full
+
+        if not meta["pubdate"]:
+            m_date = re.search(r'<date[^>]*value=[\'"]([^\'"]+)[\'"]', raw_text, re.IGNORECASE)
+            if m_date:
+                meta["pubdate"] = m_date.group(1).strip()
+            else:
+                m_year = re.search(r'<year[^>]*>(.*?)</year>', raw_text, re.IGNORECASE)
+                if m_year:
+                    meta["pubdate"] = re.sub(r'<[^>]+>', '', m_year.group(1)).strip()
+                else:
+                    m_date2 = re.search(r'<date[^>]*>(.*?)</date>', raw_text, re.IGNORECASE)
+                    if m_date2:
+                        meta["pubdate"] = re.sub(r'<[^>]+>', '', m_date2.group(1)).strip()
+
+        if not meta["publisher"]:
+            m_pub = re.search(r'<publisher[^>]*>(.*?)</publisher>', raw_text, re.IGNORECASE)
+            if m_pub:
+                meta["publisher"] = re.sub(r'<[^>]+>', '', m_pub.group(1)).strip()
     except Exception:
         pass
 
@@ -325,8 +378,11 @@ def parse_epub_metadata(epub_path: Path) -> dict:
                 elif tag == "description" and elem.text and not meta["comments"]:
                     meta["comments"] = elem.text.strip()
 
-                elif tag == "publisher" and elem.text:
+                elif tag == "publisher" and elem.text and not meta["publisher"]:
                     meta["publisher"] = elem.text.strip()
+
+                elif tag == "date" and elem.text and not meta["pubdate"]:
+                    meta["pubdate"] = elem.text.strip()
 
                 elif tag == "language" and elem.text and not meta["language"]:
                     meta["language"] = elem.text.strip().lower()[:10]
@@ -878,6 +934,10 @@ def get_book_metadata(file_path: Path, ext: str) -> dict:
                                 pass
                 elif k == "Comments" and not meta.get("comments") and v:
                     meta["comments"] = v
+                elif k == "Published" and not meta.get("pubdate") and v:
+                    meta["pubdate"] = v
+                elif k == "Publisher" and not meta.get("publisher") and v:
+                    meta["publisher"] = v
         except Exception:
             pass
 
