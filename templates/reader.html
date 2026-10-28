@@ -34,16 +34,22 @@
       height: 100%;
     }
     .flow-scroll #viewer {
+      overflow: hidden !important;
+      width: 100%;
+      height: 100%;
+    }
+    .flow-scroll .epub-container {
       overflow-y: auto !important;
       overflow-x: hidden !important;
       -webkit-overflow-scrolling: touch;
-      width: 100%;
-      height: 100%;
+      width: 100% !important;
+      height: 100% !important;
     }
     .flow-scroll #viewer iframe {
       border: none !important;
       display: block !important;
       width: 100% !important;
+      max-width: 100% !important;
     }
     .flow-scroll #prev-btn, .flow-scroll #next-btn {
       opacity: 0.6;
@@ -54,30 +60,38 @@
     }
 
     /* Custom smooth scrollbar for scrolled reading */
+    .flow-scroll .epub-container::-webkit-scrollbar,
     .flow-scroll #viewer::-webkit-scrollbar {
       width: 8px;
     }
+    .flow-scroll .epub-container::-webkit-scrollbar-track,
     .flow-scroll #viewer::-webkit-scrollbar-track {
       background: transparent;
     }
+    body.theme-dark .flow-scroll .epub-container::-webkit-scrollbar-thumb,
     body.theme-dark .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(148, 163, 184, 0.25);
       border-radius: 4px;
     }
+    body.theme-dark .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover,
     body.theme-dark .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(148, 163, 184, 0.45);
     }
+    body.theme-light .flow-scroll .epub-container::-webkit-scrollbar-thumb,
     body.theme-light .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(100, 116, 139, 0.25);
       border-radius: 4px;
     }
+    body.theme-light .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover,
     body.theme-light .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(100, 116, 139, 0.45);
     }
+    body.theme-sepia .flow-scroll .epub-container::-webkit-scrollbar-thumb,
     body.theme-sepia .flow-scroll #viewer::-webkit-scrollbar-thumb {
       background-color: rgba(120, 80, 40, 0.25);
       border-radius: 4px;
     }
+    body.theme-sepia .flow-scroll .epub-container::-webkit-scrollbar-thumb:hover,
     body.theme-sepia .flow-scroll #viewer::-webkit-scrollbar-thumb:hover {
       background-color: rgba(120, 80, 40, 0.45);
     }
@@ -314,7 +328,7 @@
 
     {% if fmt == 'epub' %}
       <!-- EPUB Viewport Container (Configurable Width) -->
-      <div id="viewer-container" class="w-full h-full px-4 sm:px-14 transition-all duration-200">
+      <div id="viewer-container" class="w-full h-full px-4 sm:px-14 transition-all duration-200 overflow-hidden">
         <div id="viewer" class="w-full h-full"></div>
       </div>
 
@@ -568,7 +582,7 @@
     function applyWidthStyles() {
       const container = document.getElementById('viewer-container');
       if (!container) return;
-      container.className = "h-full transition-all duration-200 ";
+      container.className = "h-full transition-all duration-200 overflow-hidden ";
       if (currentWidth === "medium") {
         container.className += "w-full max-w-4xl mx-auto px-4 sm:px-12";
       } else if (currentWidth === "wide") {
@@ -622,20 +636,24 @@
       // Setup layout mode parameters
       let spreadSetting = "none";
       let flowSetting = "paginated";
+      let managerSetting = "default";
 
       if (currentLayout === "double") {
         spreadSetting = "always";
         flowSetting = "paginated";
+        managerSetting = "default";
         document.body.classList.remove('flow-scroll');
         document.body.classList.add('flow-paginated');
       } else if (currentLayout === "scroll") {
         spreadSetting = "none";
-        flowSetting = "scrolled-doc";
+        flowSetting = "scrolled";
+        managerSetting = "continuous";
         document.body.classList.remove('flow-paginated');
         document.body.classList.add('flow-scroll');
       } else { // "single"
         spreadSetting = "none";
         flowSetting = "paginated";
+        managerSetting = "default";
         document.body.classList.remove('flow-scroll');
         document.body.classList.add('flow-paginated');
       }
@@ -645,33 +663,28 @@
         width: "100%",
         height: "100%",
         spread: spreadSetting,
-        flow: flowSetting
+        flow: flowSetting,
+        manager: managerSetting
       });
 
-      if (currentLayout === "scroll") {
-        function checkTransitionWheel(e) {
-          if (isChapterTransitioning) return;
-          if (e.deltaY > 0 && viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 10) {
-            isChapterTransitioning = true;
-            nextPage();
-            setTimeout(() => { isChapterTransitioning = false; }, 800);
-          } else if (e.deltaY < 0 && viewer.scrollTop <= 0) {
-            isChapterTransitioning = true;
-            prevPage();
-            setTimeout(() => { isChapterTransitioning = false; }, 800);
-          }
-        }
-        viewer.onwheel = checkTransitionWheel;
-        rendition.on("wheel", checkTransitionWheel);
-      } else {
-        viewer.onwheel = null;
-      }
+      viewer.onwheel = null;
 
       // Normalize covers and illustrations to prevent stretching or distortion
       rendition.hooks.content.register(function(contents) {
         try {
           const doc = contents.document;
           if (!doc) return;
+
+          // Prevent horizontal overflow inside the chapter document
+          if (doc.documentElement) {
+            doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
+            doc.documentElement.style.setProperty('max-width', '100%', 'important');
+          }
+          if (doc.body) {
+            doc.body.style.setProperty('overflow-x', 'hidden', 'important');
+            doc.body.style.setProperty('max-width', '100%', 'important');
+            doc.body.style.setProperty('box-sizing', 'border-box', 'important');
+          }
 
           // 1. Normalize SVG covers (specifically Calibre's preserveAspectRatio="none")
           const svgs = doc.querySelectorAll('svg');
@@ -1066,28 +1079,20 @@
         return;
       }
       if (currentLayout === "scroll") {
-        const viewer = document.getElementById("viewer");
-        if (!viewer) return;
+        const scroller = document.querySelector(".epub-container") || document.getElementById("viewer");
+        if (!scroller) return;
         const scrollDelta = window.innerHeight * 0.75;
         if (e.key === "ArrowDown") {
-          viewer.scrollBy({ top: 120, behavior: 'smooth' });
+          scroller.scrollBy({ top: 120, behavior: 'smooth' });
           e.preventDefault();
         } else if (e.key === "ArrowUp") {
-          viewer.scrollBy({ top: -120, behavior: 'smooth' });
+          scroller.scrollBy({ top: -120, behavior: 'smooth' });
           e.preventDefault();
         } else if (e.key === "PageDown" || (e.key === " " && !e.shiftKey)) {
-          if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 40) {
-            nextPage();
-          } else {
-            viewer.scrollBy({ top: scrollDelta, behavior: 'smooth' });
-          }
+          scroller.scrollBy({ top: scrollDelta, behavior: 'smooth' });
           e.preventDefault();
         } else if (e.key === "PageUp" || (e.key === " " && e.shiftKey)) {
-          if (viewer.scrollTop <= 15) {
-            prevPage();
-          } else {
-            viewer.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
-          }
+          scroller.scrollBy({ top: -scrollDelta, behavior: 'smooth' });
           e.preventDefault();
         }
         return;
@@ -1101,23 +1106,27 @@
 
     function prevPage() {
       if (rendition) {
-        rendition.prev().then(() => {
-          if (currentLayout === 'scroll') {
-            const v = document.getElementById("viewer");
-            if (v) v.scrollTop = v.scrollHeight;
+        if (currentLayout === 'scroll') {
+          const scroller = document.querySelector(".epub-container") || document.getElementById("viewer");
+          if (scroller) {
+            scroller.scrollBy({ top: -(window.innerHeight * 0.8), behavior: 'smooth' });
+            return;
           }
-        });
+        }
+        rendition.prev();
       }
     }
 
     function nextPage() {
       if (rendition) {
-        rendition.next().then(() => {
-          if (currentLayout === 'scroll') {
-            const v = document.getElementById("viewer");
-            if (v) v.scrollTop = 0;
+        if (currentLayout === 'scroll') {
+          const scroller = document.querySelector(".epub-container") || document.getElementById("viewer");
+          if (scroller) {
+            scroller.scrollBy({ top: (window.innerHeight * 0.8), behavior: 'smooth' });
+            return;
           }
-        });
+        }
+        rendition.next();
       }
     }
 
