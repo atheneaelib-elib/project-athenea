@@ -288,6 +288,13 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
 
         # ── Tier 3: any authenticated user ───────────────────────────
         if not user:
+            # API endpoints return 401 JSON, avoiding 302 stream resets during upload fetch
+            if path.startswith("/api/"):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication required. Please log in."}
+                )
+
             login_url = f"/login?next={urllib.parse.quote(path)}"
             # HTMX requests get a header redirect so partials don't break
             if request.headers.get("HX-Request"):

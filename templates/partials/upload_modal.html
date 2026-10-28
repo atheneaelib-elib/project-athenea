@@ -430,7 +430,7 @@
     }
 
     const totalFiles = collectedEbookFiles.length;
-    const CHUNK_SIZE = 25; // 25 books per batch for rock-solid reliability
+    const CHUNK_SIZE = 5; // 5 books per batch for responsive progress and rock-solid memory stability
     const totalBatches = Math.ceil(totalFiles / CHUNK_SIZE);
 
     let allImported = [];

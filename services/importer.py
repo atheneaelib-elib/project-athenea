@@ -1060,8 +1060,17 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
         else:
             meta = get_book_metadata(actual_file_to_process, effective_ext)
 
-        title = (meta.get("title") or Path(orig_name).stem).strip()
-        primary_author = (meta.get("author") or "Unknown Author").strip()
+        raw_title = (meta.get("title") or "").strip()
+        if not raw_title or not re.search(r'[\w\u0400-\u04FF]', raw_title):
+            title = Path(orig_name).stem
+        else:
+            title = raw_title
+
+        raw_author = (meta.get("author") or "").strip()
+        if not raw_author or not re.search(r'[\w\u0400-\u04FF]', raw_author):
+            primary_author = "Unknown Author"
+        else:
+            primary_author = raw_author
 
         # Language resolution
         lang_code = meta.get("language")
@@ -1090,13 +1099,14 @@ def import_book_file(db: Session, file_path: Path, original_filename: str | None
                         pass
         else:
             book_id = db.execute(text("SELECT nextval('books_id_seq')")).scalar()
-            author_folder = sanitize_filename(primary_author, max_len=64)
-            title_folder = f"{sanitize_filename(title, max_len=64)} ({book_id})"
+            author_folder = sanitize_filename(primary_author, max_len=64) or "Unknown Author"
+            clean_title_part = sanitize_filename(title, max_len=64) or f"Book_{book_id}"
+            title_folder = f"{clean_title_part} ({book_id})"
             rel_path = f"{author_folder}/{title_folder}"
             dest_dir = Path(settings.LIBRARY_ROOT) / author_folder / title_folder
             dest_dir.mkdir(parents=True, exist_ok=True)
 
-        base_file_name = sanitize_filename(f"{title} - {primary_author}", max_len=96)
+        base_file_name = sanitize_filename(f"{title} - {primary_author}", max_len=96) or f"book_{book_id}"
         formats_imported = []
 
         # Copy converted or extracted ebook format files into book directory
