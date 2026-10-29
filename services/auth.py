@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import bcrypt
@@ -366,16 +367,18 @@ def init_auth_tables(db: Session):
     prune_expired_sessions(db)
     prune_old_login_attempts(db)
 
-    # Check if any user exists. If not, create default admin:admin
-    count = db.execute(text("SELECT count(*) FROM users")).scalar() or 0
-    if count == 0:
-        admin_hash = hash_password("admin")
-        db.execute(text("""
-            INSERT INTO users (username, email, password_hash, role, is_active)
-            VALUES ('admin', 'admin@local.host', :pwd, 'admin', TRUE)
-        """), {"pwd": admin_hash})
-        db.commit()
-        print("Default admin created: username 'admin', password 'admin'")
+    # Only seed a default admin/admin account if explicitly requested via AUTO_CREATE_DEFAULT_ADMIN=true.
+    # Otherwise, leave users empty on fresh installs so the First-Run Setup Wizard (/setup) triggers consistently.
+    if os.getenv("AUTO_CREATE_DEFAULT_ADMIN", "").lower() == "true":
+        count = db.execute(text("SELECT count(*) FROM users")).scalar() or 0
+        if count == 0:
+            admin_hash = hash_password("admin")
+            db.execute(text("""
+                INSERT INTO users (username, email, password_hash, role, is_active)
+                VALUES ('admin', 'admin@local.host', :pwd, 'admin', TRUE)
+            """), {"pwd": admin_hash})
+            db.commit()
+            print("Default admin created: username 'admin', password 'admin'")
 
 
 def create_session(db: Session, user_id: int) -> str:

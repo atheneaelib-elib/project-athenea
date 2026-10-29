@@ -211,7 +211,7 @@ def complete_initial_setup(
     settings.ALLOW_REGISTRATION = allow_registration
     settings.REQUIRE_ADMIN_APPROVAL = require_approval
 
-    # 3. Apply schema.sql DDL if users table doesn't exist
+    # 3. Apply schema.sql DDL if books table doesn't exist
     conn = psycopg.connect(
         host=db_host,
         port=db_port,
@@ -222,10 +222,10 @@ def complete_initial_setup(
     )
     cur = conn.cursor()
 
-    cur.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users';")
-    has_users_table = bool(cur.fetchone())
+    cur.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'books';")
+    has_books_table = bool(cur.fetchone())
 
-    if not has_users_table:
+    if not has_books_table:
         if not SCHEMA_SQL_PATH.exists():
             return False, f"schema.sql not found at {SCHEMA_SQL_PATH}"
         schema_text = SCHEMA_SQL_PATH.read_text(encoding="utf-8", errors="ignore")
@@ -248,24 +248,10 @@ def complete_initial_setup(
                 conn.close()
                 return False, f"Database schema initialization failed: {fe}"
 
-    # 4. Create primary Administrator user
-    try:
-        pwd_hash = auth_service.hash_password(admin_password)
-        cur.execute("""
-            INSERT INTO public.users (username, password_hash, role, email, is_active, created_at)
-            VALUES (%s, %s, 'admin', %s, true, NOW())
-            ON CONFLICT (username) 
-            DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', is_active = true;
-        """, (admin_username.strip(), pwd_hash, (admin_email or "").strip()))
-    except Exception as ue:
-        cur.close()
-        conn.close()
-        return False, f"Failed to create admin user: {ue}"
-
     cur.close()
     conn.close()
 
-    # 5. Reinitialize live SQLAlchemy connection pool
+    # 4. Reinitialize live SQLAlchemy connection pool and ensure all auth/permission tables exist
     db_module.reinit_engine(
         db_user=db_user,
         db_password=db_password,
@@ -273,6 +259,30 @@ def complete_initial_setup(
         db_port=db_port,
         db_name=db_name
     )
+
+    try:
+        db = db_module.SessionLocal()
+        try:
+            auth_service.init_auth_tables(db)
+            pwd_hash = auth_service.hash_password(admin_password)
+            db.execute(
+                text("""
+                    INSERT INTO public.users (username, password_hash, role, email, is_active, created_at)
+                    VALUES (:u, :p, 'admin', :e, true, NOW())
+                    ON CONFLICT (username)
+                    DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', is_active = true
+                """),
+                {
+                    "u": admin_username.strip(),
+                    "p": pwd_hash,
+                    "e": (admin_email or "").strip() or None,
+                },
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception as ue:
+        return False, f"Failed to create admin user: {ue}"
 
     set_configured_flag(True)
     return True, "Setup completed successfully! You can now sign in."

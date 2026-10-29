@@ -86,19 +86,19 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label data-i18n="setup.db_host" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_host') }}</label>
-              <input type="text" id="db_host" name="db_host" value="localhost" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+              <input type="text" id="db_host" name="db_host" value="{{ default_db_host }}" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div>
               <label data-i18n="setup.db_port" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_port') }}</label>
-              <input type="number" id="db_port" name="db_port" value="5432" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+              <input type="number" id="db_port" name="db_port" value="{{ default_db_port }}" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div>
               <label data-i18n="setup.db_name" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_name') }}</label>
-              <input type="text" id="db_name" name="db_name" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+              <input type="text" id="db_name" name="db_name" value="{{ default_db_name }}" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div>
               <label data-i18n="setup.db_user" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_user') }}</label>
-              <input type="text" id="db_user" name="db_user" value="athenea" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+              <input type="text" id="db_user" name="db_user" value="{{ default_db_user }}" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             </div>
             <div class="sm:col-span-2">
               <label data-i18n="setup.db_password" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.db_password') }}</label>
@@ -117,7 +117,7 @@
           </div>
           <div>
             <label data-i18n="setup.storage_path" class="block text-xs font-medium text-slate-300 mb-1">{{ t('setup.storage_path') }}</label>
-            <input type="text" id="library_root" name="library_root" value="/data/books" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
+            <input type="text" id="library_root" name="library_root" value="{{ default_library_root }}" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" />
             <p data-i18n="setup.storage_path_help" class="text-[11px] text-slate-400 mt-1">{{ t('setup.storage_path_help') }}</p>
           </div>
         </div>
