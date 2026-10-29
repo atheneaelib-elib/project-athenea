@@ -489,7 +489,30 @@ def test_smtp_connection(
                 server.ehlo()
 
             if user and password:
-                server.login(user, password)
+                try:
+                    server.login(user, password)
+                except smtplib.SMTPAuthenticationError as auth_err:
+                    err_detail = auth_err.smtp_error.decode(errors="replace") if isinstance(auth_err.smtp_error, bytes) else str(auth_err.smtp_error)
+                    msg = f"Authentication rejected ({auth_err.smtp_code} {err_detail})."
+                    if "gmail.com" in host.lower():
+                        msg += (
+                            f" For Google Mail, please verify that: 1) You are using a 16-character App Password (not your normal Google account password), "
+                            f"2) 2-Step Verification is enabled on the account '{user}', and 3) The App Password was created specifically under '{user}' "
+                            f"(https://myaccount.google.com/apppasswords)."
+                        )
+                    return {"success": False, "message": msg}
+                except smtplib.SMTPServerDisconnected as disc_err:
+                    if "gmail.com" in host.lower():
+                        msg = (
+                            f"Google SMTP server rejected login credentials (BadCredentials): Connection closed by server. "
+                            f"Google terminates the connection immediately when credentials are not recognized. "
+                            f"Please verify: 1) You are using a 16-character App Password without typos, "
+                            f"2) The App Password was generated while logged in as '{user}' at https://myaccount.google.com/apppasswords, and "
+                            f"3) 2-Step Verification is active on '{user}'."
+                        )
+                    else:
+                        msg = f"SMTP server disconnected during authentication ({disc_err})."
+                    return {"success": False, "message": msg}
 
             if test_recipient and test_recipient.strip():
                 recipient = test_recipient.strip()

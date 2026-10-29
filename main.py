@@ -2563,21 +2563,32 @@ def api_send_book_email(
         if "gmail.com" in (settings.SMTP_HOST or "").lower():
             smtp_pass = smtp_pass.replace(" ", "")
 
+        def _safe_login(server, u, p, host):
+            if not u or not p:
+                return
+            try:
+                server.login(u, p)
+            except smtplib.SMTPAuthenticationError as auth_err:
+                detail = auth_err.smtp_error.decode(errors="replace") if isinstance(auth_err.smtp_error, bytes) else str(auth_err.smtp_error)
+                raise RuntimeError(f"Authentication rejected ({auth_err.smtp_code} {detail}) for '{u}'. Check password/App Password.")
+            except smtplib.SMTPServerDisconnected as disc_err:
+                if "gmail.com" in host.lower():
+                    raise RuntimeError(f"Google SMTP server rejected login credentials (BadCredentials) for '{u}'. Ensure a 16-character App Password is used.")
+                raise RuntimeError(f"SMTP server disconnected during authentication: {disc_err}")
+
+        use_tls = not use_ssl and (getattr(settings, "SMTP_TLS", False) or settings.SMTP_PORT == 587)
         if use_ssl:
             with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
-                if smtp_user and smtp_pass:
-                    server.login(smtp_user, smtp_pass)
+                _safe_login(server, smtp_user, smtp_pass, settings.SMTP_HOST)
                 server.send_message(msg)
-        elif settings.SMTP_TLS:
+        elif use_tls:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
                 server.starttls()
-                if smtp_user and smtp_pass:
-                    server.login(smtp_user, smtp_pass)
+                _safe_login(server, smtp_user, smtp_pass, settings.SMTP_HOST)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
-                if smtp_user and smtp_pass:
-                    server.login(smtp_user, smtp_pass)
+                _safe_login(server, smtp_user, smtp_pass, settings.SMTP_HOST)
                 server.send_message(msg)
         return {"success": True, "message": f"Successfully sent '{b_row.title}' ({fmt}) to {email_target}!"}
     except Exception as e:
