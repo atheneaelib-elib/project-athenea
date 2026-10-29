@@ -518,6 +518,7 @@
                 value="{{ settings.SMTP_PORT }}" 
                 placeholder="587"
                 required
+                onchange="handleSMTPPortChange(this.value)"
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
               />
             </div>
@@ -532,6 +533,7 @@
                 value="{{ settings.SMTP_FROM }}" 
                 placeholder="books@yourdomain.com or your-email@gmail.com"
                 required
+                onblur="if(!document.getElementById('smtp_user').value.trim() && this.value.trim()) document.getElementById('smtp_user').value = this.value.trim();"
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -541,7 +543,7 @@
                 type="text" 
                 id="smtp_user" 
                 value="{{ settings.SMTP_USER }}" 
-                placeholder="e.g. user@gmail.com"
+                placeholder="e.g. user@gmail.com (defaults to Sender Email)"
                 autocomplete="off"
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
               />
@@ -580,6 +582,7 @@
                 type="checkbox" 
                 id="smtp_tls" 
                 {% if settings.SMTP_TLS %}checked{% endif %}
+                onchange="if(this.checked) document.getElementById('smtp_ssl').checked = false;"
                 class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
               />
               <div class="text-xs">
@@ -593,6 +596,7 @@
                 type="checkbox" 
                 id="smtp_ssl" 
                 {% if settings.SMTP_SSL %}checked{% endif %}
+                onchange="if(this.checked) document.getElementById('smtp_tls').checked = false;"
                 class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
               />
               <div class="text-xs">
@@ -1767,6 +1771,19 @@ function applyPreset(name) {
     port.value = '465';
     tls.checked = false;
     ssl.checked = true;
+  }
+}
+
+function handleSMTPPortChange(portVal) {
+  const p = parseInt(portVal, 10);
+  const tls = document.getElementById('smtp_tls');
+  const ssl = document.getElementById('smtp_ssl');
+  if (p === 465) {
+    if (ssl) ssl.checked = true;
+    if (tls) tls.checked = false;
+  } else if (p === 587) {
+    if (tls) tls.checked = true;
+    if (ssl) ssl.checked = false;
   }
 }
 

@@ -465,7 +465,16 @@ def test_smtp_connection(
             )
         }
 
-    use_ssl = ssl or port == 465
+    # Automatically enforce proper SSL/TLS mode according to port
+    if port == 465:
+        use_ssl = True
+        use_tls = False
+    elif port == 587:
+        use_ssl = False
+        use_tls = True
+    else:
+        use_ssl = bool(ssl)
+        use_tls = bool(tls and not use_ssl)
 
     try:
         if use_ssl:
@@ -475,7 +484,7 @@ def test_smtp_connection(
 
         with server:
             server.ehlo()
-            if tls and not use_ssl:
+            if use_tls:
                 server.starttls()
                 server.ehlo()
 
