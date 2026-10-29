@@ -495,7 +495,8 @@ def get_cli_book_metadata(file_path: Path, ext: str) -> dict:
 def find_fb2c_binary() -> Optional[str]:
     """Look for fb2c in common locations or system PATH."""
     candidates = [
-        "/mnt/mainlib/Books/fb2c",
+        os.getenv("FB2C_BIN", ""),
+        "/opt/athenea/bin/fb2c",
         "/usr/local/bin/fb2c",
         "/usr/bin/fb2c",
         shutil.which("fb2c"),

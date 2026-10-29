@@ -26,9 +26,12 @@ logger = logging.getLogger("bookserver.admin_settings")
 PRIMARY_ENV_PATH = Path("/etc/athenea.env")
 LEGACY_ENV_PATH = Path("/etc/bookserver.env")
 FALLBACK_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-_PROD_BACKUP = Path("/mnt/mainlib/Backups/db")
-BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/mnt/mainlib/Backups/db" if _PROD_BACKUP.exists() else str(Path(__file__).resolve().parent.parent / "backups")))
-BACKUP_SCRIPT = Path("/opt/athenea/backup_db.sh") if Path("/opt/athenea/backup_db.sh").exists() else Path("/opt/bookserver/backup_db.sh")
+BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/var/backups/athenea" if Path("/var/backups/athenea").exists() else str(Path(__file__).resolve().parent.parent / "backups")))
+BACKUP_SCRIPT = (
+    Path("/opt/athenea/backup_db.sh") if Path("/opt/athenea/backup_db.sh").exists()
+    else Path("/opt/bookserver/backup_db.sh") if Path("/opt/bookserver/backup_db.sh").exists()
+    else (Path(__file__).resolve().parent.parent / "backup_db.sh")
+)
 
 
 def get_target_env_path() -> Path:
