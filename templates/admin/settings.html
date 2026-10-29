@@ -1777,11 +1777,18 @@ async function saveSMTPSettings(e) {
   btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving...</span>`;
   btn.disabled = true;
 
+  const fromVal = document.getElementById('smtp_from').value.trim();
+  const userInput = document.getElementById('smtp_user');
+  const userVal = userInput.value.trim() || (fromVal && fromVal !== 'books@example.com' ? fromVal : '');
+  if (!userInput.value.trim() && userVal) {
+    userInput.value = userVal;
+  }
+
   const payload = {
     host: document.getElementById('smtp_host').value.trim(),
     port: parseInt(document.getElementById('smtp_port').value.trim()) || 587,
-    from_email: document.getElementById('smtp_from').value.trim(),
-    user: document.getElementById('smtp_user').value.trim(),
+    from_email: fromVal,
+    user: userVal,
     password: document.getElementById('smtp_password').value,
     tls: document.getElementById('smtp_tls').checked,
     ssl: document.getElementById('smtp_ssl').checked
@@ -1819,11 +1826,18 @@ async function runSMTPTest() {
 
   resultBox.className = 'hidden';
 
+  const fromVal = document.getElementById('smtp_from').value.trim();
+  const userInput = document.getElementById('smtp_user');
+  const userVal = userInput.value.trim() || (fromVal && fromVal !== 'books@example.com' ? fromVal : '');
+  if (!userInput.value.trim() && userVal) {
+    userInput.value = userVal;
+  }
+
   const payload = {
     host: document.getElementById('smtp_host').value.trim(),
     port: parseInt(document.getElementById('smtp_port').value.trim()) || 587,
-    from_email: document.getElementById('smtp_from').value.trim(),
-    user: document.getElementById('smtp_user').value.trim(),
+    from_email: fromVal,
+    user: userVal,
     password: document.getElementById('smtp_password').value,
     tls: document.getElementById('smtp_tls').checked,
     ssl: document.getElementById('smtp_ssl').checked,

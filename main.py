@@ -2558,21 +2558,26 @@ def api_send_book_email(
 
     try:
         use_ssl = getattr(settings, "SMTP_SSL", False) or settings.SMTP_PORT == 465
+        smtp_user = (settings.SMTP_USER or "").strip() or (settings.SMTP_FROM or "").strip()
+        smtp_pass = (settings.SMTP_PASSWORD or "").strip()
+        if "gmail.com" in (settings.SMTP_HOST or "").lower():
+            smtp_pass = smtp_pass.replace(" ", "")
+
         if use_ssl:
             with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
-                if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
         elif settings.SMTP_TLS:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
                 server.starttls()
-                if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=25) as server:
-                if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                if smtp_user and smtp_pass:
+                    server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
         return {"success": True, "message": f"Successfully sent '{b_row.title}' ({fmt}) to {email_target}!"}
     except Exception as e:

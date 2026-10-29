@@ -391,14 +391,18 @@ def save_smtp_settings(
 ) -> dict:
     """Save SMTP configuration to both disk and live in-memory settings."""
     host = (host or "").strip()
-    user = (user or "").strip()
     from_addr = (from_addr or "").strip() or getattr(settings, "SMTP_FROM", "books@example.com")
+    user = (user or "").strip()
+    if not user and from_addr and from_addr != "books@example.com" and "@" in from_addr:
+        user = from_addr
     port = int(port) if str(port).isdigit() else 587
 
     if not password or password in ("••••••••", "********"):
         effective_password = settings.SMTP_PASSWORD
     else:
         effective_password = password.strip()
+        if "gmail.com" in host.lower():
+            effective_password = effective_password.replace(" ", "")
 
     updates = {
         "SMTP_HOST": host,
@@ -440,11 +444,26 @@ def test_smtp_connection(
         return {"success": False, "message": "SMTP Host is required."}
 
     port = int(port) if str(port).isdigit() else 587
-    user = (user or "").strip()
     from_addr = (from_addr or "").strip() or getattr(settings, "SMTP_FROM", "books@example.com")
+    user = (user or "").strip() or getattr(settings, "SMTP_USER", "")
+    if not user and from_addr and from_addr != "books@example.com" and "@" in from_addr:
+        user = from_addr
 
     if not password or password in ("••••••••", "********"):
         password = settings.SMTP_PASSWORD
+    else:
+        password = password.strip()
+        if "gmail.com" in host.lower():
+            password = password.replace(" ", "")
+
+    if host.lower() not in ("localhost", "127.0.0.1") and not password:
+        return {
+            "success": False,
+            "message": (
+                f"SMTP Password is required to authenticate with {host}. "
+                + ("For Gmail (smtp.gmail.com), enter your 16-character Google App Password in the SMTP Password field." if "gmail.com" in host.lower() else "Please enter your SMTP Password.")
+            )
+        }
 
     use_ssl = ssl or port == 465
 
@@ -466,13 +485,13 @@ def test_smtp_connection(
             if test_recipient and test_recipient.strip():
                 recipient = test_recipient.strip()
                 msg = EmailMessage()
-                msg["Subject"] = "eBook Library - SMTP Test Email"
+                msg["Subject"] = "Athenea - SMTP Test Email"
                 msg["From"] = from_addr
                 msg["To"] = recipient
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 msg.set_content(
                     f"Hello,\n\n"
-                    f"This is a confirmation test email from your eBook Library (BookServer).\n"
+                    f"This is a confirmation test email from your Athenea Digital Library.\n"
                     f"Timestamp: {timestamp}\n"
                     f"SMTP Host: {host}:{port}\n"
                     f"Sender: {from_addr}\n\n"
@@ -481,12 +500,12 @@ def test_smtp_connection(
                 server.send_message(msg)
                 return {
                     "success": True,
-                    "message": f"Success! Handshake, authentication, and test email sent to {recipient}."
+                    "message": f"Success! Handshake, authentication ({user}), and test email sent to {recipient}."
                 }
 
         return {
             "success": True,
-            "message": f"Success! Connected to {host}:{port} and authenticated successfully."
+            "message": f"Success! Connected to {host}:{port} and authenticated as {user}."
         }
     except Exception as e:
         logger.error(f"SMTP connection test failed: {e}")
