@@ -37,8 +37,8 @@
         {% endif %}
       </div>
 
-      <!-- Cover Art Management Tools (Power Users & Admins) -->
-      {% if current_user and current_user.is_power_user %}
+      <!-- Cover Art Management Tools (Users with Metadata Permission & Admins) -->
+      {% if current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
       <div class="w-full mt-2.5 pt-2 border-t border-slate-800/80 space-y-1 text-center">
         <div class="flex items-center justify-between gap-1.5">
           <label class="cursor-pointer px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-semibold transition-colors flex-1 text-center border border-slate-700/80" title="{{ t('modal.upload_cover') }}">
@@ -145,6 +145,8 @@
           {% endif %}
         {% endfor %}
 
+        {% set user_can_read = (current_user.can_read if current_user else true) %}
+        {% if user_can_read %}
         {% if ns.has_epub %}
         <a 
           href="/reader/{{ book.id }}?fmt=epub" 
@@ -223,6 +225,7 @@
           </script>
         </div>
         {% endif %}
+        {% endif %}
 
         <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">{{ t('modal.download') }}</p>
         
@@ -252,39 +255,6 @@
               <span class="text-[11px] opacity-80 font-mono">{{ fmt.size_formatted }}</span>
             </a>
             {% endfor %}
-
-            <!-- Send to Kindle / Email Action -->
-            <div class="pt-2 border-t border-slate-800">
-              <button 
-                type="button" 
-                onclick="toggleSendEmailBox()"
-                class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
-              >
-                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                {{ t('modal.send_email_title') }}
-              </button>
-              <div id="send-email-box" class="hidden mt-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-                <p class="text-[11px] text-slate-400">{{ t('modal.send_email_desc') }}</p>
-                <div class="flex gap-1.5">
-                  <input 
-                    type="email" 
-                    id="send-email-input" 
-                    value="{{ current_user.kindle_email or current_user.email or '' }}"
-                    placeholder="user@kindle.com" 
-                    class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                  <button 
-                    type="button" 
-                    id="send-email-btn"
-                    onclick="submitSendEmail({{ book.id }})" 
-                    class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer"
-                  >
-                    {{ t('modal.send_email_btn') }}
-                  </button>
-                </div>
-                <div id="send-email-status"></div>
-              </div>
-            </div>
           {% endif %}
         {% elif current_user %}
           <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
@@ -303,6 +273,89 @@
               {{ t('navbar.sign_in') }}
             </a>
           </div>
+        {% endif %}
+
+        <!-- Send to Kindle / Email Action (Permission-Controlled) -->
+        {% if current_user and current_user.can_send_email and book.formats|length > 0 %}
+        <div class="pt-2 border-t border-slate-800">
+          <button 
+            type="button" 
+            onclick="toggleSendEmailBox()"
+            class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            {{ t('modal.send_email_title') }}
+          </button>
+          <div id="send-email-box" class="hidden mt-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+            <p class="text-[11px] text-slate-400">{{ t('modal.send_email_desc') }}</p>
+            <div class="flex gap-1.5">
+              <input 
+                type="email" 
+                id="send-email-input" 
+                value="{{ current_user.kindle_email or current_user.email or '' }}"
+                placeholder="user@kindle.com" 
+                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              <button 
+                type="button" 
+                id="send-email-btn"
+                onclick="submitSendEmail({{ book.id }})" 
+                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer"
+              >
+                {{ t('modal.send_email_btn') }}
+              </button>
+            </div>
+            <div id="send-email-status"></div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Book Deletion Controls (Users with Delete Permission & Admins) -->
+        {% if current_user and (current_user.is_admin or current_user.can_delete_books) %}
+        <div class="pt-3 mt-3 border-t border-slate-800/90">
+          <button
+            type="button"
+            id="delete-book-open-btn"
+            onclick="toggleDeleteBookConfirm(true)"
+            class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-white bg-rose-950/40 hover:bg-rose-600 border border-rose-500/30 hover:border-rose-500 transition-all cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <span>{{ t('modal.delete_book', default='Delete Book') }}</span>
+          </button>
+
+          <div id="delete-book-confirm-box" class="hidden mt-2 p-3 bg-rose-950/30 rounded-xl border border-rose-500/40 space-y-2.5">
+            <p class="text-[11px] font-semibold text-rose-300 leading-snug">
+              {{ t('modal.delete_confirm_title', default='Permanently delete this book from the library?') }}
+            </p>
+            <label class="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                id="delete-book-files-chk"
+                checked
+                class="rounded bg-slate-900 border-slate-700 text-rose-600 focus:ring-0 cursor-pointer"
+              />
+              <span>{{ t('modal.delete_files_label', default='Also delete files from disk') }}</span>
+            </label>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="delete-book-confirm-btn"
+                onclick="confirmDeleteBook({{ book.id }})"
+                class="flex-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer"
+              >
+                {{ t('general.delete', default='Delete') }}
+              </button>
+              <button
+                type="button"
+                onclick="toggleDeleteBookConfirm(false)"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+              >
+                {{ t('general.cancel', default='Cancel') }}
+              </button>
+            </div>
+            <div id="delete-book-status" class="hidden text-[11px]"></div>
+          </div>
+        </div>
         {% endif %}
       </div>
 
@@ -719,6 +772,76 @@
         if (btn) {
           btn.disabled = false;
           btn.innerText = "Fetch Cover";
+        }
+      }
+    }
+
+    function toggleDeleteBookConfirm(show) {
+      const box = document.getElementById('delete-book-confirm-box');
+      const openBtn = document.getElementById('delete-book-open-btn');
+      if (!box) return;
+      if (show) {
+        box.classList.remove('hidden');
+        if (openBtn) openBtn.classList.add('hidden');
+      } else {
+        box.classList.add('hidden');
+        if (openBtn) openBtn.classList.remove('hidden');
+      }
+    }
+
+    async function confirmDeleteBook(bookId) {
+      const chk = document.getElementById('delete-book-files-chk');
+      const btn = document.getElementById('delete-book-confirm-btn');
+      const statusDiv = document.getElementById('delete-book-status');
+      const deleteFiles = chk ? chk.checked : true;
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = "Deleting...";
+      }
+      if (statusDiv) {
+        statusDiv.className = "text-[11px] text-slate-300 block";
+        statusDiv.innerText = "Removing book...";
+      }
+
+      try {
+        const res = await fetch(`/admin/book/${bookId}/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delete_files: deleteFiles })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (statusDiv) {
+            statusDiv.className = "text-[11px] text-emerald-400 font-semibold block";
+            statusDiv.innerText = data.message || "Book deleted!";
+          }
+          setTimeout(() => {
+            if (typeof closeModal === 'function') closeModal();
+            if (typeof triggerGridUpdate === 'function') {
+              triggerGridUpdate();
+            } else {
+              window.location.reload();
+            }
+          }, 400);
+        } else {
+          if (statusDiv) {
+            statusDiv.className = "text-[11px] text-rose-400 font-semibold block";
+            statusDiv.innerText = data.error || data.detail || "Failed to delete book.";
+          }
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Delete";
+          }
+        }
+      } catch (err) {
+        if (statusDiv) {
+          statusDiv.className = "text-[11px] text-rose-400 font-semibold block";
+          statusDiv.innerText = "Network error: " + err.message;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = "Delete";
         }
       }
     }

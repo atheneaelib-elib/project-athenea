@@ -1,4 +1,5 @@
 import re
+import json
 import bcrypt
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,233 @@ except ImportError:
 
 SESSION_COOKIE_NAME = "book_session"
 SESSION_DURATION_DAYS = 30
+
+# =====================================================================
+# GRANULAR PERMISSION DEFINITIONS FOR GROUPS (ROLES) & USERS
+# =====================================================================
+
+PERMISSION_CATALOG = [
+    {
+        "key": "can_read",
+        "label": "Read Online & Listen",
+        "description": "Open books/comics in the web reader and stream audiobooks.",
+    },
+    {
+        "key": "can_download",
+        "label": "Download Files",
+        "description": "Download EPUB, PDF, MOBI, CBZ, FB2, and audiobook files to device.",
+    },
+    {
+        "key": "can_send_email",
+        "label": "Send to Kindle / Email",
+        "description": "Deliver books directly to Kindle or personal email via SMTP.",
+    },
+    {
+        "key": "can_use_tts",
+        "label": "Neural TTS Read-Aloud",
+        "description": "Synthesize and listen to Kokoro-82M neural speech in the reader.",
+    },
+    {
+        "key": "can_use_opds",
+        "label": "OPDS Catalog Feed",
+        "description": "Browse and download books from e-reader apps via /opds.",
+    },
+    {
+        "key": "can_upload",
+        "label": "Add / Upload Books",
+        "description": "Upload new books, comics, or audiobooks and scan server folders.",
+    },
+    {
+        "key": "can_edit_metadata",
+        "label": "Edit Covers & Metadata",
+        "description": "Upload custom book covers and fetch covers from OpenLibrary.",
+    },
+    {
+        "key": "can_delete_books",
+        "label": "Delete Books",
+        "description": "Permanently delete books from the catalog database and disk.",
+    },
+]
+
+PERMISSION_KEYS = [p["key"] for p in PERMISSION_CATALOG]
+
+DEFAULT_ROLE_PERMISSIONS = {
+    "guest": {
+        "can_read": False,
+        "can_download": False,
+        "can_send_email": False,
+        "can_use_tts": False,
+        "can_use_opds": False,
+        "can_upload": False,
+        "can_edit_metadata": False,
+        "can_delete_books": False,
+    },
+    "user": {
+        "can_read": True,
+        "can_download": True,
+        "can_send_email": True,
+        "can_use_tts": True,
+        "can_use_opds": True,
+        "can_upload": False,
+        "can_edit_metadata": False,
+        "can_delete_books": False,
+    },
+    "power_user": {
+        "can_read": True,
+        "can_download": True,
+        "can_send_email": True,
+        "can_use_tts": True,
+        "can_use_opds": True,
+        "can_upload": True,
+        "can_edit_metadata": True,
+        "can_delete_books": False,
+    },
+    "admin": {
+        "can_read": True,
+        "can_download": True,
+        "can_send_email": True,
+        "can_use_tts": True,
+        "can_use_opds": True,
+        "can_upload": True,
+        "can_edit_metadata": True,
+        "can_delete_books": True,
+    },
+}
+
+_SCHEMA_INITIALIZED = False
+
+
+def _ensure_permission_schema(db: Session):
+    """Ensure users.custom_permissions and role_permissions table exist and are seeded."""
+    global _SCHEMA_INITIALIZED
+    if _SCHEMA_INITIALIZED:
+        return
+    try:
+        db.execute(text("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS kindle_email VARCHAR(255);
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_permissions JSONB DEFAULT '{}'::jsonb;
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                role VARCHAR(50) PRIMARY KEY,
+                permissions JSONB NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        for role_name, default_perms in DEFAULT_ROLE_PERMISSIONS.items():
+            db.execute(
+                text("""
+                    INSERT INTO role_permissions (role, permissions)
+                    VALUES (:r, CAST(:p AS jsonb))
+                    ON CONFLICT (role) DO NOTHING
+                """),
+                {"r": role_name, "p": json.dumps(default_perms)}
+            )
+        db.commit()
+        _SCHEMA_INITIALIZED = True
+    except Exception:
+        db.rollback()
+
+
+def _parse_json_dict(val) -> dict:
+    if not val:
+        return {}
+    if isinstance(val, dict):
+        return dict(val)
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def get_role_permissions(db: Session) -> dict[str, dict[str, bool]]:
+    """Return full permission matrix for all roles (guest, user, power_user, admin)."""
+    _ensure_permission_schema(db)
+    matrix = {r: dict(perms) for r, perms in DEFAULT_ROLE_PERMISSIONS.items()}
+    try:
+        rows = db.execute(text("SELECT role, permissions FROM role_permissions")).fetchall()
+        for row in rows:
+            role_name = row.role
+            if role_name in matrix:
+                saved = _parse_json_dict(row.permissions)
+                for k in PERMISSION_KEYS:
+                    if k in saved and saved[k] is not None:
+                        matrix[role_name][k] = bool(saved[k])
+    except Exception:
+        db.rollback()
+    return matrix
+
+
+def get_guest_permissions(db: Session) -> dict[str, bool]:
+    """Return effective permissions for unauthenticated guests."""
+    matrix = get_role_permissions(db)
+    return matrix.get("guest", dict(DEFAULT_ROLE_PERMISSIONS["guest"]))
+
+
+def save_all_role_permissions(db: Session, matrix: dict) -> dict:
+    """Save updated permissions matrix for guest, user, power_user, and admin."""
+    _ensure_permission_schema(db)
+    current_matrix = get_role_permissions(db)
+
+    for role_name in ("guest", "user", "power_user", "admin"):
+        if role_name not in matrix or not isinstance(matrix[role_name], dict):
+            continue
+        incoming = matrix[role_name]
+        merged = dict(current_matrix.get(role_name, DEFAULT_ROLE_PERMISSIONS[role_name]))
+        for k in PERMISSION_KEYS:
+            if k in incoming and incoming[k] is not None:
+                merged[k] = bool(incoming[k])
+        db.execute(
+            text("""
+                INSERT INTO role_permissions (role, permissions, updated_at)
+                VALUES (:r, CAST(:p AS jsonb), CURRENT_TIMESTAMP)
+                ON CONFLICT (role) DO UPDATE
+                SET permissions = EXCLUDED.permissions,
+                    updated_at = CURRENT_TIMESTAMP
+            """),
+            {"r": role_name, "p": json.dumps(merged)}
+        )
+
+    db.commit()
+    return {
+        "success": True,
+        "message": "Group & role permissions saved successfully.",
+        "role_permissions": get_role_permissions(db),
+    }
+
+
+def sanitize_custom_permissions(custom_perms: dict | None) -> dict[str, bool]:
+    """Keep only valid boolean permission overrides; omit keys set to None/'inherit'."""
+    if not custom_perms or not isinstance(custom_perms, dict):
+        return {}
+    cleaned = {}
+    for k in PERMISSION_KEYS:
+        if k in custom_perms:
+            v = custom_perms[k]
+            if v is None or v == "" or v == "inherit":
+                continue
+            if isinstance(v, bool):
+                cleaned[k] = v
+            elif str(v).lower() in ("true", "1", "allow", "yes"):
+                cleaned[k] = True
+            elif str(v).lower() in ("false", "0", "deny", "no"):
+                cleaned[k] = False
+    return cleaned
+
+
+def resolve_user_permissions(role: str, custom_perms_raw, role_matrix: dict[str, dict[str, bool]]) -> tuple[dict[str, bool], dict[str, bool]]:
+    """
+    Merge role default permissions with per-user custom_permissions overrides.
+    Returns (effective_permissions_dict, clean_custom_overrides_dict).
+    """
+    base = dict(role_matrix.get(role, DEFAULT_ROLE_PERMISSIONS.get(role, DEFAULT_ROLE_PERMISSIONS["user"])))
+    custom = sanitize_custom_permissions(_parse_json_dict(custom_perms_raw))
+    effective = dict(base)
+    for k, v in custom.items():
+        if k in effective:
+            effective[k] = bool(v)
+    return effective, custom
 
 
 def hash_password(password: str) -> str:
@@ -95,9 +323,11 @@ def init_auth_tables(db: Session):
             id SERIAL PRIMARY KEY,
             username VARCHAR(100) UNIQUE NOT NULL,
             email VARCHAR(255),
+            kindle_email VARCHAR(255),
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(20) NOT NULL DEFAULT 'user',
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            custom_permissions JSONB DEFAULT '{}'::jsonb,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP WITH TIME ZONE
         );
@@ -132,6 +362,7 @@ def init_auth_tables(db: Session):
     """))
     db.commit()
 
+    _ensure_permission_schema(db)
     prune_expired_sessions(db)
     prune_old_login_attempts(db)
 
@@ -170,12 +401,49 @@ def delete_session(db: Session, session_id: str):
     db.commit()
 
 
+def _build_user_dict(row, role_matrix: dict[str, dict[str, bool]]) -> dict:
+    effective_perms, custom_overrides = resolve_user_permissions(
+        row.role,
+        getattr(row, "custom_permissions", None),
+        role_matrix
+    )
+    is_admin = (row.role == "admin")
+    return {
+        "id": row.id,
+        "username": row.username,
+        "email": getattr(row, "email", None),
+        "kindle_email": getattr(row, "kindle_email", None) or "",
+        "role": row.role,
+        "is_active": row.is_active,
+        "is_admin": is_admin,
+        "is_power_user": (
+            row.role in ("admin", "power_user")
+            or effective_perms.get("can_upload", False)
+            or effective_perms.get("can_edit_metadata", False)
+        ),
+        "can_read": effective_perms.get("can_read", True),
+        "can_download": effective_perms.get("can_download", True),
+        "can_send_email": effective_perms.get("can_send_email", True),
+        "can_use_tts": effective_perms.get("can_use_tts", True),
+        "can_use_opds": effective_perms.get("can_use_opds", True),
+        "can_upload": effective_perms.get("can_upload", row.role in ("admin", "power_user")),
+        "can_edit_metadata": effective_perms.get("can_edit_metadata", row.role in ("admin", "power_user")),
+        "can_delete_books": effective_perms.get("can_delete_books", is_admin),
+        "permissions": effective_perms,
+        "custom_permissions": custom_overrides,
+        "created_at": getattr(row, "created_at", None),
+        "last_login": getattr(row, "last_login", None),
+    }
+
+
 def get_user_from_session(db: Session, session_id: str | None):
     if not session_id:
         return None
 
+    _ensure_permission_schema(db)
     row = db.execute(text("""
-        SELECT u.id, u.username, u.email, u.kindle_email, u.role, u.is_active, u.created_at, u.last_login
+        SELECT u.id, u.username, u.email, u.kindle_email, u.role, u.is_active,
+               u.custom_permissions, u.created_at, u.last_login
         FROM sessions s
         JOIN users u ON s.user_id = u.id
         WHERE s.session_id = :sid AND s.expires_at > CURRENT_TIMESTAMP AND u.is_active = TRUE
@@ -184,19 +452,8 @@ def get_user_from_session(db: Session, session_id: str | None):
     if not row:
         return None
 
-    return {
-        "id": row.id,
-        "username": row.username,
-        "email": row.email,
-        "kindle_email": row.kindle_email or "",
-        "role": row.role,
-        "is_active": row.is_active,
-        "is_admin": (row.role == "admin"),
-        "is_power_user": (row.role in ("admin", "power_user")),
-        "can_download": True,
-        "created_at": row.created_at,
-        "last_login": row.last_login,
-    }
+    role_matrix = get_role_permissions(db)
+    return _build_user_dict(row, role_matrix)
 
 
 def authenticate_user(db: Session, username: str, password: str):
@@ -205,8 +462,10 @@ def authenticate_user(db: Session, username: str, password: str):
     if not clean_u or not password:
         return None
 
+    _ensure_permission_schema(db)
     row = db.execute(text("""
-        SELECT id, username, password_hash, role, is_active
+        SELECT id, username, email, kindle_email, password_hash, role, is_active,
+               custom_permissions, created_at, last_login
         FROM users
         WHERE LOWER(username) = LOWER(:u) OR (email IS NOT NULL AND LOWER(email) = LOWER(:u))
     """), {"u": clean_u}).fetchone()
@@ -223,34 +482,26 @@ def authenticate_user(db: Session, username: str, password: str):
     if not row.is_active:
         return False  # Password correct, but account awaiting approval or disabled
 
-    return {
-        "id": row.id,
-        "username": row.username,
-        "role": row.role,
-        "is_active": row.is_active
-    }
+    role_matrix = get_role_permissions(db)
+    return _build_user_dict(row, role_matrix)
 
 
 def get_all_users(db: Session):
+    _ensure_permission_schema(db)
+    role_matrix = get_role_permissions(db)
     rows = db.execute(text("""
-        SELECT id, username, email, kindle_email, role, is_active, created_at, last_login
+        SELECT id, username, email, kindle_email, role, is_active, custom_permissions, created_at, last_login
         FROM users
         ORDER BY id ASC
     """)).fetchall()
 
-    return [
-        {
-            "id": r.id,
-            "username": r.username,
-            "email": r.email,
-            "kindle_email": r.kindle_email or "",
-            "role": r.role,
-            "is_active": r.is_active,
-            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
-            "last_login": r.last_login.strftime("%Y-%m-%d %H:%M") if r.last_login else "Never",
-        }
-        for r in rows
-    ]
+    results = []
+    for r in rows:
+        u = _build_user_dict(r, role_matrix)
+        u["created_at"] = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else ""
+        u["last_login"] = r.last_login.strftime("%Y-%m-%d %H:%M") if r.last_login else "Never"
+        results.append(u)
+    return results
 
 
 def update_user_profile(
@@ -281,25 +532,49 @@ def update_user_profile(
     return {"success": True, "message": "Profile updated successfully."}
 
 
-def create_user(db: Session, username: str, password: str, role: str = "user", email: str | None = None):
+def create_user(
+    db: Session,
+    username: str,
+    password: str,
+    role: str = "user",
+    email: str | None = None,
+    custom_permissions: dict | None = None
+):
+    _ensure_permission_schema(db)
     # Check if username exists
     existing = db.execute(text("SELECT id FROM users WHERE LOWER(username) = LOWER(:u)"), {"u": username.strip()}).fetchone()
     if existing:
-        return {"error": "Username already exists"}
+        return {"error": "Username already exists", "message": "Username already exists"}
 
     if role not in ("admin", "power_user", "user"):
         role = "user"
 
     pwd_hash = hash_password(password)
+    clean_custom = sanitize_custom_permissions(custom_permissions)
     db.execute(text("""
-        INSERT INTO users (username, email, password_hash, role, is_active)
-        VALUES (:u, :e, :p, :r, TRUE)
-    """), {"u": username.strip(), "e": email.strip() if email else None, "p": pwd_hash, "r": role})
+        INSERT INTO users (username, email, password_hash, role, is_active, custom_permissions)
+        VALUES (:u, :e, :p, :r, TRUE, CAST(:cp AS jsonb))
+    """), {
+        "u": username.strip(),
+        "e": email.strip() if email else None,
+        "p": pwd_hash,
+        "r": role,
+        "cp": json.dumps(clean_custom),
+    })
     db.commit()
-    return {"success": True}
+    return {"success": True, "message": f"User '{username.strip()}' created successfully."}
 
 
-def update_user(db: Session, user_id: int, role: str | None = None, is_active: bool | None = None, password: str | None = None, email: str | None = None):
+def update_user(
+    db: Session,
+    user_id: int,
+    role: str | None = None,
+    is_active: bool | None = None,
+    password: str | None = None,
+    email: str | None = None,
+    custom_permissions: dict | None = None
+):
+    _ensure_permission_schema(db)
     updates = []
     params = {"uid": user_id}
 
@@ -319,12 +594,17 @@ def update_user(db: Session, user_id: int, role: str | None = None, is_active: b
         updates.append("email = :email")
         params["email"] = email.strip() if email.strip() else None
 
+    if custom_permissions is not None:
+        clean_custom = sanitize_custom_permissions(custom_permissions)
+        updates.append("custom_permissions = CAST(:cp AS jsonb)")
+        params["cp"] = json.dumps(clean_custom)
+
     if updates:
         sql = f"UPDATE users SET {', '.join(updates)} WHERE id = :uid"
         db.execute(text(sql), params)
         db.commit()
 
-    return {"success": True}
+    return {"success": True, "message": "User account updated successfully."}
 
 
 def delete_user(db: Session, user_id: int, current_user_id: int):

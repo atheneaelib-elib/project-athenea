@@ -136,6 +136,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "modal.download_restricted": "Downloads restricted to Power Users & Admins.",
         "modal.read_online_notice": "You can read the entire book online above!",
         "modal.sign_in_to_download": "Sign in to download book files",
+        "modal.delete_book": "Delete Book",
+        "modal.delete_confirm_title": "Permanently delete this book from the library?",
+        "modal.delete_files_label": "Also delete files from disk",
 
         # Reader & TTS
         "reader.table_of_contents": "Table of Contents",
@@ -1588,6 +1591,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "modal.download_restricted": "Скачивание доступно проверенным пользователям и администраторам.",
         "modal.read_online_notice": "Вы можете читать всю книгу онлайн выше!",
         "modal.sign_in_to_download": "Войдите в аккаунт для скачивания файлов",
+        "modal.delete_book": "Удалить книгу",
+        "modal.delete_confirm_title": "Удалить эту книгу из библиотеки навсегда?",
+        "modal.delete_files_label": "Также удалить файлы с диска",
 
         # Reader & TTS
         "reader.table_of_contents": "Содержание",

@@ -26,7 +26,8 @@ logger = logging.getLogger("bookserver")
 
 try:
     from .settings import settings
-    from .db import get_db, SessionLocal
+    from . import db as db_module
+    from .db import get_db
     from .services import books as book_service
     from .services import auth as auth_service
     from .services import importer as importer_service
@@ -37,7 +38,8 @@ try:
     from .services import i18n as i18n_service
 except (ImportError, ValueError):
     from settings import settings
-    from db import get_db, SessionLocal
+    import db as db_module
+    from db import get_db
     from services import books as book_service
     from services import auth as auth_service
     from services import importer as importer_service
@@ -117,7 +119,7 @@ login_limiter = LoginRateLimiter(
 async def lifespan(app: FastAPI):
     # Initialize auth tables and sequences if database is already configured
     try:
-        db = SessionLocal()
+        db = db_module.SessionLocal()
         try:
             auth_service.init_auth_tables(db)
             importer_service.ensure_sequences(db)
@@ -163,7 +165,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def get_library_total_books() -> str:
     """Retrieve formatted total books count from cache or database."""
     try:
-        with SessionLocal() as db:
+        with db_module.SessionLocal() as db:
             stats = book_service.get_stats(db)
             return f"{stats.get('books', 0):,}"
     except Exception as e:
@@ -239,7 +241,7 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
         session_id = request.cookies.get(auth_service.SESSION_COOKIE_NAME)
         user = None
         if session_id:
-            db = SessionLocal()
+            db = db_module.SessionLocal()
             try:
                 user = auth_service.get_user_from_session(db, session_id)
             finally:
@@ -253,7 +255,7 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                     import base64
                     creds = base64.b64decode(auth_header[6:]).decode("utf-8").split(":", 1)
                     if len(creds) == 2:
-                        db = SessionLocal()
+                        db = db_module.SessionLocal()
                         try:
                             auth_res = auth_service.authenticate_user(db, creds[0], creds[1])
                             if auth_res:
@@ -264,19 +266,45 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                 except Exception:
                     pass
 
-        # ── OPDS Authentication handling ────────────────────────────
+        # ── OPDS Authentication & Permission handling ──────────────
         if path.startswith("/opds"):
             if not user:
+                guest_opds_allowed = False
+                db = db_module.SessionLocal()
+                try:
+                    guest_perms = auth_service.get_guest_permissions(db)
+                    guest_opds_allowed = guest_perms.get("can_use_opds", False)
+                except Exception:
+                    pass
+                finally:
+                    db.close()
+                if not guest_opds_allowed:
+                    from starlette.responses import Response as StarletteResponse
+                    return StarletteResponse(
+                        status_code=401,
+                        content="Authentication required for OPDS catalog",
+                        headers={"WWW-Authenticate": 'Basic realm="eBook Library OPDS"'}
+                    )
+                return await call_next(request)
+            if not user.get("can_use_opds", True):
                 from starlette.responses import Response as StarletteResponse
                 return StarletteResponse(
-                    status_code=401,
-                    content="Authentication required for OPDS catalog",
-                    headers={"WWW-Authenticate": 'Basic realm="eBook Library OPDS"'}
+                    status_code=403,
+                    content="OPDS access is disabled for this account."
                 )
             return await call_next(request)
 
         # ── Tier 2: admin-only paths ─────────────────────────────────
         if any(path.startswith(p) for p in self.ADMIN_ONLY_PATHS):
+            # Allow /admin/book/{id}/upload-cover, fetch-cover, delete for users with those granular permissions
+            if path.startswith("/admin/book/") and user:
+                if (path.endswith("/upload-cover") or path.endswith("/fetch-cover")) and (
+                    user.get("can_edit_metadata") or user.get("is_power_user") or user.get("is_admin")
+                ):
+                    return await call_next(request)
+                if path.endswith("/delete") and (user.get("can_delete_books") or user.get("is_admin")):
+                    return await call_next(request)
+
             if not user or not user.get("is_admin"):
                 # Logged-in non-admins → home; guests → login
                 if user:
@@ -286,8 +314,30 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                 )
             return await call_next(request)
 
-        # ── Tier 3: any authenticated user ───────────────────────────
+        # ── Tier 3: any authenticated user (or Guest if permitted) ──
         if not user:
+            guest_perms = {}
+            db = db_module.SessionLocal()
+            try:
+                guest_perms = auth_service.get_guest_permissions(db)
+            except Exception:
+                pass
+            finally:
+                db.close()
+
+            if guest_perms.get("can_read", False):
+                if path in ("/", "/books/grid", "/books/random/modal") or path.startswith((
+                    "/book/",
+                    "/reader/",
+                    "/raw/",
+                    "/api/books",
+                    "/api/authors",
+                    "/api/series",
+                )):
+                    return await call_next(request)
+
+            if guest_perms.get("can_download", False) and path.startswith("/download/"):
+                return await call_next(request)
             # API endpoints return 401 JSON, avoiding 302 stream resets during upload fetch
             if path.startswith("/api/"):
                 return JSONResponse(
@@ -749,6 +799,7 @@ def admin_settings_page(
         return RedirectResponse(url=f"/login?next={urllib.parse.quote(str(request.url))}", status_code=status.HTTP_302_FOUND)
 
     users_list = auth_service.get_all_users(db)
+    role_permissions = auth_service.get_role_permissions(db)
     user_stats = {
         "total": len(users_list),
         "admins": sum(1 for u in users_list if u["role"] == "admin"),
@@ -759,6 +810,7 @@ def admin_settings_page(
     system_info = admin_settings_service.get_system_status(db)
     smtp_configured = bool(settings.SMTP_HOST and settings.SMTP_HOST.strip())
     smtp_password_set = bool(settings.SMTP_PASSWORD and settings.SMTP_PASSWORD.strip())
+    db_password_set = bool(settings.DB_PASSWORD and settings.DB_PASSWORD.strip())
 
     total_books = system_info.get("total_books")
     if not total_books:
@@ -771,10 +823,13 @@ def admin_settings_page(
         context={
             "settings": settings,
             "users": users_list,
+            "role_permissions": role_permissions,
+            "permission_catalog": auth_service.PERMISSION_CATALOG,
             "user_stats": user_stats,
             "system_info": system_info,
             "smtp_configured": smtp_configured,
             "smtp_password_set": smtp_password_set,
+            "db_password_set": db_password_set,
             "active_tab": tab,
             "current_user": user,
             "total_books_count": f"{total_books:,}",
@@ -787,6 +842,7 @@ class CreateUserRequest(BaseModel):
     password: str
     role: str = "user"
     email: str | None = None
+    custom_permissions: dict | None = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -795,6 +851,19 @@ class UpdateUserRequest(BaseModel):
     is_active: bool | None = None
     password: str | None = None
     email: str | None = None
+    custom_permissions: dict | None = None
+
+
+class SaveRolePermissionsRequest(BaseModel):
+    role_permissions: dict
+
+
+class DatabaseSettingsRequest(BaseModel):
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "athenea"
+    db_user: str = "athenea"
+    db_password: str = ""
 
 
 @app.post("/admin/users/create")
@@ -803,7 +872,7 @@ def admin_create_user(
     admin: dict = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    res = auth_service.create_user(db, req.username, req.password, req.role, req.email)
+    res = auth_service.create_user(db, req.username, req.password, req.role, req.email, req.custom_permissions)
     return res
 
 
@@ -813,8 +882,74 @@ def admin_update_user(
     admin: dict = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    res = auth_service.update_user(db, req.user_id, req.role, req.is_active, req.password, req.email)
+    res = auth_service.update_user(db, req.user_id, req.role, req.is_active, req.password, req.email, req.custom_permissions)
     return res
+
+
+@app.get("/admin/permissions/roles")
+def admin_get_role_permissions(
+    admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    return {
+        "success": True,
+        "role_permissions": auth_service.get_role_permissions(db),
+        "permission_catalog": auth_service.PERMISSION_CATALOG,
+    }
+
+
+@app.post("/admin/permissions/roles")
+def admin_save_role_permissions(
+    req: SaveRolePermissionsRequest,
+    admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    try:
+        res = auth_service.save_all_role_permissions(db, req.role_permissions)
+        return res
+    except Exception as e:
+        logger.error(f"Error saving role permissions: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+
+
+@app.post("/admin/settings/database/test")
+def admin_test_database_settings(
+    req: DatabaseSettingsRequest,
+    admin: dict = Depends(require_admin)
+):
+    try:
+        res = admin_settings_service.test_database_connection(
+            host=req.db_host,
+            port=req.db_port,
+            dbname=req.db_name,
+            user=req.db_user,
+            password=req.db_password,
+        )
+        status_code = 200 if res.get("success") else 400
+        return JSONResponse(status_code=status_code, content=res)
+    except Exception as e:
+        logger.error(f"Error testing database settings: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+
+
+@app.post("/admin/settings/database")
+def admin_save_database_settings(
+    req: DatabaseSettingsRequest,
+    admin: dict = Depends(require_admin)
+):
+    try:
+        res = admin_settings_service.save_database_settings(
+            host=req.db_host,
+            port=req.db_port,
+            dbname=req.db_name,
+            user=req.db_user,
+            password=req.db_password,
+        )
+        status_code = 200 if res.get("success") else 400
+        return JSONResponse(status_code=status_code, content=res)
+    except Exception as e:
+        logger.error(f"Error saving database settings: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 
 @app.post("/admin/users/delete/{user_id}")
@@ -1441,10 +1576,10 @@ def toggle_book_favorite(
 @app.get("/upload/modal", response_class=HTMLResponse)
 def upload_modal_view(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_upload") or user.get("is_admin")):
         raise HTTPException(
             status_code=403,
-            detail="Permission denied. Adding books is restricted to Power Users and Administrators."
+            detail="Permission denied. Adding books is restricted to users with upload permissions."
         )
     return templates.TemplateResponse(
         request=request,
@@ -1462,7 +1597,7 @@ async def process_book_upload(
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_upload") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     all_uploads = [f for f in (files + folder_files) if f and f.filename]
@@ -1538,7 +1673,7 @@ async def upload_summary_partial(
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_upload") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     imported = payload.get("imported", [])
@@ -1565,7 +1700,7 @@ async def api_upload_books(
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_upload") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     all_uploads = [f for f in (files + folder_files) if f and f.filename]
@@ -1629,6 +1764,14 @@ def reader_page(
     db: Session = Depends(get_db)
 ):
     current_user = get_current_user(request, db)
+    if current_user:
+        if not current_user.get("can_read", True):
+            raise HTTPException(status_code=403, detail="Online reading is disabled for this account.")
+    else:
+        guest_perms = auth_service.get_guest_permissions(db)
+        if not guest_perms.get("can_read", False):
+            return RedirectResponse(url=f"/login?next=/reader/{book_id}", status_code=302)
+
     book = book_service.get_book_details(db, book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -2037,14 +2180,16 @@ def download_book(
     fmt: str,
     db: Session = Depends(get_db)
 ):
-    # Authentication required to download book files
+    # Authentication or Guest Download permission required to download book files
     user = get_current_user(request, db)
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required. Please sign in to download book files."
-        )
-    if not user.get("can_download", True):
+        guest_perms = auth_service.get_guest_permissions(db)
+        if not guest_perms.get("can_download", False):
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required. Please sign in to download book files."
+            )
+    elif not user.get("can_download", True):
         raise HTTPException(
             status_code=403,
             detail="Downloads are disabled for this account."
@@ -2191,8 +2336,21 @@ def get_tts_voices():
 
 
 @app.post("/api/tts/synthesize")
-def synthesize_tts(req: SynthesizeRequest):
+def synthesize_tts(
+    req: SynthesizeRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """Synthesize text into speech and return MP3 audio URL and duration."""
+    user = get_current_user(request, db)
+    if user:
+        if not user.get("can_use_tts", True):
+            raise HTTPException(status_code=403, detail="Neural TTS Read-Aloud is disabled for this account.")
+    else:
+        guest_perms = auth_service.get_guest_permissions(db)
+        if not guest_perms.get("can_use_tts", False):
+            raise HTTPException(status_code=403, detail="Neural TTS Read-Aloud is disabled for guests.")
+
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     try:
@@ -2337,8 +2495,8 @@ def api_send_book_email(
     user = get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
-    if not user.get("can_download", True):
-        raise HTTPException(status_code=403, detail="Sending books requires download permissions")
+    if not user.get("can_send_email", True):
+        raise HTTPException(status_code=403, detail="Send to Kindle / Email is disabled for this account.")
 
     email_target = req.recipient_email.strip()
     if not email_target or "@" not in email_target:
@@ -2884,7 +3042,7 @@ async def admin_upload_book_cover(
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     content = await cover_file.read()
@@ -2902,10 +3060,47 @@ def admin_fetch_openlibrary_cover(
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
-    if not user or not user.get("is_power_user"):
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     res = admin_settings_service.fetch_cover_from_openlibrary(db, book_id)
     return res
+
+
+class DeleteBookRequest(BaseModel):
+    delete_files: bool = True
+
+
+@app.post("/admin/book/{book_id}/delete")
+def admin_delete_book(
+    book_id: int,
+    req: DeleteBookRequest = Body(default=DeleteBookRequest()),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Permanently delete a book from the catalog and optionally from disk (requires can_delete_books or Admin)."""
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_delete_books") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied: book deletion is disabled for this account.")
+    res = admin_settings_service.delete_book(db, book_id, delete_files=req.delete_files)
+    status_code = 200 if res.get("success") else 404
+    return JSONResponse(status_code=status_code, content=res)
+
+
+@app.delete("/api/books/{book_id}")
+def api_admin_delete_book(
+    book_id: int,
+    delete_files: bool = Query(True),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint to delete a book (requires can_delete_books or Admin)."""
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_delete_books") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied: book deletion is disabled for this account.")
+    res = admin_settings_service.delete_book(db, book_id, delete_files=delete_files)
+    status_code = 200 if res.get("success") else 404
+    return JSONResponse(status_code=status_code, content=res)
+
 
 

@@ -23,16 +23,23 @@ except ImportError:
 
 logger = logging.getLogger("bookserver.admin_settings")
 
-PRIMARY_ENV_PATH = Path("/etc/bookserver.env")
+PRIMARY_ENV_PATH = Path("/etc/athenea.env")
+LEGACY_ENV_PATH = Path("/etc/bookserver.env")
 FALLBACK_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 _PROD_BACKUP = Path("/mnt/mainlib/Backups/db")
 BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/mnt/mainlib/Backups/db" if _PROD_BACKUP.exists() else str(Path(__file__).resolve().parent.parent / "backups")))
-BACKUP_SCRIPT = Path("/opt/bookserver/backup_db.sh")
+BACKUP_SCRIPT = Path("/opt/athenea/backup_db.sh") if Path("/opt/athenea/backup_db.sh").exists() else Path("/opt/bookserver/backup_db.sh")
 
 
 def get_target_env_path() -> Path:
     """Return the active configuration file path."""
-    if PRIMARY_ENV_PATH.exists() or os.access(PRIMARY_ENV_PATH.parent, os.W_OK):
+    if PRIMARY_ENV_PATH.exists():
+        return PRIMARY_ENV_PATH
+    if FALLBACK_ENV_PATH.exists():
+        return FALLBACK_ENV_PATH
+    if LEGACY_ENV_PATH.exists():
+        return LEGACY_ENV_PATH
+    if os.access(PRIMARY_ENV_PATH.parent, os.W_OK):
         return PRIMARY_ENV_PATH
     return FALLBACK_ENV_PATH
 
@@ -50,12 +57,15 @@ def read_raw_env_file() -> tuple[Path, list[str]]:
     return env_path, lines
 
 
-def update_env_file(key_values: dict[str, str]) -> Path:
-    """
-    Update or append key=value pairs in the configuration file,
-    preserving comments and existing formatting.
-    """
-    env_path, lines = read_raw_env_file()
+def _update_single_env_file(env_path: Path, key_values: dict[str, str]):
+    lines = []
+    if env_path.exists():
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            logger.error(f"Error reading env file {env_path}: {e}")
+
     updated_keys = set()
     new_lines = []
 
@@ -78,17 +88,200 @@ def update_env_file(key_values: dict[str, str]) -> Path:
         for k in remaining:
             new_lines.append(f"{k}={key_values[k]}\n")
 
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+
+def update_env_file(key_values: dict[str, str]) -> Path:
+    """
+    Update or append key=value pairs in the configuration file,
+    preserving comments and existing formatting. Also syncs secondary env files if present.
+    """
+    env_path = get_target_env_path()
     try:
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
+        _update_single_env_file(env_path, key_values)
     except Exception as e:
         logger.error(f"Failed to write configuration file {env_path}: {e}")
         raise RuntimeError(f"Unable to write to {env_path}: {e}")
+
+    # Keep any secondary existing env files synchronized so restarts always pick up latest values
+    for extra_path in (PRIMARY_ENV_PATH, FALLBACK_ENV_PATH, LEGACY_ENV_PATH):
+        if extra_path != env_path and extra_path.exists():
+            try:
+                _update_single_env_file(extra_path, key_values)
+            except Exception as ex:
+                logger.warning(f"Could not sync secondary env file {extra_path}: {ex}")
 
     for k, v in key_values.items():
         os.environ[k] = str(v)
 
     return env_path
+
+
+def test_database_connection(
+    host: str,
+    port: int,
+    dbname: str,
+    user: str,
+    password: str
+) -> dict:
+    """Test a PostgreSQL connection with the supplied parameters and return diagnostic info."""
+    import psycopg2
+
+    clean_host = (host or "").strip() or "localhost"
+    clean_dbname = (dbname or "").strip() or "athenea"
+    clean_user = (user or "").strip() or "athenea"
+    clean_port = int(port) if str(port).isdigit() else 5432
+
+    if not password or password in ("••••••••", "********"):
+        effective_password = settings.DB_PASSWORD
+    else:
+        effective_password = password
+
+    if not effective_password:
+        return {
+            "success": False,
+            "message": "DB_PASSWORD is required. Please enter the PostgreSQL password."
+        }
+
+    try:
+        conn = psycopg2.connect(
+            host=clean_host,
+            port=clean_port,
+            dbname=clean_dbname,
+            user=clean_user,
+            password=effective_password,
+            connect_timeout=5,
+            client_encoding="utf8"
+        )
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT version();")
+                ver_row = cur.fetchone()
+                pg_ver = (ver_row[0].split(",")[0] if ver_row and ver_row[0] else "PostgreSQL")
+
+                cur.execute("SELECT pg_size_pretty(pg_database_size(current_database()));")
+                sz_row = cur.fetchone()
+                db_size = sz_row[0] if sz_row and sz_row[0] else "Unknown"
+
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'books'
+                    );
+                """)
+                has_books_table = bool(cur.fetchone()[0])
+                book_count = None
+                if has_books_table:
+                    cur.execute("SELECT count(*) FROM books;")
+                    book_count = cur.fetchone()[0]
+        finally:
+            conn.close()
+
+        books_msg = f", {book_count:,} books in catalog" if book_count is not None else " (empty/new schema)"
+        return {
+            "success": True,
+            "pg_version": pg_ver,
+            "db_size": db_size,
+            "book_count": book_count,
+            "message": f"Connected to {clean_user}@{clean_host}:{clean_port}/{clean_dbname} ({pg_ver}, Size: {db_size}{books_msg})."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"PostgreSQL connection failed: {str(e).strip()}"
+        }
+
+
+def save_database_settings(
+    host: str,
+    port: int,
+    dbname: str,
+    user: str,
+    password: str
+) -> dict:
+    """
+    Validate, persist, and hot-reload PostgreSQL connection parameters
+    (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD).
+    """
+    clean_host = (host or "").strip() or "localhost"
+    clean_dbname = (dbname or "").strip() or "athenea"
+    clean_user = (user or "").strip() or "athenea"
+    clean_port = int(port) if str(port).isdigit() else 5432
+
+    if not password or password in ("••••••••", "********"):
+        effective_password = settings.DB_PASSWORD
+    else:
+        effective_password = password
+
+    # Verify the connection succeeds before applying so we don't lock out the server
+    test_res = test_database_connection(
+        host=clean_host,
+        port=clean_port,
+        dbname=clean_dbname,
+        user=clean_user,
+        password=effective_password
+    )
+    if not test_res.get("success"):
+        return test_res
+
+    updates = {
+        "DB_HOST": clean_host,
+        "DB_PORT": str(clean_port),
+        "DB_NAME": clean_dbname,
+        "DB_USER": clean_user,
+        "DB_PASSWORD": effective_password,
+    }
+
+    env_path = update_env_file(updates)
+
+    settings.DB_HOST = clean_host
+    settings.DB_PORT = clean_port
+    settings.DB_NAME = clean_dbname
+    settings.DB_USER = clean_user
+    settings.DB_PASSWORD = effective_password
+
+    # Reinitialize live SQLAlchemy engine & SessionLocal pool
+    try:
+        try:
+            from .. import db as db_module
+            from . import auth as auth_service
+        except ImportError:
+            import db as db_module
+            from services import auth as auth_service
+
+        db_module.reinit_engine(
+            db_user=clean_user,
+            db_password=effective_password,
+            db_host=clean_host,
+            db_port=clean_port,
+            db_name=clean_dbname,
+        )
+        # Ensure auth/permission schema exists on the target database
+        with db_module.SessionLocal() as session:
+            auth_service.init_auth_tables(session)
+    except Exception as e:
+        logger.error(f"Error reinitializing SQLAlchemy engine: {e}")
+        return {
+            "success": False,
+            "message": f"Saved to {env_path.name}, but live engine reload failed: {e}"
+        }
+
+    try:
+        book_service.invalidate_caches()
+    except Exception:
+        pass
+
+    logger.info(
+        f"Updated PostgreSQL settings in {env_path}: "
+        f"{clean_user}@{clean_host}:{clean_port}/{clean_dbname}"
+    )
+    return {
+        "success": True,
+        "message": f"PostgreSQL settings saved to {env_path.name} and live connection pool reinitialized! ({test_res.get('message')})",
+        "db_size": test_res.get("db_size"),
+        "book_count": test_res.get("book_count"),
+    }
 
 
 def save_registration_settings(allow_registration: bool, require_approval: bool) -> dict:
@@ -476,7 +669,14 @@ def get_library_sync_status() -> dict:
 
 def _run_sync_worker(dry_run: bool = False):
     global _sync_state
-    cmd = ["/opt/bookserver/api/sync-library"]
+    import sys
+    app_root = Path(__file__).resolve().parent.parent
+    sync_sh = app_root / "cli" / "sync-library.sh"
+    sync_py = app_root / "cli" / "sync_library.py"
+    if sync_sh.exists() and os.access(sync_sh, os.X_OK):
+        cmd = [str(sync_sh)]
+    else:
+        cmd = [sys.executable, str(sync_py)]
     if dry_run:
         cmd.append("--dry-run")
 
@@ -794,10 +994,10 @@ def set_auto_sync_schedule(enabled: bool, hour: int = 2, minute: int = 0) -> dic
         return {"success": True, "enabled": False}
 
     cron_content = (
-        f"# Automated Nightly Library Rescan for BookServer\n"
+        f"# Automated Nightly Library Rescan for Athenea\n"
         f"SHELL=/bin/bash\n"
         f"PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n"
-        f"{minute} {hour} * * * books /opt/bookserver/api/venv/bin/python /opt/bookserver/api/cli/sync_library.py >> /var/log/bookserver_sync.log 2>&1\n"
+        f"{minute} {hour} * * * athenea /opt/athenea/venv/bin/python /opt/athenea/cli/sync_library.py >> /var/log/athenea_sync.log 2>&1\n"
     )
     try:
         AUTO_SYNC_CRON_PATH.write_text(cron_content, encoding="utf-8")
@@ -1006,4 +1206,131 @@ def fetch_cover_from_openlibrary(db: Session, book_id: int) -> dict:
         return {"success": False, "error": "No high-resolution cover was found on Open Library for this book."}
 
     return replace_book_cover(db, book_id, image_bytes)
+
+
+# ===================================================================
+# ADMIN-ONLY BOOK DELETION (DB + FILES + CACHE)
+# ===================================================================
+
+def delete_book(db: Session, book_id: int, delete_files: bool = True) -> dict:
+    """
+    Permanently delete a book from the PostgreSQL database (including all related
+    links, formats, user shelves/progress/notes) and optionally remove its files
+    from LIBRARY_ROOT and the WebP thumbnail cache.
+    """
+    row = db.execute(
+        text("SELECT id, title, author_sort, path FROM books WHERE id = :id"),
+        {"id": book_id}
+    ).fetchone()
+    if not row:
+        return {"success": False, "error": f"Book #{book_id} not found"}
+
+    book_title = row.title
+    book_author = row.author_sort or "Unknown"
+    book_rel_path = row.path
+
+    # Capture linked entity IDs before deleting link rows so we can prune orphans
+    author_ids = [r[0] for r in db.execute(text("SELECT author_id FROM book_authors WHERE book_id = :id"), {"id": book_id}).fetchall()]
+    publisher_ids = [r[0] for r in db.execute(text("SELECT publisher_id FROM book_publishers WHERE book_id = :id"), {"id": book_id}).fetchall()]
+    series_ids = [r[0] for r in db.execute(text("SELECT series_id FROM book_series WHERE book_id = :id"), {"id": book_id}).fetchall()]
+    tag_ids = [r[0] for r in db.execute(text("SELECT tag_id FROM book_tags WHERE book_id = :id"), {"id": book_id}).fetchall()]
+
+    try:
+        # 1. Remove all dependent rows across link & user tables
+        for tbl in (
+            "book_authors",
+            "book_publishers",
+            "book_series",
+            "book_tags",
+            "book_languages",
+            "comments",
+            "data",
+            "identifiers",
+            "favorites",
+            "reading_progress",
+            "reading_status",
+            "user_bookmarks",
+            "user_notes",
+        ):
+            exists = db.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = :t"),
+                {"t": tbl}
+            ).fetchone()
+            if exists:
+                db.execute(text(f"DELETE FROM {tbl} WHERE book_id = :id"), {"id": book_id})
+
+        # 2. Delete the book row itself
+        db.execute(text("DELETE FROM books WHERE id = :id"), {"id": book_id})
+
+        # 3. Clean up orphaned authors, series, publishers, and tags that have 0 remaining books
+        for aid in author_ids:
+            rem = db.execute(text("SELECT 1 FROM book_authors WHERE author_id = :aid LIMIT 1"), {"aid": aid}).fetchone()
+            if not rem:
+                db.execute(text("DELETE FROM authors WHERE id = :aid"), {"aid": aid})
+
+        for pid in publisher_ids:
+            rem = db.execute(text("SELECT 1 FROM book_publishers WHERE publisher_id = :pid LIMIT 1"), {"pid": pid}).fetchone()
+            if not rem:
+                db.execute(text("DELETE FROM publishers WHERE id = :pid"), {"pid": pid})
+
+        for sid in series_ids:
+            rem = db.execute(text("SELECT 1 FROM book_series WHERE series_id = :sid LIMIT 1"), {"sid": sid}).fetchone()
+            if not rem:
+                db.execute(text("DELETE FROM series WHERE id = :sid"), {"sid": sid})
+
+        for tid in tag_ids:
+            rem = db.execute(text("SELECT 1 FROM book_tags WHERE tag_id = :tid LIMIT 1"), {"tid": tid}).fetchone()
+            if not rem:
+                db.execute(text("DELETE FROM tags WHERE id = :tid"), {"tid": tid})
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error deleting book #{book_id}: {e}")
+        return {"success": False, "error": f"Database error: {e}"}
+
+    # 4. Remove cached WebP thumbnail
+    try:
+        thumb_file = Path(settings.THUMB_CACHE_DIR) / f"{book_id}.webp"
+        if thumb_file.exists():
+            thumb_file.unlink(missing_ok=True)
+    except Exception as te:
+        logger.warning(f"Failed to remove thumbnail cache for #{book_id}: {te}")
+
+    # 5. Optionally remove physical book directory from LIBRARY_ROOT
+    files_deleted = False
+    if delete_files and book_rel_path and book_rel_path.strip():
+        try:
+            lib_root = Path(settings.LIBRARY_ROOT).resolve()
+            book_dir = (lib_root / book_rel_path).resolve()
+            # Security check: ensure book_dir is strictly a subdirectory inside lib_root
+            if lib_root in book_dir.parents and book_dir != lib_root and book_dir.exists() and book_dir.is_dir():
+                shutil.rmtree(book_dir, ignore_errors=True)
+                files_deleted = True
+                # If parent author folder is now empty and inside lib_root, clean it up too
+                author_dir = book_dir.parent
+                if author_dir != lib_root and lib_root in author_dir.parents and author_dir.exists():
+                    try:
+                        if not any(author_dir.iterdir()):
+                            author_dir.rmdir()
+                    except Exception:
+                        pass
+        except Exception as fe:
+            logger.warning(f"Failed to delete physical directory for book #{book_id} ({book_rel_path}): {fe}")
+
+    # 6. Invalidate catalog & stats caches
+    try:
+        book_service.invalidate_caches()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "book_id": book_id,
+        "title": book_title,
+        "author": book_author,
+        "files_deleted": files_deleted,
+        "message": f"Deleted '{book_title}' (#{book_id})" + (" and removed files from disk." if files_deleted else " from catalog database.")
+    }
+
 

@@ -249,6 +249,74 @@
       </div>
     </div>
 
+    <!-- Group & Role Permissions Matrix Card -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+      <div class="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+            Group &amp; Role Permissions Matrix
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Adjust default capabilities for each group (<code class="text-slate-300">guest</code>, <code class="text-slate-300">user</code>, <code class="text-emerald-300">power_user</code>, <code class="text-purple-300">admin</code>). Individual users can also have custom permission overrides when editing their account.
+          </p>
+        </div>
+        <button
+          type="button"
+          id="save-role-perms-btn"
+          onclick="saveRolePermissionsMatrix()"
+          class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex-shrink-0"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+          <span>Save Group Permissions</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4 font-semibold">Permission / Capability</th>
+              <th class="py-3 px-4 font-semibold text-center">
+                <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Guest (Unlogged)</span>
+              </th>
+              <th class="py-3 px-4 font-semibold text-center">
+                <span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-200 border border-slate-600">Standard User</span>
+              </th>
+              <th class="py-3 px-4 font-semibold text-center">
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Power User</span>
+              </th>
+              <th class="py-3 px-4 font-semibold text-center">
+                <span class="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">Admin</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+            {% for perm in permission_catalog %}
+            <tr class="hover:bg-slate-800/30 transition-colors">
+              <td class="py-2.5 px-4">
+                <div class="font-semibold text-white">{{ perm.label }} <code class="text-[10px] text-indigo-400 font-mono ml-1">{{ perm.key }}</code></div>
+                <div class="text-[11px] text-slate-400">{{ perm.description }}</div>
+              </td>
+              {% for r_key in ['guest', 'user', 'power_user', 'admin'] %}
+              <td class="py-2.5 px-4 text-center">
+                <input
+                  type="checkbox"
+                  id="role-perm-{{ r_key }}-{{ perm.key }}"
+                  data-role="{{ r_key }}"
+                  data-perm="{{ perm.key }}"
+                  {% if role_permissions.get(r_key, {}).get(perm.key) %}checked{% endif %}
+                  class="role-perm-chk w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                />
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Actions & Filter Toolbar -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
       <div class="relative flex-1 max-w-md">
@@ -280,6 +348,7 @@
             <tr>
               <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_user') }}</th>
               <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_role') }}</th>
+              <th class="py-3.5 px-4 font-semibold">Effective Permissions</th>
               <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_status') }}</th>
               <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_last_login') }}</th>
               <th class="py-3.5 px-4 font-semibold">{{ t('admin.th_created') }}</th>
@@ -305,13 +374,32 @@
 
               <!-- Role -->
               <td class="py-3 px-4">
-                {% if u.role == 'admin' %}
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/30">Admin</span>
-                {% elif u.role == 'power_user' %}
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Power User</span>
-                {% else %}
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-700 text-slate-300 border border-slate-600">User</span>
-                {% endif %}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  {% if u.role == 'admin' %}
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/30">Admin</span>
+                  {% elif u.role == 'power_user' %}
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Power User</span>
+                  {% else %}
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-700 text-slate-300 border border-slate-600">User</span>
+                  {% endif %}
+                  {% if u.custom_permissions and u.custom_permissions|length > 0 %}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Has custom per-user permission overrides">Custom ({{ u.custom_permissions|length }})</span>
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Effective Permissions -->
+              <td class="py-3 px-4">
+                <div class="flex flex-wrap gap-1 max-w-xs">
+                  {% if u.can_read %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-200 border border-slate-700">Read</span>{% endif %}
+                  {% if u.can_download %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-700/40">Download</span>{% endif %}
+                  {% if u.can_send_email %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-950/60 text-amber-300 border border-amber-700/40">Email</span>{% endif %}
+                  {% if u.can_use_tts %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-cyan-950/60 text-cyan-300 border border-cyan-700/40">TTS</span>{% endif %}
+                  {% if u.can_use_opds %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-indigo-300 border border-slate-700">OPDS</span>{% endif %}
+                  {% if u.can_upload %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-950/70 text-indigo-300 border border-indigo-500/40">Add</span>{% endif %}
+                  {% if u.can_edit_metadata %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950/70 text-purple-300 border border-purple-500/40">Edit</span>{% endif %}
+                  {% if u.can_delete_books %}<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-rose-950/70 text-rose-300 border border-rose-500/40">Delete</span>{% endif %}
+                </div>
               </td>
 
               <!-- Status -->
@@ -901,6 +989,140 @@
   <!-- ===================================================================== -->
   <div id="tab-content-backups" class="tab-pane hidden space-y-6">
 
+    <!-- PostgreSQL Database Connection Configuration Card -->
+    <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-4 gap-3">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7M4 7c0-2 1.5-3 3.5-3h9c2 0 3.5 1 3.5 3M4 7c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3"></path></svg>
+            PostgreSQL Database Connection Parameters
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Configure PostgreSQL host, port, database name, user, and password. Changes are verified before saving to <code class="text-indigo-300 font-mono">{{ system_info.env_path }}</code> and hot-reloaded immediately.
+          </p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 w-fit">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Connected ({{ settings.DB_USER }}@{{ settings.DB_HOST }}:{{ settings.DB_PORT }}/{{ settings.DB_NAME }})
+        </span>
+      </div>
+
+      <form id="db-settings-form" onsubmit="saveDatabaseSettings(event)" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              PostgreSQL Database Host (<code class="text-indigo-300 font-mono">DB_HOST</code>) <span class="text-rose-400">*</span>
+            </label>
+            <input
+              type="text"
+              id="db_host_input"
+              value="{{ settings.DB_HOST or 'localhost' }}"
+              placeholder="localhost"
+              required
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              PostgreSQL Database Port (<code class="text-indigo-300 font-mono">DB_PORT</code>) <span class="text-rose-400">*</span>
+            </label>
+            <input
+              type="number"
+              id="db_port_input"
+              value="{{ settings.DB_PORT or 5432 }}"
+              placeholder="5432"
+              required
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              Database Name (<code class="text-indigo-300 font-mono">DB_NAME</code>) <span class="text-rose-400">*</span>
+            </label>
+            <input
+              type="text"
+              id="db_name_input"
+              value="{{ settings.DB_NAME or 'athenea' }}"
+              placeholder="athenea"
+              required
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              Database User (<code class="text-indigo-300 font-mono">DB_USER</code>) <span class="text-rose-400">*</span>
+            </label>
+            <input
+              type="text"
+              id="db_user_input"
+              value="{{ settings.DB_USER or 'athenea' }}"
+              placeholder="athenea"
+              required
+              autocomplete="off"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+            />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-semibold text-slate-300">
+                Password (<code class="text-indigo-300 font-mono">DB_PASSWORD</code>) <span class="text-rose-400">*</span>
+              </label>
+              {% if db_password_set %}
+              <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">Saved</span>
+              {% endif %}
+            </div>
+            <div class="relative">
+              <input
+                type="password"
+                id="db_password_input"
+                placeholder="{% if db_password_set %}•••••••• (leave blank to keep current){% else %}Required PostgreSQL password{% endif %}"
+                autocomplete="new-password"
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors pr-10 font-mono"
+              />
+              <button
+                type="button"
+                onclick="togglePasswordVisibility('db_password_input', 'db-eye-icon')"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+                title="Show/Hide Password"
+              >
+                <svg id="db-eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="db-test-result" class="hidden p-3.5 rounded-xl text-xs font-mono transition-all"></div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-slate-800">
+          <span class="text-[11px] text-slate-400">
+            Persists to <code class="text-indigo-300 font-mono">{{ system_info.env_path }}</code> and reinitializes live SQLAlchemy pool.
+          </span>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              id="test-db-btn"
+              onclick="testDatabaseSettings()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer"
+            >
+              <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>Test Connection</span>
+            </button>
+            <button
+              type="submit"
+              id="save-db-btn"
+              class="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Save &amp; Reconnect Database</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
     <!-- Top Stats & Manual Backup Trigger -->
     <div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
@@ -1068,8 +1290,8 @@
 <!-- ===================================================================== -->
 <!-- ADD USER MODAL                                                        -->
 <!-- ===================================================================== -->
-<div id="add-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+<div id="add-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
@@ -1099,18 +1321,44 @@
         </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
-        <input type="email" id="add-email" placeholder="user@example.com (optional)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+          <input type="email" id="add-email" placeholder="user@example.com (optional)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Group / Role</label>
+          <select id="add-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <option value="user">Standard User</option>
+            <option value="power_user">Power User</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
-        <select id="add-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-          <option value="user">Standard User (Read Online Only)</option>
-          <option value="power_user">Power User (Online + Downloads + Ingestion)</option>
-          <option value="admin">Administrator (Full Access)</option>
-        </select>
+      <!-- Per-User Custom Permission Overrides -->
+      <div class="pt-2 border-t border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Custom Permission Overrides (Optional)</span>
+          <button type="button" onclick="resetModalPermissions('add')" class="text-[11px] text-indigo-400 hover:underline">Reset all to Inherit</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          {% for perm in permission_catalog %}
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-slate-300 truncate" title="{{ perm.description }}">{{ perm.label }}</span>
+            <select
+              id="add-perm-{{ perm.key }}"
+              data-perm="{{ perm.key }}"
+              class="add-user-perm-sel bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="inherit">Inherit Group</option>
+              <option value="allow">Allow (Override)</option>
+              <option value="deny">Deny (Override)</option>
+            </select>
+          </div>
+          {% endfor %}
+        </div>
       </div>
 
       <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
@@ -1124,8 +1372,8 @@
 <!-- ===================================================================== -->
 <!-- EDIT USER MODAL                                                       -->
 <!-- ===================================================================== -->
-<div id="edit-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+<div id="edit-user-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -1137,18 +1385,20 @@
     <form onsubmit="submitEditUser(event)" class="space-y-3.5">
       <input type="hidden" id="edit-user-id" />
 
-      <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
-        <input type="email" id="edit-email" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+          <input type="email" id="edit-email" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        </div>
 
-      <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
-        <select id="edit-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-          <option value="user">Standard User (Read Online Only)</option>
-          <option value="power_user">Power User (Online + Downloads + Ingestion)</option>
-          <option value="admin">Administrator (Full Access)</option>
-        </select>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Group / Role</label>
+          <select id="edit-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <option value="user">Standard User</option>
+            <option value="power_user">Power User</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
       </div>
 
       <div>
@@ -1166,7 +1416,31 @@
         </div>
       </div>
 
-      <div class="pt-2">
+      <!-- Per-User Custom Permission Overrides -->
+      <div class="pt-2 border-t border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Custom Permission Overrides</span>
+          <button type="button" onclick="resetModalPermissions('edit')" class="text-[11px] text-indigo-400 hover:underline">Reset all to Inherit</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          {% for perm in permission_catalog %}
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-slate-300 truncate" title="{{ perm.description }}">{{ perm.label }}</span>
+            <select
+              id="edit-perm-{{ perm.key }}"
+              data-perm="{{ perm.key }}"
+              class="edit-user-perm-sel bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="inherit">Inherit Group</option>
+              <option value="allow">Allow (Override)</option>
+              <option value="deny">Deny (Override)</option>
+            </select>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="pt-1">
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" id="edit-active" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer" />
           <span class="text-xs text-white font-medium">Account is Active</span>
@@ -1244,7 +1518,64 @@ function filterUsersTable() {
   });
 }
 
+function resetModalPermissions(mode) {
+  const selector = mode === 'add' ? '.add-user-perm-sel' : '.edit-user-perm-sel';
+  document.querySelectorAll(selector).forEach(sel => {
+    sel.value = 'inherit';
+  });
+}
+
+function collectModalPermissions(mode) {
+  const selector = mode === 'add' ? '.add-user-perm-sel' : '.edit-user-perm-sel';
+  const overrides = {};
+  document.querySelectorAll(selector).forEach(sel => {
+    const key = sel.dataset.perm;
+    const val = sel.value;
+    if (key && (val === 'allow' || val === 'deny')) {
+      overrides[key] = (val === 'allow');
+    }
+  });
+  return overrides;
+}
+
+async function saveRolePermissionsMatrix() {
+  const btn = document.getElementById('save-role-perms-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving...</span>`;
+
+  const roles = { guest: {}, user: {}, power_user: {}, admin: {} };
+  document.querySelectorAll('.role-perm-chk').forEach(chk => {
+    const role = chk.dataset.role;
+    const perm = chk.dataset.perm;
+    if (role && perm && roles[role]) {
+      roles[role][perm] = !!chk.checked;
+    }
+  });
+
+  try {
+    const res = await fetch('/admin/permissions/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roles })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert(data.message || 'Group & role permissions saved!', false);
+      setTimeout(() => window.location.reload(), 900);
+    } else {
+      showAlert(data.message || 'Failed to save role permissions', true);
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
 function openAddUserModal() {
+  resetModalPermissions('add');
   document.getElementById('add-user-modal').classList.remove('hidden');
   document.getElementById('add-username').focus();
 }
@@ -1261,7 +1592,8 @@ async function submitAddUser(e) {
     username: document.getElementById('add-username').value.trim(),
     password: document.getElementById('add-password').value,
     email: document.getElementById('add-email').value.trim() || null,
-    role: document.getElementById('add-role').value
+    role: document.getElementById('add-role').value,
+    custom_permissions: collectModalPermissions('add')
   };
 
   try {
@@ -1291,6 +1623,18 @@ function openEditUserModal(user) {
   document.getElementById('edit-role').value = user.role;
   document.getElementById('edit-active').checked = !!user.is_active;
   document.getElementById('edit-password').value = '';
+
+  resetModalPermissions('edit');
+  const customPerms = user.custom_permissions || {};
+  document.querySelectorAll('.edit-user-perm-sel').forEach(sel => {
+    const key = sel.dataset.perm;
+    if (key && Object.prototype.hasOwnProperty.call(customPerms, key)) {
+      sel.value = customPerms[key] ? 'allow' : 'deny';
+    } else {
+      sel.value = 'inherit';
+    }
+  });
+
   document.getElementById('edit-user-modal').classList.remove('hidden');
 }
 
@@ -1307,7 +1651,8 @@ async function submitEditUser(e) {
     email: document.getElementById('edit-email').value.trim() || null,
     role: document.getElementById('edit-role').value,
     is_active: document.getElementById('edit-active').checked,
-    password: document.getElementById('edit-password').value.trim() || null
+    password: document.getElementById('edit-password').value.trim() || null,
+    custom_permissions: collectModalPermissions('edit')
   };
 
   try {
@@ -1856,7 +2201,7 @@ async function scanForDuplicates() {
         const card = document.createElement('div');
         card.className = "p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2";
         let booksHtml = group.books.map(b => `
-          <div class="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs">
+          <div id="dup-book-row-${b.id}" class="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs">
             <div class="flex items-center gap-2 min-w-0">
               <span class="font-mono text-slate-500 font-bold">#${b.id}</span>
               <span class="text-white font-medium truncate max-w-xs">${b.title}</span>
@@ -1865,6 +2210,14 @@ async function scanForDuplicates() {
             <div class="flex items-center gap-2 flex-shrink-0">
               <span class="text-[10px] text-slate-500 hidden sm:inline">${b.pubdate}</span>
               <a href="/cover/${b.id}" target="_blank" class="text-xs text-indigo-400 hover:underline">Cover</a>
+              <button
+                type="button"
+                onclick="deleteDuplicateBook(${b.id}, ${JSON.stringify(b.title).replace(/"/g, '&quot;')})"
+                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-950/70 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-colors cursor-pointer"
+                title="Delete Book #${b.id} and its files"
+              >
+                Delete
+              </button>
             </div>
           </div>
         `).join("");
@@ -1884,6 +2237,112 @@ async function scanForDuplicates() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg><span>Scan for Duplicates</span>`;
+  }
+}
+
+async function deleteDuplicateBook(bookId, bookTitle) {
+  if (!confirm(`Permanently delete '${bookTitle}' (#${bookId}) and remove its files from disk?`)) return;
+  try {
+    const res = await fetch(`/admin/book/${bookId}/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delete_files: true })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const row = document.getElementById(`dup-book-row-${bookId}`);
+      if (row) row.remove();
+      showAlert(data.message || `Deleted book #${bookId}`, false);
+    } else {
+      showAlert(data.error || data.detail || "Failed to delete book", true);
+    }
+  } catch (err) {
+    showAlert("Error deleting book: " + err.message, true);
+  }
+}
+
+// --- POSTGRESQL DATABASE PARAMETERS FUNCTIONS ---
+function getDatabaseFormPayload() {
+  return {
+    db_host: (document.getElementById('db_host_input')?.value || '').trim(),
+    db_port: parseInt(document.getElementById('db_port_input')?.value || '5432', 10) || 5432,
+    db_name: (document.getElementById('db_name_input')?.value || '').trim(),
+    db_user: (document.getElementById('db_user_input')?.value || '').trim(),
+    db_password: document.getElementById('db_password_input')?.value || ''
+  };
+}
+
+async function testDatabaseSettings() {
+  const btn = document.getElementById('test-db-btn');
+  const resultBox = document.getElementById('db-test-result');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Testing...</span>`;
+  resultBox.className = 'hidden';
+
+  const payload = getDatabaseFormPayload();
+  try {
+    const res = await fetch('/admin/settings/database/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    resultBox.classList.remove('hidden');
+    if (res.ok && data.success) {
+      resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-emerald-950/60 border border-emerald-500/40 text-emerald-300';
+      resultBox.innerHTML = `&#10004; ${data.message}`;
+    } else {
+      resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-rose-950/60 border border-rose-500/40 text-rose-300';
+      resultBox.innerHTML = `&#10008; ${data.message || 'Database connection failed'}`;
+    }
+  } catch (err) {
+    resultBox.classList.remove('hidden');
+    resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-rose-950/60 border border-rose-500/40 text-rose-300';
+    resultBox.innerHTML = `&#10008; Network Error: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+async function saveDatabaseSettings(e) {
+  e.preventDefault();
+  const btn = document.getElementById('save-db-btn');
+  const resultBox = document.getElementById('db-test-result');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving & Reconnecting...</span>`;
+
+  const payload = getDatabaseFormPayload();
+  try {
+    const res = await fetch('/admin/settings/database', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAlert(data.message || 'Database settings saved and reconnected!', false);
+      if (resultBox) {
+        resultBox.classList.remove('hidden');
+        resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-emerald-950/60 border border-emerald-500/40 text-emerald-300';
+        resultBox.innerHTML = `&#10004; ${data.message}`;
+      }
+      setTimeout(() => window.location.reload(), 1200);
+    } else {
+      showAlert(data.message || 'Failed to save database settings', true);
+      if (resultBox) {
+        resultBox.classList.remove('hidden');
+        resultBox.className = 'p-3.5 rounded-xl text-xs font-mono bg-rose-950/60 border border-rose-500/40 text-rose-300';
+        resultBox.innerHTML = `&#10008; ${data.message || 'Failed to save database settings'}`;
+      }
+    }
+  } catch (err) {
+    showAlert('Network error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
   }
 }
 </script>
