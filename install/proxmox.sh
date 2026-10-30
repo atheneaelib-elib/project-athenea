@@ -72,7 +72,7 @@ SETTINGS_MODE=$(whiptail --backtitle "Proxmox VE - Athenea Installer" \
     --title "Configuration Mode" \
     --radiolist "Choose your installation settings profile:" 11 68 2 \
     "Default" "2 Cores, 2GB RAM, 16GB Disk, DHCP (Recommended)" ON \
-    "Advanced" "Customize CT ID, Hostname, CPU, RAM, Disk, Storage & IP" OFF \
+    "Advanced" "Customize CT ID, Hostname, CPU, RAM, Disk, Storage, Privilege & IP" OFF \
     3>&1 1>&2 2>&3) || exit 0
 
 # Find next available CT ID
@@ -144,6 +144,13 @@ if [ "$SETTINGS_MODE" == "Advanced" ]; then
     else
         IP_CONFIG="dhcp"
     fi
+
+    UNPRIVILEGED=$(whiptail --backtitle "Proxmox VE - Athenea Installer" \
+        --title "Container Privilege" \
+        --radiolist "Choose Container Security & Privilege Mode:\n(Privileged is recommended if bind-mounting host ZFS/NFS media storage without complex UID mapping)" 12 72 2 \
+        "1" "Unprivileged (Default / standard user-namespace isolation)" ON \
+        "0" "Privileged (Direct host access, easiest for bind mounts)" OFF \
+        3>&1 1>&2 2>&3) || exit 0
 fi
 
 # Validate CT ID does not already exist
@@ -256,7 +263,7 @@ msg_ok "Athenea has been successfully installed in Container $CT_ID!"
 
 whiptail --backtitle "Proxmox VE - Athenea Installer" \
     --title "Installation Complete!" \
-    --msgbox "🎉 Athenea has been successfully installed and started!\n\nContainer ID: $CT_ID\nContainer IP: $CT_IP\n\nAccess the Setup Wizard in your web browser:\n👉 http://${CT_IP}:8000/setup\n\nBook storage inside container is located at:\n📂 /data/books" 14 70
+    --msgbox "🎉 Athenea has been successfully installed and started!\n\nContainer ID: $CT_ID\nPrivilege Mode: $([ "$UNPRIVILEGED" -eq 0 ] && echo "Privileged" || echo "Unprivileged")\nContainer IP: $CT_IP\n\nAccess the Setup Wizard in your web browser:\n👉 http://${CT_IP}:8000/setup\n\nBook storage inside container is located at:\n📂 /data/books" 15 70
 
 echo -e "\n${GREEN}${BOLD}==============================================================================${NC}"
 echo -e "${GREEN}${BOLD}   🎉 Athenea LXC Container $CT_ID Successfully Installed! 🎉${NC}"
@@ -264,6 +271,7 @@ echo -e "${GREEN}${BOLD}========================================================
 echo -e "Web Setup Wizard:  ${CYAN}${BOLD}http://${CT_IP}:8000/setup${NC}"
 echo -e "Container ID:      ${CYAN}$CT_ID${NC}"
 echo -e "Hostname:          ${CYAN}$HOSTNAME${NC}"
+echo -e "Privileged:        ${CYAN}$([ "$UNPRIVILEGED" -eq 0 ] && echo "Yes (Privileged)" || echo "No (Unprivileged)")${NC}"
 echo -e "IPv4 Address:      ${CYAN}$CT_IP${NC}"
 echo -e "Books Directory:   ${CYAN}/data/books${NC} (inside CT $CT_ID)"
 echo -e "\nTo access the container shell:"
