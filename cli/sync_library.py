@@ -244,6 +244,7 @@ def extract_combined_dir_metadata(book_dir: Path) -> dict:
         or not meta.get("pubdate")
         or not meta.get("publisher")
         or not meta.get("comments")
+        or not meta.get("series")
         or not (book_dir / "cover.jpg").is_file()
     )
 
@@ -271,7 +272,7 @@ def extract_combined_dir_metadata(book_dir: Path) -> dict:
                 embedded_meta = parse_fb2_fast(fb2_file)
             except Exception:
                 pass
-        if epub_file and (not embedded_meta.get("pubdate") or not embedded_meta.get("publisher") or not embedded_meta.get("cover_bytes")):
+        if epub_file and (not embedded_meta.get("pubdate") or not embedded_meta.get("publisher") or not embedded_meta.get("cover_bytes") or not embedded_meta.get("series")):
             try:
                 ep_meta = importer_service.parse_epub_metadata(epub_file)
                 for k, v in ep_meta.items():

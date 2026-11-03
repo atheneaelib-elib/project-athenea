@@ -395,13 +395,26 @@ def parse_epub_metadata(epub_path: Path) -> dict:
                 elif tag == "meta":
                     name_attr = elem.attrib.get("name", "").lower()
                     prop_attr = elem.attrib.get("property", "").lower()
+                    content_val = elem.attrib.get("content", "").strip()
+                    text_val = elem.text.strip() if elem.text else ""
+                    val = content_val or text_val
+
                     if name_attr == "cover":
                         cover_id = elem.attrib.get("content")
+                    elif name_attr == "calibre:series" or name_attr.endswith("series"):
+                        if val and not meta["series"]:
+                            meta["series"] = val
+                    elif name_attr == "calibre:series_index" or name_attr.endswith("series_index"):
+                        if val:
+                            try:
+                                meta["series_index"] = float(val)
+                            except Exception:
+                                pass
                     elif prop_attr == "belongs-to-collection":
-                        meta["series"] = elem.text.strip() if elem.text else None
+                        meta["series"] = text_val or None
                     elif prop_attr == "group-position":
                         try:
-                            meta["series_index"] = float(elem.text.strip())
+                            meta["series_index"] = float(text_val)
                         except Exception:
                             pass
 
