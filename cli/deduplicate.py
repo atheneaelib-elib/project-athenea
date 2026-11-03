@@ -256,6 +256,10 @@ def merge_and_deduplicate(conn, dry_run: bool = False, merge_title_author: bool 
             print("\n[*] Phase 3: Creating UNIQUE INDEXES on books(path) and data(book_id, format)...")
             try:
                 cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_books_path_unconditional
+                    ON books (path);
+                """)
+                cur.execute("""
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_books_unique_path 
                     ON books (path) 
                     WHERE path IS NOT NULL AND path != '';

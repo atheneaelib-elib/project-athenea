@@ -963,6 +963,13 @@ CREATE UNIQUE INDEX idx_books_unique_path ON public.books USING btree (path) WHE
 
 
 --
+-- Name: idx_books_path_unconditional; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_books_path_unconditional ON public.books USING btree (path);
+
+
+--
 -- Name: idx_books_uuid; Type: INDEX; Schema: public; Owner: -
 --
 

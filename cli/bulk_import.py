@@ -212,6 +212,9 @@ def ensure_indexes_and_sequences(conn):
             if not cur.fetchone():
                 cur.execute(f"CREATE INDEX {idx} ON {tbl} (LOWER(name))")
 
+        # Unconditional unique index on books(path) for ON CONFLICT (path)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_books_path_unconditional ON books (path)")
+
         # Unique index on languages(lang_code) and data(book_id, format)
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_lang_code ON languages (lang_code)")
         cur.execute("""
