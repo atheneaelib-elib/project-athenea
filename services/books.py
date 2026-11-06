@@ -427,10 +427,13 @@ def group_books_by_author_and_series(books: list[dict], query: str | None = None
     author_map = {}
 
     for b in books:
-        a_key = b.get("author_id") or b.get("author") or "unknown"
+        author_name = b.get("author") or "Unknown Author"
+        author_sort = b.get("author_sort") or author_name
+        # Canonicalize author token key so word-order variations ('Панов, Вадим' vs 'Вадим Панов') merge into one card
+        author_tokens = tuple(sorted(re.findall(r'[a-zA-Zа-яА-Я0-9]+', author_name.lower().replace('ё', 'е'))))
+        a_key = author_tokens if author_tokens else (b.get("author_id") or author_name)
+
         if a_key not in author_map:
-            author_name = b.get("author") or "Unknown Author"
-            author_sort = b.get("author_sort") or author_name
             parts = [p[0].upper() for p in author_name.replace(',', ' ').split() if p and p[0].isalnum()]
             initials = "".join(parts[:2]) if parts else "??"
             name_match = bool(q_lower and (q_lower in author_name.lower() or q_lower in author_sort.lower()))
@@ -445,18 +448,27 @@ def group_books_by_author_and_series(books: list[dict], query: str | None = None
                 "series_dict": {},
                 "standalone_books": [],
             }
+        else:
+            # Prefer a valid author_id and direct display name if available
+            if not author_map[a_key]["author_id"] and b.get("author_id"):
+                author_map[a_key]["author_id"] = b.get("author_id")
+            if "," in author_map[a_key]["author_name"] and "," not in author_name:
+                author_map[a_key]["author_name"] = author_name
 
         entry = author_map[a_key]
         entry["total_books"] += 1
 
         if b.get("series_name"):
-            sid = b.get("series_id") or b.get("series_name")
+            clean_sname = b.get("series_name").strip()
+            sid = clean_sname.lower()
             if sid not in entry["series_dict"]:
                 entry["series_dict"][sid] = {
                     "series_id": b.get("series_id"),
-                    "series_name": b.get("series_name"),
+                    "series_name": clean_sname,
                     "books": [],
                 }
+            elif not entry["series_dict"][sid]["series_id"] and b.get("series_id"):
+                entry["series_dict"][sid]["series_id"] = b.get("series_id")
             entry["series_dict"][sid]["books"].append(b)
         else:
             entry["standalone_books"].append(b)
@@ -520,11 +532,11 @@ def get_books(
         effective_view_mode = "grid"
 
     page = max(1, page)
-    # When filtering by author/series or in grouped view, increase page size so complete series remain unified on one page
+    # When filtering by author/series or in grouped view, expand page size so complete series remain unified on one page
     if author_id or series_id:
-        size = min(max(24, size), 250)
+        size = max(size, 250)
     elif effective_view_mode == "grouped":
-        size = min(max(24, size), 120)
+        size = max(size, 120)
     else:
         size = min(max(12, size), 72)
     offset = (page - 1) * size
