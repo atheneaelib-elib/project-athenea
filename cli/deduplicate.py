@@ -22,9 +22,11 @@ Deduplication Strategy:
 """
 
 import sys
+import re
 import argparse
+from collections import defaultdict
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Tuple
 
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -48,6 +50,46 @@ def get_db_connection():
     )
     conn.set_client_encoding('UTF8')
     return conn
+
+
+def normalize_title(title: str) -> str:
+    """
+    Smart title normalizer:
+    1. Lowercase and replace 'ё' -> 'е'
+    2. Strips distributor/edition bracket tags like [litres], (СИ), [СИ], (18+), (илл)
+    3. Normalizes whitespace and removes special punctuation
+    """
+    if not title:
+        return ""
+    s = title.strip().lower().replace("ё", "е")
+
+    # Repeatedly strip trailing bracketed tags like [litres], (СИ), [Литрес], (полная версия), etc.
+    while True:
+        new_s = re.sub(r'\s*(\[[^\]]*\]|\([^\)]*\))\s*$', '', s, flags=re.IGNORECASE).strip()
+        if new_s == s or not new_s:
+            break
+        s = new_s
+
+    # Strip punctuation characters but retain alphanumeric words
+    s = re.sub(r'[^\w\s]', ' ', s)
+    return " ".join(s.split())
+
+
+def normalize_author(author: str) -> str:
+    """
+    Smart author normalizer:
+    1. Lowercase and replace 'ё' -> 'е'
+    2. Extracts all words and sorts them alphabetically so
+       'Панов, Вадим Юрьевич' == 'Вадим Юрьевич Панов'
+    """
+    if not author:
+        return ""
+    s = author.strip().lower().replace("ё", "е")
+    # Extract alphanumeric words
+    words = [w for w in re.findall(r'\w+', s) if len(w) >= 2]
+    if not words:
+        words = re.findall(r'\w+', s)
+    return " ".join(sorted(words))
 
 
 def merge_records_into_primary(cur, primary_id: int, redundant_ids: List[int]):
@@ -198,58 +240,77 @@ def merge_and_deduplicate(conn, dry_run: bool = False, merge_title_author: bool 
         else:
             print(f"[✓] Phase 1 dry run: Would remove {path_removed_count:,} duplicate path records.")
 
-        # Phase 2: Title + Author Duplicates
+        # Phase 2: Smart Title + Author Duplicates
         title_author_removed = 0
         if merge_title_author:
-            print("\n[*] Phase 2: Scanning for duplicate (title, author) records...")
-            if keep_all_languages:
-                cur.execute("""
-                    SELECT 
-                        LOWER(TRIM(b.title)) as norm_title,
-                        LOWER(TRIM(b.author_sort)) as norm_author,
-                        COALESCE(l.lang_code, '') as norm_lang,
-                        array_agg(b.id ORDER BY b.has_cover DESC, b.id ASC) as ids
-                    FROM books b
-                    LEFT JOIN book_languages bl ON bl.book_id = b.id
-                    LEFT JOIN languages l ON l.id = bl.language_id
-                    WHERE b.title IS NOT NULL AND b.author_sort IS NOT NULL AND b.path IS NOT NULL AND b.path != ''
-                    GROUP BY LOWER(TRIM(b.title)), LOWER(TRIM(b.author_sort)), COALESCE(l.lang_code, '')
-                    HAVING count(*) > 1
-                """)
-            else:
-                cur.execute("""
-                    SELECT 
-                        LOWER(TRIM(title)) as norm_title,
-                        LOWER(TRIM(author_sort)) as norm_author,
-                        '' as norm_lang,
-                        array_agg(id ORDER BY has_cover DESC, id ASC) as ids
-                    FROM books
-                    WHERE title IS NOT NULL AND author_sort IS NOT NULL AND path IS NOT NULL AND path != ''
-                    GROUP BY LOWER(TRIM(title)), LOWER(TRIM(author_sort))
-                    HAVING count(*) > 1
-                """)
-            title_dups = cur.fetchall()
-            print(f"[+] Found {len(title_dups):,} duplicate (title, author) groups.")
+            print("\n[*] Phase 2: Scanning for smart (title, author) duplicates...")
+            cur.execute("""
+                SELECT 
+                    b.id,
+                    b.title,
+                    b.author_sort,
+                    b.path,
+                    b.has_cover,
+                    COALESCE(l.lang_code, '') as lang
+                FROM books b
+                LEFT JOIN book_languages bl ON bl.book_id = b.id
+                LEFT JOIN languages l ON l.id = bl.language_id
+                WHERE b.title IS NOT NULL AND b.title != ''
+                  AND b.author_sort IS NOT NULL AND b.author_sort != ''
+                  AND b.path IS NOT NULL AND b.path != ''
+                ORDER BY b.has_cover DESC, b.id ASC;
+            """)
+            rows = cur.fetchall()
+            print(f"[*] Retrieved {len(rows):,} books for smart matching...")
 
-            for row in title_dups:
-                ids = row["ids"]
-                primary_id = ids[0]
-                redundant_ids = ids[1:]
+            groups = defaultdict(list)
+            for r in rows:
+                nt = normalize_title(r["title"])
+                na = normalize_author(r["author_sort"])
+                if len(nt) >= 2 and len(na) >= 2:
+                    key = (nt, na, r["lang"]) if keep_all_languages else (nt, na)
+                    groups[key].append(r)
+
+            # Filter to groups with > 1 book
+            dup_groups = [g for g in groups.values() if len(g) > 1]
+            print(f"[+] Found {len(dup_groups):,} duplicate groups.")
+
+            tag_regex = re.compile(r'\[.*?\]|\(.*?\)')
+            pending_merge = 0
+
+            for g in dup_groups:
+                primary = g[0]
+                redundant = g[1:]
+                primary_id = primary["id"]
+                redundant_ids = [r["id"] for r in redundant]
                 title_author_removed += len(redundant_ids)
 
                 if dry_run:
-                    if title_author_removed <= 15:
-                        lang_info = f" [{row['norm_lang'].upper()}]" if row['norm_lang'] else ""
-                        print(f"  [DRY-RUN] Title/Author{lang_info}: '{row['norm_title']}' by '{row['norm_author']}' -> Keep #{primary_id}, Remove: {redundant_ids}")
+                    if title_author_removed <= 35:
+                        print(f"\n  [DUPLICATE GROUP] '{primary['title']}' by '{primary['author_sort']}':")
+                        print(f"    -> KEEP   #{primary_id}: '{primary['title']}' ({primary['author_sort']}) | Cover: {primary['has_cover']} | Path: {primary['path']}")
+                        for r in redundant:
+                            print(f"    -> REMOVE #{r['id']}: '{r['title']}' ({r['author_sort']}) | Cover: {r['has_cover']} | Path: {r['path']}")
                 else:
+                    # If primary title has trailing [tag] and duplicate has a clean title, adopt clean title
+                    for r in redundant:
+                        if tag_regex.search(primary["title"]) and not tag_regex.search(r["title"]):
+                            cur.execute("UPDATE books SET title = %s WHERE id = %s", (r["title"], primary_id))
+                            primary["title"] = r["title"]
+                            break
+
                     merge_records_into_primary(cur, primary_id, redundant_ids)
                     delete_book_records(cur, redundant_ids)
+                    pending_merge += 1
+                    if pending_merge >= 500:
+                        conn.commit()
+                        pending_merge = 0
 
             if not dry_run:
                 conn.commit()
                 print(f"[✓] Phase 2 complete: Removed {title_author_removed:,} duplicate (title, author) records.")
             else:
-                print(f"[✓] Phase 2 dry run: Would remove {title_author_removed:,} duplicate (title, author) records.")
+                print(f"\n[✓] Phase 2 dry run: Found {len(dup_groups):,} duplicate groups ({title_author_removed:,} books to remove).")
 
         # Phase 3: Enforce Unique Path & Format Constraints in PostgreSQL
         if not dry_run:
