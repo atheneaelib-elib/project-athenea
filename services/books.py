@@ -511,10 +511,6 @@ def get_books(
     user_id: int | None = None,
     view_mode: str | None = None,
 ):
-    page = max(1, page)
-    size = min(max(12, size), 72)
-    offset = (page - 1) * size
-
     # Determine view mode: explicit or auto (search defaults to grouped)
     if view_mode in ("grouped", "grid"):
         effective_view_mode = view_mode
@@ -522,6 +518,16 @@ def get_books(
         effective_view_mode = "grouped"
     else:
         effective_view_mode = "grid"
+
+    page = max(1, page)
+    # When filtering by author/series or in grouped view, increase page size so complete series remain unified on one page
+    if author_id or series_id:
+        size = min(max(24, size), 250)
+    elif effective_view_mode == "grouped":
+        size = min(max(24, size), 120)
+    else:
+        size = min(max(12, size), 72)
+    offset = (page - 1) * size
 
     where_clauses = []
     params = {"limit": size, "offset": offset}
@@ -582,12 +588,14 @@ def get_books(
     where_str = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
     # Sort order
-    if sort_by == "title_asc":
+    if sort_by in ("series", "series_asc") or (author_id and sort_by == "recent") or (effective_view_mode == "grouped" and sort_by == "recent"):
+        order_str = "CASE WHEN s.name IS NOT NULL THEN 0 ELSE 1 END, s.name ASC, b.series_index ASC NULLS LAST, b.title ASC, b.id ASC"
+    elif sort_by == "title_asc":
         order_str = "b.title ASC, b.id DESC"
     elif sort_by == "title_desc":
         order_str = "b.title DESC, b.id DESC"
     elif sort_by == "author_asc":
-        order_str = "b.author_sort ASC, b.title ASC"
+        order_str = "b.author_sort ASC, CASE WHEN s.name IS NOT NULL THEN 0 ELSE 1 END, s.name ASC, b.series_index ASC NULLS LAST, b.title ASC"
     elif sort_by == "pubdate_desc":
         order_str = "b.pubdate DESC NULLS LAST, b.id DESC"
     else:  # default "recent"
@@ -614,6 +622,7 @@ def get_books(
     page = min(page, total_pages)
 
     # Main query using CTE for instant pagination
+    outer_order_str = order_str.replace('b.', 'pb.').replace('s.name', 'pb.series_name')
     query_sql = text(f"""
         WITH page_books AS (
             SELECT
@@ -622,8 +631,12 @@ def get_books(
                 b.author_sort,
                 b.has_cover,
                 b.series_index,
-                b.pubdate
+                b.pubdate,
+                s.id AS series_id,
+                s.name AS series_name
             FROM books b
+            LEFT JOIN book_series bs ON b.id = bs.book_id
+            LEFT JOIN series s ON bs.series_id = s.id
             {where_str}
             ORDER BY {order_str}
             LIMIT :limit OFFSET :offset
@@ -634,8 +647,8 @@ def get_books(
             pb.author_sort,
             pb.has_cover,
             pb.series_index,
-            s.id AS series_id,
-            s.name AS series_name,
+            pb.series_id,
+            pb.series_name,
             auth.author_id,
             auth.author_name,
             lng.lang_code,
@@ -650,8 +663,6 @@ def get_books(
                 '[]'::json
             ) AS formats
         FROM page_books pb
-        LEFT JOIN book_series bs ON pb.id = bs.book_id
-        LEFT JOIN series s ON bs.series_id = s.id
         LEFT JOIN data d ON pb.id = d.book_id
         LEFT JOIN LATERAL (
             SELECT ba.author_id, a.name AS author_name
@@ -668,8 +679,8 @@ def get_books(
             WHERE bl.book_id = pb.id
             LIMIT 1
         ) lng ON true
-        GROUP BY pb.id, pb.title, pb.author_sort, pb.has_cover, pb.series_index, s.id, s.name, auth.author_id, auth.author_name, pb.pubdate, lng.lang_code
-        ORDER BY {order_str.replace('b.', 'pb.')}
+        GROUP BY pb.id, pb.title, pb.author_sort, pb.has_cover, pb.series_index, pb.series_id, pb.series_name, auth.author_id, auth.author_name, pb.pubdate, lng.lang_code
+        ORDER BY {outer_order_str}
     """)
 
     rows = db.execute(query_sql, params).fetchall()
