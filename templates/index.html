@@ -366,6 +366,8 @@
   function setViewMode(mode) {
     const input = document.getElementById('input-view-mode');
     if (input) input.value = mode;
+    const pageInput = document.getElementById('input-page');
+    if (pageInput) pageInput.value = '1';
     triggerGridUpdate();
   }
   window.setViewMode = setViewMode;
