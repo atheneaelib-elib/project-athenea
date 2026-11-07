@@ -1119,7 +1119,13 @@ def find_duplicate_books(db: Session, limit: int = 50) -> list[dict]:
                 SELECT string_agg(d.format, ', ')
                 FROM data d
                 WHERE d.book_id = b.id
-            ) AS formats
+            ) AS formats,
+            (
+                SELECT string_agg(l.lang_code, ', ')
+                FROM languages l
+                JOIN book_languages bl ON l.id = bl.language_id
+                WHERE bl.book_id = b.id
+            ) AS lang_codes
         FROM duplicate_groups dg
         JOIN books b ON lower(trim(b.title)) = dg.clean_title
                     AND lower(trim(coalesce(b.author_sort, ''))) = dg.clean_author
@@ -1136,6 +1142,9 @@ def find_duplicate_books(db: Session, limit: int = 50) -> list[dict]:
                 "count": r.cnt,
                 "books": []
             }
+        raw_lang = (r.lang_codes or "").strip().upper()
+        first_code = raw_lang.split(",")[0].strip().lower() if raw_lang else ""
+        flag = book_service.get_language_flag(first_code) if first_code else ""
         groups[key]["books"].append({
             "id": r.id,
             "title": r.title,
@@ -1144,7 +1153,9 @@ def find_duplicate_books(db: Session, limit: int = 50) -> list[dict]:
             "thumbnail_url": f"/thumbnail/{r.id}",
             "pubdate": r.pubdate.strftime("%Y-%m-%d") if r.pubdate else "Unknown",
             "path": r.path,
-            "formats": r.formats or "None"
+            "formats": r.formats or "None",
+            "language": raw_lang or "Unknown",
+            "language_flag": flag,
         })
 
     return list(groups.values())

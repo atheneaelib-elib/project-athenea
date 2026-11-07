@@ -2237,6 +2237,7 @@ async function scanForDuplicates() {
               <span class="font-mono text-slate-500 font-bold">#${b.id}</span>
               <span class="text-white font-medium truncate max-w-xs">${b.title}</span>
               <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-indigo-300 font-mono">${b.formats}</span>
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${b.language && b.language !== 'Unknown' ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-400'}" title="Language">${b.language_flag ? b.language_flag + ' ' : ''}${b.language || 'Unknown'}</span>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
               <span class="text-[10px] text-slate-500 hidden sm:inline">${b.pubdate}</span>
