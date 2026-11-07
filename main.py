@@ -1513,6 +1513,8 @@ def books_grid_partial(
             "active_filter_label": active_filter_label,
             "current_favorites_only": fav_only,
             "current_shelf": shelf or "",
+            "current_author_id": aid or "",
+            "current_series_id": sid or "",
             "current_user": current_user,
         }
     )
@@ -1645,6 +1647,96 @@ def api_toggle_series_favorite(
         raise HTTPException(status_code=401, detail="Authentication required")
     is_fav = book_service.toggle_favorite_series(db, current_user["id"], series_id)
     return {"success": True, "favorited": is_fav, "series_id": series_id}
+
+
+# ===================================================================
+# SERIES ORDER MANAGEMENT ROUTES
+# ===================================================================
+
+@app.get("/series/{series_id}/order-modal", response_class=HTMLResponse)
+def series_order_modal_view(
+    request: Request,
+    series_id: int,
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user or not (current_user.get("can_edit_metadata") or current_user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied. Editing series order requires metadata or admin privileges.")
+
+    series = book_service.get_series_info(db, series_id)
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+
+    books = book_service.get_series_books(db, series_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/series_order_modal.html",
+        context={
+            "series": series,
+            "books": books,
+            "current_user": current_user,
+        }
+    )
+
+
+class SeriesOrderItem(BaseModel):
+    book_id: int
+    series_index: float | None = None
+
+
+class UpdateSeriesOrderRequest(BaseModel):
+    items: list[SeriesOrderItem]
+
+
+@app.post("/series/{series_id}/order")
+def update_series_order_route(
+    request: Request,
+    series_id: int,
+    payload: UpdateSeriesOrderRequest,
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user or not (current_user.get("can_edit_metadata") or current_user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    items_dict = [{"book_id": item.book_id, "series_index": item.series_index} for item in payload.items]
+    book_service.update_series_books_order(db, series_id, items_dict)
+    return {"success": True, "count": len(items_dict), "series_id": series_id}
+
+
+@app.post("/book/{book_id}/series-index")
+async def update_book_series_index_route(
+    request: Request,
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user or not (current_user.get("can_edit_metadata") or current_user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    s_idx = None
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        body = await request.json()
+        val = body.get("series_index")
+    else:
+        form = await request.form()
+        val = form.get("series_index")
+
+    if val is not None and str(val).strip() != "":
+        try:
+            s_idx = float(val)
+        except (ValueError, TypeError):
+            s_idx = None
+
+    book_service.update_book_series_index(db, book_id, s_idx)
+    s_idx_str = f"#{int(s_idx)}" if s_idx is not None and s_idx == int(s_idx) else (f"#{s_idx:.1f}" if s_idx is not None else "")
+    return {
+        "success": True,
+        "book_id": book_id,
+        "series_index": s_idx,
+        "series_index_str": s_idx_str
+    }
 
 
 

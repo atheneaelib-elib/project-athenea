@@ -744,6 +744,9 @@
   <!-- Modal Container for Self Change Password -->
   <div id="profile-modal-container"></div>
 
+  <!-- Modal Container for Series Order Management -->
+  <div id="series-order-modal-container"></div>
+
   <!-- Footer -->
   <footer class="mt-auto border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-400">
     <div class="max-w-7xl mx-auto px-4">
@@ -897,6 +900,30 @@
       if (container) container.innerHTML = "";
     }
 
+    function openSeriesOrderModal(seriesId) {
+      if (!seriesId) return;
+      const container = document.getElementById('series-order-modal-container');
+      if (!container) return;
+      fetch(`/series/${seriesId}/order-modal`)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to load series order modal");
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          console.error(err);
+        });
+    }
+
+    function closeSeriesOrderModal() {
+      const container = document.getElementById('series-order-modal-container');
+      if (container) container.innerHTML = "";
+    }
+    window.openSeriesOrderModal = openSeriesOrderModal;
+    window.closeSeriesOrderModal = closeSeriesOrderModal;
+
     // Close modal on Escape
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
@@ -904,6 +931,7 @@
         closeUploadModal();
         closePasswordModal();
         closeProfileModal();
+        closeSeriesOrderModal();
       }
     });
 

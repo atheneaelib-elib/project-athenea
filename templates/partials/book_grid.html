@@ -20,6 +20,17 @@
         </button>
       </span>
       {% endif %}
+      {% if current_series_id and current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
+      <button 
+        type="button" 
+        onclick="openSeriesOrderModal({{ current_series_id }})"
+        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all cursor-pointer shadow-sm"
+        title="Reorder books in this series"
+      >
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+        <span>Reorder Series</span>
+      </button>
+      {% endif %}
     </div>
 
     <!-- Active page summary & View Mode Toggle -->
@@ -146,6 +157,16 @@
             </span>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
+            {% if s.series_id and current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
+            <button 
+              type="button" 
+              onclick="openSeriesOrderModal({{ s.series_id }})"
+              class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-indigo-300 border border-slate-700/80 hover:border-indigo-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
+              title="Reorder books in {{ s.series_name }}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+            </button>
+            {% endif %}
             {% if current_user and s.series_id %}
               {% with series_id=s.series_id, is_favorite=s.is_favorite, context='inline' %}
                 {% include 'partials/favorite_series_btn.html' %}

@@ -365,6 +365,82 @@ def get_user_favorite_series(db, user_id: int | None) -> list[dict]:
     return [{"id": r.id, "name": r.name, "count": r.count, "is_favorite": True} for r in rows]
 
 
+def get_series_info(db, series_id: int) -> dict | None:
+    """Get metadata and book count for a series."""
+    row = db.execute(text("SELECT id, name FROM series WHERE id = :sid"), {"sid": series_id}).fetchone()
+    if not row:
+        return None
+    count = db.execute(text("SELECT count(*) FROM book_series WHERE series_id = :sid"), {"sid": series_id}).scalar() or 0
+    return {"id": row.id, "name": row.name, "count": count}
+
+
+def get_series_books(db, series_id: int) -> list[dict]:
+    """Retrieve all books belonging to a series, ordered by series_index ASC NULLS LAST, b.title ASC, b.id ASC."""
+    rows = db.execute(text("""
+        SELECT b.id, b.title, b.author_sort, b.series_index, b.has_cover, b.pubdate
+        FROM book_series bs
+        JOIN books b ON bs.book_id = b.id
+        WHERE bs.series_id = :sid
+        ORDER BY b.series_index ASC NULLS LAST, b.title ASC, b.id ASC
+    """), {"sid": series_id}).fetchall()
+    
+    books = []
+    for r in rows:
+        s_idx = r.series_index
+        s_idx_num = float(s_idx) if s_idx is not None else 999999.0
+        s_idx_display = int(s_idx) if s_idx is not None and s_idx == int(s_idx) else (round(s_idx, 2) if s_idx is not None else "")
+        s_idx_str = f"#{int(s_idx)}" if s_idx and s_idx == int(s_idx) else (f"#{s_idx:.1f}" if s_idx else None)
+        books.append({
+            "id": r.id,
+            "title": r.title,
+            "author": r.author_sort or "Unknown",
+            "series_index": s_idx_str,
+            "series_index_raw": s_idx,
+            "series_index_val": s_idx_display,
+            "series_index_num": s_idx_num,
+            "has_cover": bool(r.has_cover),
+            "thumbnail_url": f"/thumbnail/{r.id}",
+            "pubdate": r.pubdate.strftime("%Y-%m-%d") if r.pubdate else "",
+        })
+    return books
+
+
+def update_book_series_index(db, book_id: int, series_index: float | None) -> bool:
+    """Update a specific book's series volume index."""
+    db.execute(text("""
+        UPDATE books
+        SET series_index = :series_index
+        WHERE id = :book_id
+    """), {"book_id": book_id, "series_index": series_index})
+    db.commit()
+    return True
+
+
+def update_series_books_order(db, series_id: int, items: list[dict]) -> bool:
+    """
+    Bulk update series_index for books in a series.
+    items: list of dicts e.g. [{"book_id": 123, "series_index": 1.0}, ...]
+    """
+    for item in items:
+        bid = item.get("book_id")
+        idx_val = item.get("series_index")
+        idx = None
+        if idx_val is not None and str(idx_val).strip() != "":
+            try:
+                idx = float(idx_val)
+            except (ValueError, TypeError):
+                idx = None
+        if bid is not None:
+            db.execute(text("""
+                UPDATE books
+                SET series_index = :idx
+                WHERE id = :bid
+                AND EXISTS (SELECT 1 FROM book_series bs WHERE bs.book_id = :bid AND bs.series_id = :sid)
+            """), {"bid": bid, "idx": idx, "sid": series_id})
+    db.commit()
+    return True
+
+
 def get_user_shelf_counts(db, user_id: int | None) -> dict:
     counts = {"reading": 0, "plan_to_read": 0, "finished": 0}
     if not user_id:
