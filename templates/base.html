@@ -1440,7 +1440,19 @@
             htmx.trigger(grid, 'refresh');
           }
         } else {
-          alert("Failed to save metadata: " + (data.detail || data.error || "Unknown error"));
+          let errorMsg = "Unknown error";
+          if (data.detail) {
+            if (Array.isArray(data.detail)) {
+              errorMsg = data.detail.map(d => (d.loc ? d.loc.slice(1).join('.') + ': ' : '') + d.msg).join('\n');
+            } else if (typeof data.detail === 'object') {
+              errorMsg = JSON.stringify(data.detail);
+            } else {
+              errorMsg = String(data.detail);
+            }
+          } else if (data.error) {
+            errorMsg = String(data.error);
+          }
+          alert("Failed to save metadata:\n" + errorMsg);
         }
       } catch (err) {
         console.error("Save metadata error:", err);

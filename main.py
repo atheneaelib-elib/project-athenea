@@ -1747,10 +1747,10 @@ async def update_book_series_index_route(
 
 class UpdateBookMetadataRequest(BaseModel):
     title: str
-    authors: str
+    authors: list[str] | str
     series_name: str | None = None
     series_index: float | int | str | None = None
-    tags: str | None = None
+    tags: list[str] | str | None = None
     description: str | None = None
     pubdate: str | None = None
     publisher: str | None = None
