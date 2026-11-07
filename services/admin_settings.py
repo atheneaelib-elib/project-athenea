@@ -551,7 +551,14 @@ def test_smtp_connection(
 
 
 def _run_fail2ban_cmd(args: list[str]) -> subprocess.CompletedProcess:
-    """Run fail2ban-client directly as athenea user without sudo."""
+    """Run fail2ban-client via non-interactive sudo with locked-down sudoers rule."""
+    try:
+        res = subprocess.run(["sudo", "-n", "/usr/bin/fail2ban-client"] + args, capture_output=True, text=True, timeout=5)
+        if res.returncode == 0:
+            return res
+    except Exception:
+        pass
+
     try:
         return subprocess.run(["fail2ban-client"] + args, capture_output=True, text=True, timeout=5)
     except Exception as e:

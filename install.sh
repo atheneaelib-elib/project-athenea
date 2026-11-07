@@ -293,11 +293,18 @@ else
     info "Existing configuration found at $ENV_FILE; leaving intact."
 fi
 
-# 11. Configure Systemd Service
+# 11. Configure Systemd Service & Minimal Fail2ban Sudoers Rule
 SERVICE_FILE="/etc/systemd/system/athenea.service"
 info "Installing systemd service to $SERVICE_FILE..."
 cp "$INSTALL_DIR/deploy/athenea.service" "$SERVICE_FILE"
 chmod 644 "$SERVICE_FILE"
+
+# Strictly scoped NOPASSWD rule limited ONLY to fail2ban status and unban commands
+if command -v fail2ban-client &>/dev/null; then
+    F2B_BIN=$(command -v fail2ban-client)
+    echo "$APP_USER ALL=(ALL) NOPASSWD: $F2B_BIN status athenea, $F2B_BIN status bookserver, $F2B_BIN set athenea unbanip *, $F2B_BIN set bookserver unbanip *" > /etc/sudoers.d/athenea-fail2ban
+    chmod 0440 /etc/sudoers.d/athenea-fail2ban
+fi
 
 systemctl daemon-reload
 systemctl enable athenea.service
