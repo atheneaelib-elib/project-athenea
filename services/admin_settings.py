@@ -1579,119 +1579,403 @@ def update_book_metadata(
     return {"success": True, "book_id": book_id, "message": "Metadata updated successfully!"}
 
 
-def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "") -> dict:
+def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", provider: str = "auto") -> dict:
     """
-    Search OpenLibrary and Google Books for metadata enrichment.
+    Search multiple online metadata providers:
+    - Google Books ('google')
+    - OpenLibrary ('openlibrary')
+    - FantLab ('fantlab') - Sci-Fi, Fantasy, Sagas & Russian literature
+    - Internet Archive ('archive')
+    - Wikipedia ('wikipedia')
+    - Crossref ('crossref')
+    - Auto ('auto') - Smart cascade across all providers
     """
     import urllib.request
     import urllib.parse
     import json
 
-    result = {
+    clean_isbn = re.sub(r"[^0-9X]", "", (isbn or "").upper().strip())
+    clean_title = (title or "").strip()
+    clean_author = (author or "").strip()
+
+    def _fetch_openlibrary_isbn(target_isbn: str) -> dict | None:
+        if not target_isbn:
+            return None
+        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{target_isbn}&format=json&jscmd=data"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    key = f"ISBN:{target_isbn}"
+                    if key in data:
+                        b = data[key]
+                        tags = [s.get("name", "") for s in b.get("subjects", [])[:8] if s.get("name")]
+                        cover = b.get("cover", {}).get("large") or b.get("cover", {}).get("medium") or ""
+                        return {
+                            "found": True,
+                            "source": "OpenLibrary (ISBN)",
+                            "title": b.get("title", "") or clean_title,
+                            "authors": [a.get("name", "") for a in b.get("authors", []) if a.get("name")],
+                            "description": "",
+                            "publisher": (b.get("publishers", [{}])[0].get("name", "") if b.get("publishers") else ""),
+                            "pubdate": b.get("publish_date", ""),
+                            "tags": tags,
+                            "isbn": target_isbn,
+                            "series_name": "",
+                            "series_index": None,
+                            "cover_url": cover
+                        }
+        except Exception as e:
+            logger.debug(f"OpenLibrary ISBN fetch error: {e}")
+        return None
+
+    def _fetch_openlibrary_search(t: str, a: str) -> dict | None:
+        if not t:
+            return None
+        q_str = f"{t} {a}".strip() if a else t
+        url = f"https://openlibrary.org/search.json?q={urllib.parse.quote(q_str)}&limit=1"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    docs = json.loads(resp.read().decode("utf-8")).get("docs", [])
+                    if docs:
+                        doc = docs[0]
+                        cover = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg" if doc.get("cover_i") else ""
+                        return {
+                            "found": True,
+                            "source": "OpenLibrary",
+                            "title": doc.get("title", "") or t,
+                            "authors": doc.get("author_name", []) or ([a] if a else []),
+                            "description": "",
+                            "publisher": doc.get("publisher", [""])[0] if doc.get("publisher") else "",
+                            "pubdate": str(doc.get("first_publish_year", "")),
+                            "tags": doc.get("subject", [])[:8],
+                            "isbn": doc.get("isbn", [""])[0] if doc.get("isbn") else clean_isbn,
+                            "series_name": "",
+                            "series_index": None,
+                            "cover_url": cover
+                        }
+        except Exception as e:
+            logger.debug(f"OpenLibrary search error: {e}")
+        return None
+
+    def _fetch_google_books(target_isbn: str, t: str, a: str) -> dict | None:
+        q_parts = []
+        if target_isbn:
+            q_parts.append(f"isbn:{target_isbn}")
+        else:
+            if t:
+                q_parts.append(f"intitle:{t}")
+            if a:
+                q_parts.append(f"inauthor:{a}")
+        query_str = " ".join(q_parts).strip()
+        if not query_str:
+            return None
+        url = f"https://www.googleapis.com/books/v1/volumes?q={urllib.parse.quote(query_str)}&maxResults=1"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    gb_data = json.loads(resp.read().decode("utf-8"))
+                    items = gb_data.get("items", [])
+                    if items:
+                        info = items[0].get("volumeInfo", {})
+                        img_links = info.get("imageLinks", {})
+                        cover = img_links.get("extraLarge") or img_links.get("large") or img_links.get("thumbnail") or ""
+                        found_isbn = target_isbn
+                        for id_item in info.get("industryIdentifiers", []):
+                            if id_item.get("type") in ("ISBN_13", "ISBN_10"):
+                                found_isbn = id_item.get("identifier", found_isbn)
+                                break
+                        return {
+                            "found": True,
+                            "source": "Google Books",
+                            "title": info.get("title", "") or t,
+                            "authors": info.get("authors", []) or ([a] if a else []),
+                            "description": info.get("description", "") or "",
+                            "publisher": info.get("publisher", "") or "",
+                            "pubdate": info.get("publishedDate", "") or "",
+                            "tags": info.get("categories", []) or [],
+                            "isbn": found_isbn,
+                            "series_name": "",
+                            "series_index": None,
+                            "cover_url": cover
+                        }
+        except Exception as e:
+            logger.debug(f"Google Books fetch error: {e}")
+        return None
+
+    def _fetch_fantlab(t: str, a: str) -> dict | None:
+        if not t:
+            return None
+        q_str = f"{t} {a}".strip() if a else t
+        url = f"https://api.fantlab.ru/search-works?q={urllib.parse.quote(q_str)}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    matches = data.get("matches", []) if isinstance(data, dict) else []
+                    if matches:
+                        top = matches[0]
+                        work_id = top.get("work_id")
+                        if work_id:
+                            ext_url = f"https://api.fantlab.ru/work/{work_id}/extended"
+                            ext_req = urllib.request.Request(ext_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                            with urllib.request.urlopen(ext_req, timeout=7) as ext_resp:
+                                if ext_resp.status == 200:
+                                    ext = json.loads(ext_resp.read().decode("utf-8"))
+                                    
+                                    # Extract tags from classificatory
+                                    tags = []
+                                    classif = ext.get("classificatory", {})
+                                    if isinstance(classif, dict) and "genre_group" in classif:
+                                        for grp in classif.get("genre_group", [])[:2]:
+                                            for g in grp.get("genre", []):
+                                                lbl = g.get("label")
+                                                if lbl and lbl not in tags:
+                                                    tags.append(lbl)
+                                                for sub_g in g.get("genre", []):
+                                                    sub_lbl = sub_g.get("label")
+                                                    if sub_lbl and sub_lbl not in tags:
+                                                        tags.append(sub_lbl)
+
+                                    # Extract series name
+                                    series_name = ""
+                                    parents = ext.get("parents", {})
+                                    if isinstance(parents, dict) and parents.get("cycles"):
+                                        for cycle_list in parents.get("cycles", []):
+                                            if cycle_list and isinstance(cycle_list, list) and cycle_list[0].get("work_name"):
+                                                series_name = cycle_list[0].get("work_name")
+                                                break
+
+                                    authors = []
+                                    if ext.get("work_description_author"):
+                                        authors.append(ext.get("work_description_author"))
+                                    elif top.get("all_autor_rusname"):
+                                        authors.append(top.get("all_autor_rusname"))
+
+                                    cover = f"https://fantlab.ru{ext['image']}" if ext.get("image") else ""
+                                    return {
+                                        "found": True,
+                                        "source": "FantLab",
+                                        "title": ext.get("work_name") or top.get("rusname") or t,
+                                        "authors": authors or ([a] if a else []),
+                                        "description": ext.get("work_description", "") or "",
+                                        "publisher": "",
+                                        "pubdate": str(ext.get("work_year") or top.get("year") or ""),
+                                        "tags": tags[:8],
+                                        "isbn": clean_isbn,
+                                        "series_name": series_name,
+                                        "series_index": None,
+                                        "cover_url": cover
+                                    }
+        except Exception as e:
+            logger.debug(f"FantLab fetch error: {e}")
+        return None
+
+    def _fetch_archive_org(t: str, a: str, target_isbn: str) -> dict | None:
+        q_parts = ["mediatype:(texts)"]
+        if target_isbn:
+            q_parts.append(f"isbn:{target_isbn}")
+        else:
+            if t:
+                q_parts.append(f'title:("{t}")')
+            if a:
+                q_parts.append(f'creator:("{a}")')
+        if len(q_parts) <= 1:
+            return None
+        
+        query_str = " AND ".join(q_parts)
+        url = f"https://archive.org/advancedsearch.php?q={urllib.parse.quote(query_str)}&fl[]=identifier,title,creator,publisher,year,description,subject,isbn&rows=1&output=json"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    docs = data.get("response", {}).get("docs", [])
+                    if docs:
+                        doc = docs[0]
+                        creators = doc.get("creator", [])
+                        if isinstance(creators, str):
+                            creators = [creators]
+                        subjects = doc.get("subject", [])
+                        if isinstance(subjects, str):
+                            subjects = [s.strip() for s in subjects.split(";") if s.strip()]
+                        ident = doc.get("identifier", "")
+                        return {
+                            "found": True,
+                            "source": "Internet Archive",
+                            "title": doc.get("title", "") or t,
+                            "authors": creators or ([a] if a else []),
+                            "description": doc.get("description", "") or "",
+                            "publisher": doc.get("publisher", "") or "",
+                            "pubdate": str(doc.get("year", "") or ""),
+                            "tags": subjects[:8],
+                            "isbn": doc.get("isbn", [""])[0] if isinstance(doc.get("isbn"), list) else (doc.get("isbn") or target_isbn),
+                            "series_name": "",
+                            "series_index": None,
+                            "cover_url": f"https://archive.org/services/img/{ident}" if ident else ""
+                        }
+        except Exception as e:
+            logger.debug(f"Internet Archive fetch error: {e}")
+        return None
+
+    def _fetch_wikipedia(t: str, a: str) -> dict | None:
+        if not t:
+            return None
+        has_cyrillic = bool(re.search(r"[\u0400-\u04FF]", t + (a or "")))
+        lang = "ru" if has_cyrillic else "en"
+        search_q = f"{t} {a}".strip() if a else t
+        search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(search_q)}&format=json&utf8=1"
+        try:
+            req = urllib.request.Request(search_url, headers={"User-Agent": "Athenea/2.0 (admin@example.com)"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    hits = data.get("query", {}).get("search", [])
+                    if hits:
+                        page_title = hits[0].get("title", "")
+                        if page_title:
+                            summary_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(page_title)}"
+                            s_req = urllib.request.Request(summary_url, headers={"User-Agent": "Athenea/2.0 (admin@example.com)"})
+                            with urllib.request.urlopen(s_req, timeout=7) as s_resp:
+                                if s_resp.status == 200:
+                                    s_data = json.loads(s_resp.read().decode("utf-8"))
+                                    return {
+                                        "found": True,
+                                        "source": f"Wikipedia ({lang.upper()})",
+                                        "title": s_data.get("title", "") or t,
+                                        "authors": [a] if a else [],
+                                        "description": s_data.get("extract", "") or "",
+                                        "publisher": "",
+                                        "pubdate": "",
+                                        "tags": [],
+                                        "isbn": clean_isbn,
+                                        "series_name": "",
+                                        "series_index": None,
+                                        "cover_url": s_data.get("thumbnail", {}).get("source", "")
+                                    }
+        except Exception as e:
+            logger.debug(f"Wikipedia fetch error: {e}")
+        return None
+
+    def _fetch_crossref(t: str, a: str, target_isbn: str) -> dict | None:
+        params = ["rows=1"]
+        if target_isbn:
+            params.append(f"filter=isbn:{target_isbn}")
+        elif t:
+            params.append(f"query.title={urllib.parse.quote(t)}")
+            if a:
+                params.append(f"query.author={urllib.parse.quote(a)}")
+        else:
+            return None
+        
+        url = f"https://api.crossref.org/works?{'&'.join(params)}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0 (mailto:admin@example.com)"})
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    items = data.get("message", {}).get("items", [])
+                    if items:
+                        item = items[0]
+                        titles = item.get("title", [])
+                        title_res = titles[0] if titles else t
+                        authors_res = [f"{author_item.get('given', '')} {author_item.get('family', '')}".strip() for author_item in item.get("author", []) if author_item.get("family")]
+                        pubdate_parts = item.get("published", {}).get("date-parts", [[]])[0] if item.get("published") else []
+                        pubdate = "-".join(str(p).zfill(2) for p in pubdate_parts) if pubdate_parts else ""
+                        series_name = item.get("container-title", [""])[0] if item.get("container-title") else ""
+                        return {
+                            "found": True,
+                            "source": "Crossref",
+                            "title": title_res,
+                            "authors": authors_res or ([a] if a else []),
+                            "description": item.get("abstract", "") or "",
+                            "publisher": item.get("publisher", "") or "",
+                            "pubdate": pubdate,
+                            "tags": item.get("subject", []) or [],
+                            "isbn": item.get("ISBN", [target_isbn])[0] if item.get("ISBN") else target_isbn,
+                            "series_name": series_name,
+                            "series_index": None,
+                            "cover_url": ""
+                        }
+        except Exception as e:
+            logger.debug(f"Crossref fetch error: {e}")
+        return None
+
+    # Dispatch requested provider or cascade
+    p = (provider or "auto").lower().strip()
+
+    if p == "google":
+        res = _fetch_google_books(clean_isbn, clean_title, clean_author)
+        if res: return res
+    elif p == "openlibrary":
+        if clean_isbn:
+            res = _fetch_openlibrary_isbn(clean_isbn)
+            if res: return res
+        res = _fetch_openlibrary_search(clean_title, clean_author)
+        if res: return res
+    elif p == "fantlab":
+        res = _fetch_fantlab(clean_title, clean_author)
+        if res: return res
+    elif p == "archive":
+        res = _fetch_archive_org(clean_title, clean_author, clean_isbn)
+        if res: return res
+    elif p == "wikipedia":
+        res = _fetch_wikipedia(clean_title, clean_author)
+        if res: return res
+    elif p == "crossref":
+        res = _fetch_crossref(clean_title, clean_author, clean_isbn)
+        if res: return res
+    else:
+        # Smart Cascade for "auto":
+        has_cyrillic = bool(re.search(r"[\u0400-\u04FF]", clean_title + clean_author))
+        if has_cyrillic:
+            res = _fetch_fantlab(clean_title, clean_author)
+            if res: return res
+
+        if clean_isbn:
+            res = _fetch_openlibrary_isbn(clean_isbn)
+            if res: return res
+            res = _fetch_google_books(clean_isbn, clean_title, clean_author)
+            if res: return res
+
+        res = _fetch_google_books(clean_isbn, clean_title, clean_author)
+        if res: return res
+
+        res = _fetch_openlibrary_search(clean_title, clean_author)
+        if res: return res
+
+        if not has_cyrillic:
+            res = _fetch_fantlab(clean_title, clean_author)
+            if res: return res
+
+        res = _fetch_archive_org(clean_title, clean_author, clean_isbn)
+        if res: return res
+
+        res = _fetch_wikipedia(clean_title, clean_author)
+        if res: return res
+
+        res = _fetch_crossref(clean_title, clean_author, clean_isbn)
+        if res: return res
+
+    return {
         "found": False,
+        "source": provider,
         "title": "",
         "authors": [],
         "description": "",
         "publisher": "",
         "pubdate": "",
         "tags": [],
-        "isbn": "",
+        "isbn": clean_isbn,
+        "series_name": "",
+        "series_index": None,
         "cover_url": "",
     }
-
-    clean_isbn = re.sub(r"[^0-9X]", "", (isbn or "").upper().strip())
-
-    # 1. Try OpenLibrary by ISBN
-    if clean_isbn:
-        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{clean_isbn}&format=json&jscmd=data"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    key = f"ISBN:{clean_isbn}"
-                    if key in data:
-                        b = data[key]
-                        result["found"] = True
-                        result["title"] = b.get("title", "")
-                        result["authors"] = [a.get("name", "") for a in b.get("authors", []) if a.get("name")]
-                        result["publisher"] = (b.get("publishers", [{}])[0].get("name", "") if b.get("publishers") else "")
-                        result["pubdate"] = b.get("publish_date", "")
-                        result["isbn"] = clean_isbn
-                        if "subjects" in b:
-                            result["tags"] = [s.get("name", "") for s in b["subjects"][:6] if s.get("name")]
-                        if "cover" in b and "large" in b["cover"]:
-                            result["cover_url"] = b["cover"]["large"]
-                        return result
-        except Exception as e:
-            logger.debug(f"OpenLibrary ISBN fetch error: {e}")
-
-    # 2. Try Google Books API
-    q_parts = []
-    if clean_isbn:
-        q_parts.append(f"isbn:{clean_isbn}")
-    else:
-        if title:
-            q_parts.append(f"intitle:{title.strip()}")
-        if author:
-            q_parts.append(f"inauthor:{author.strip()}")
-
-    query_str = " ".join(q_parts).strip()
-    if query_str:
-        gb_url = f"https://www.googleapis.com/books/v1/volumes?q={urllib.parse.quote(query_str)}&maxResults=1"
-        try:
-            req = urllib.request.Request(gb_url, headers={"User-Agent": "Athenea/2.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                if resp.status == 200:
-                    gb_data = json.loads(resp.read().decode("utf-8"))
-                    items = gb_data.get("items", [])
-                    if items:
-                        info = items[0].get("volumeInfo", {})
-                        result["found"] = True
-                        result["title"] = info.get("title", "")
-                        result["authors"] = info.get("authors", [])
-                        result["description"] = info.get("description", "")
-                        result["publisher"] = info.get("publisher", "")
-                        result["pubdate"] = info.get("publishedDate", "")
-                        result["tags"] = info.get("categories", [])
-                        img_links = info.get("imageLinks", {})
-                        result["cover_url"] = img_links.get("extraLarge") or img_links.get("large") or img_links.get("thumbnail") or ""
-                        for id_item in info.get("industryIdentifiers", []):
-                            if id_item.get("type") in ("ISBN_13", "ISBN_10"):
-                                result["isbn"] = id_item.get("identifier", "")
-                                break
-                        return result
-        except Exception as ge:
-            logger.debug(f"Google Books fetch error: {ge}")
-
-    # 3. Fallback: OpenLibrary Search
-    if title:
-        q_str = f"{title} {author}".strip()
-        ol_search_url = f"https://openlibrary.org/search.json?q={urllib.parse.quote(q_str)}&limit=1"
-        try:
-            req = urllib.request.Request(ol_search_url, headers={"User-Agent": "Athenea/2.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                if resp.status == 200:
-                    docs = json.loads(resp.read().decode("utf-8")).get("docs", [])
-                    if docs:
-                        doc = docs[0]
-                        result["found"] = True
-                        result["title"] = doc.get("title", "")
-                        result["authors"] = doc.get("author_name", [])
-                        result["pubdate"] = str(doc.get("first_publish_year", ""))
-                        if doc.get("publisher"):
-                            result["publisher"] = doc["publisher"][0]
-                        if doc.get("subject"):
-                            result["tags"] = doc["subject"][:6]
-                        if doc.get("isbn"):
-                            result["isbn"] = doc["isbn"][0]
-                        if doc.get("cover_i"):
-                            result["cover_url"] = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
-                        return result
-        except Exception as se:
-            logger.debug(f"OpenLibrary search error: {se}")
-
-    return result
 
 
 def merge_authors(db: Session, target_author_id: int, source_author_ids: list[int]) -> dict:

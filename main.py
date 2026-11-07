@@ -1836,12 +1836,13 @@ def enrich_metadata_route(
     isbn: str = "",
     title: str = "",
     author: str = "",
+    provider: str = "auto",
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
     if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="Permission denied")
-    return admin_settings_service.fetch_metadata_online(isbn=isbn, title=title, author=author)
+    return admin_settings_service.fetch_metadata_online(isbn=isbn, title=title, author=author, provider=provider)
 
 
 @app.get("/author/{author_id}/merge-modal", response_class=HTMLResponse)

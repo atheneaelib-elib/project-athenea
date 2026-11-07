@@ -1152,6 +1152,7 @@
       const banner = document.getElementById('enrich-status-banner');
       const bannerText = document.getElementById('enrich-status-text');
       const enrichBtn = document.getElementById('btn-enrich-metadata');
+      const provider = document.getElementById('enrich-provider-select')?.value || 'auto';
 
       const title = (document.getElementById('meta-title')?.value || "").trim();
       const author = (document.getElementById('meta-authors')?.value || "").trim();
@@ -1159,7 +1160,10 @@
 
       if (banner) {
         banner.classList.remove('hidden');
-        if (bannerText) bannerText.textContent = 'Searching OpenLibrary & Google Books...';
+        if (bannerText) {
+          const provName = provider === 'auto' ? 'All Providers (Smart Cascade)' : provider;
+          bannerText.textContent = `Querying ${provName}...`;
+        }
       }
       if (enrichBtn) {
         enrichBtn.disabled = true;
@@ -1170,7 +1174,8 @@
         const queryParams = new URLSearchParams({
           title: title,
           author: author,
-          isbn: isbn
+          isbn: isbn,
+          provider: provider
         });
         const res = await fetch(`/api/metadata/enrich?` + queryParams.toString());
         const data = await res.json();
@@ -1182,6 +1187,12 @@
           }
           if (data.authors && data.authors.length > 0 && document.getElementById('meta-authors')) {
             document.getElementById('meta-authors').value = data.authors.join(', ');
+          }
+          if (data.series_name && document.getElementById('meta-series-name')) {
+            document.getElementById('meta-series-name').value = data.series_name;
+          }
+          if (data.series_index && document.getElementById('meta-series-index')) {
+            document.getElementById('meta-series-index').value = data.series_index;
           }
           if (data.publisher && document.getElementById('meta-publisher')) {
             document.getElementById('meta-publisher').value = data.publisher;
@@ -1204,7 +1215,7 @@
             if (bannerText) bannerText.textContent = `Enriched successfully from ${data.source}! Review and click Save.`;
           }, 600);
         } else {
-          if (bannerText) bannerText.textContent = 'No matching metadata found on OpenLibrary / Google Books.';
+          if (bannerText) bannerText.textContent = `No matching metadata found on ${data.source || provider}. Try another provider.`;
         }
       } catch (err) {
         console.error("Enrich metadata error:", err);
