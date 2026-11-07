@@ -28,6 +28,17 @@
       </button>
     </div>
 
+    {% if gaps and gaps.has_gaps %}
+    <!-- Series Gaps Banner -->
+    <div class="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2 flex-shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-base flex-shrink-0">⚠️</span>
+        <span class="font-medium truncate">{{ gaps.summary_text }}</span>
+      </div>
+      <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30 flex-shrink-0">Incomplete Saga</span>
+    </div>
+    {% endif %}
+
     <!-- Quick Utilities & Actions Bar -->
     <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800 text-xs flex-shrink-0">
       <div class="flex flex-wrap items-center gap-1.5">
@@ -39,6 +50,16 @@
         >
           <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
           <span>Auto-Number 1..N</span>
+        </button>
+
+        <button 
+          type="button" 
+          onclick="closeSeriesOrderModal(); openSeriesMergeModal({{ series.id }})" 
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-medium bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer"
+          title="Merge duplicate series into this series"
+        >
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+          <span>Merge Series</span>
         </button>
 
         <button 

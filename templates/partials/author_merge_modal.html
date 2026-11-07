@@ -1,0 +1,101 @@
+<div id="author-merge-modal" class="fixed inset-0 z-[65] overflow-y-auto flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
+  <!-- Backdrop Click Area -->
+  <div class="fixed inset-0" onclick="closeAuthorMergeModal()"></div>
+
+  <!-- Modal Dialog Card -->
+  <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden z-10 p-5 sm:p-6 space-y-4 max-h-[92vh] flex flex-col">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-base sm:text-lg font-bold text-white truncate">Merge Authors</h2>
+          <p class="text-xs text-slate-400 truncate">Consolidate duplicate author records into <span class="text-indigo-400 font-semibold">{{ author.name }}</span></p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="closeAuthorMergeModal()" 
+        class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700 cursor-pointer flex-shrink-0"
+        title="Close (Esc)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- Search / Filter Variants -->
+    <div class="relative flex-shrink-0">
+      <input 
+        type="text" 
+        id="author-merge-search" 
+        value="{{ search_q }}"
+        placeholder="Search other author variants to merge..." 
+        oninput="debounceAuthorMergeSearch({{ author.id }}, this.value)"
+        class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 pl-8 border border-slate-700 focus:border-indigo-500 focus:outline-none"
+      />
+      <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    </div>
+
+    <!-- Target Canonical Author Card -->
+    <div class="p-3 bg-indigo-950/30 border border-indigo-500/30 rounded-xl flex items-center justify-between text-xs flex-shrink-0">
+      <div>
+        <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Target Canonical Name</span>
+        <span class="text-sm font-bold text-white">{{ author.name }}</span>
+      </div>
+      <span class="px-2 py-0.5 rounded text-[10px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-mono">ID #{{ author.id }}</span>
+    </div>
+
+    <!-- Candidate Authors List (Scrollable) -->
+    <div class="space-y-1.5 overflow-y-auto pr-1 flex-1 min-h-[180px]">
+      <div class="text-[11px] text-slate-400 px-1 pb-1">Select author records to merge into <b>{{ author.name }}</b>:</div>
+      {% if candidates %}
+        {% for cand in candidates %}
+        <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800 transition-colors cursor-pointer group">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <input 
+              type="checkbox" 
+              name="merge-author-source" 
+              value="{{ cand.id }}" 
+              class="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span class="text-xs font-medium text-slate-200 group-hover:text-white truncate">{{ cand.name }}</span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-[10px] text-slate-400 font-mono">{{ cand.book_count }} book{% if cand.book_count != 1 %}s{% endif %}</span>
+            <span class="text-[10px] text-slate-600 font-mono">#{{ cand.id }}</span>
+          </div>
+        </label>
+        {% endfor %}
+      {% else %}
+        <div class="text-center py-8 text-xs text-slate-500">
+          No other author variants found matching this name.
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs flex-shrink-0">
+      <button 
+        type="button" 
+        onclick="closeAuthorMergeModal()" 
+        class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+
+      <button 
+        type="button" 
+        id="btn-confirm-author-merge"
+        onclick="submitAuthorMerge({{ author.id }})" 
+        class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+        <span>Merge Selected</span>
+      </button>
+    </div>
+
+  </div>
+</div>

@@ -1668,12 +1668,14 @@ def series_order_modal_view(
         raise HTTPException(status_code=404, detail="Series not found")
 
     books = book_service.get_series_books(db, series_id)
+    gaps = book_service.detect_series_gaps(books)
     return templates.TemplateResponse(
         request=request,
         name="partials/series_order_modal.html",
         context={
             "series": series,
             "books": books,
+            "gaps": gaps,
             "current_user": current_user,
         }
     )
@@ -1737,6 +1739,236 @@ async def update_book_series_index_route(
         "series_index": s_idx,
         "series_index_str": s_idx_str
     }
+
+
+# ===================================================================
+# ADVANCED METADATA, AUTHOR & SERIES MANAGEMENT ROUTES
+# ===================================================================
+
+class UpdateBookMetadataRequest(BaseModel):
+    title: str
+    authors: str
+    series_name: str | None = None
+    series_index: float | int | str | None = None
+    tags: str | None = None
+    description: str | None = None
+    pubdate: str | None = None
+    publisher: str | None = None
+    isbn: str | None = None
+
+
+class MergeAuthorsRequest(BaseModel):
+    target_author_id: int
+    source_author_ids: list[int]
+
+
+class MergeSeriesRequest(BaseModel):
+    target_series_id: int
+    source_series_ids: list[int]
+
+
+class BulkBookActionRequest(BaseModel):
+    book_ids: list[int]
+    action: str
+    params: dict = {}
+
+
+@app.get("/admin/book/{book_id}/edit-modal", response_class=HTMLResponse)
+def book_metadata_edit_modal_view(
+    request: Request,
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    details = book_service.get_book_details(db, book_id, user.get("id"))
+    if not details:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/book_metadata_modal.html",
+        context={"book": details, "current_user": user}
+    )
+
+
+@app.post("/admin/book/{book_id}/edit-metadata")
+def update_book_metadata_route(
+    request: Request,
+    book_id: int,
+    payload: UpdateBookMetadataRequest,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    s_idx = None
+    if payload.series_index is not None and str(payload.series_index).strip():
+        try:
+            s_idx = float(payload.series_index)
+        except (ValueError, TypeError):
+            s_idx = None
+
+    res = admin_settings_service.update_book_metadata(
+        db=db,
+        book_id=book_id,
+        title=payload.title,
+        authors=payload.authors,
+        series_name=payload.series_name,
+        series_index=s_idx,
+        tags=payload.tags,
+        description=payload.description,
+        pubdate=payload.pubdate,
+        publisher=payload.publisher,
+        isbn=payload.isbn,
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to update metadata"))
+    return res
+
+
+@app.get("/api/metadata/enrich")
+def enrich_metadata_route(
+    request: Request,
+    isbn: str = "",
+    title: str = "",
+    author: str = "",
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    return admin_settings_service.fetch_metadata_online(isbn=isbn, title=title, author=author)
+
+
+@app.get("/author/{author_id}/merge-modal", response_class=HTMLResponse)
+def author_merge_modal_view(
+    request: Request,
+    author_id: int,
+    q: str = "",
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    curr = db.execute(text("SELECT id, name FROM authors WHERE id = :id"), {"id": author_id}).fetchone()
+    if not curr:
+        raise HTTPException(status_code=404, detail="Author not found")
+
+    candidates = admin_settings_service.search_authors_to_merge(db, author_id, q)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/author_merge_modal.html",
+        context={"author": curr, "candidates": candidates, "search_q": q, "current_user": user}
+    )
+
+
+@app.post("/author/{author_id}/merge")
+def merge_author_route(
+    request: Request,
+    author_id: int,
+    payload: MergeAuthorsRequest,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    res = admin_settings_service.merge_authors(db, payload.target_author_id, payload.source_author_ids)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Merge failed"))
+    return res
+
+
+@app.get("/series/{series_id}/merge-modal", response_class=HTMLResponse)
+def series_merge_modal_view(
+    request: Request,
+    series_id: int,
+    q: str = "",
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    curr = db.execute(text("SELECT id, name FROM series WHERE id = :id"), {"id": series_id}).fetchone()
+    if not curr:
+        raise HTTPException(status_code=404, detail="Series not found")
+
+    candidates = admin_settings_service.search_series_to_merge(db, series_id, q)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/series_merge_modal.html",
+        context={"series": curr, "candidates": candidates, "search_q": q, "current_user": user}
+    )
+
+
+@app.post("/series/{series_id}/merge")
+def merge_series_route(
+    request: Request,
+    series_id: int,
+    payload: MergeSeriesRequest,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    res = admin_settings_service.merge_series(db, payload.target_series_id, payload.source_series_ids)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Merge failed"))
+    return res
+
+
+@app.get("/author/{author_id}/profile-modal", response_class=HTMLResponse)
+def author_profile_modal_view(
+    request: Request,
+    author_id: int,
+    db: Session = Depends(get_db)
+):
+    curr = db.execute(text("SELECT id, name FROM authors WHERE id = :id"), {"id": author_id}).fetchone()
+    if not curr:
+        raise HTTPException(status_code=404, detail="Author not found")
+
+    profile = admin_settings_service.get_or_fetch_author_profile(db, author_id, curr.name)
+    book_count = db.execute(text("SELECT count(*) FROM book_authors WHERE author_id = :aid"), {"aid": author_id}).scalar() or 0
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/author_bio_modal.html",
+        context={"author": curr, "profile": profile, "book_count": book_count}
+    )
+
+
+@app.post("/api/books/bulk-action")
+def bulk_book_action_route(
+    request: Request,
+    payload: BulkBookActionRequest,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if payload.action == "delete" and not (user.get("can_delete_books") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied: book deletion disabled for this account")
+
+    if payload.action in ("add_tag", "remove_tag", "assign_series") and not (user.get("can_edit_metadata") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="Permission denied: metadata editing disabled for this account")
+
+    res = admin_settings_service.execute_bulk_book_action(
+        db=db,
+        book_ids=payload.book_ids,
+        action=payload.action,
+        params=payload.params,
+        user_id=user["id"]
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Bulk action failed"))
+    return res
 
 
 

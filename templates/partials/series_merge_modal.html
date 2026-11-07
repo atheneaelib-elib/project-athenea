@@ -1,0 +1,101 @@
+<div id="series-merge-modal" class="fixed inset-0 z-[65] overflow-y-auto flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
+  <!-- Backdrop Click Area -->
+  <div class="fixed inset-0" onclick="closeSeriesMergeModal()"></div>
+
+  <!-- Modal Dialog Card -->
+  <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden z-10 p-5 sm:p-6 space-y-4 max-h-[92vh] flex flex-col">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-base sm:text-lg font-bold text-white truncate">Merge Series</h2>
+          <p class="text-xs text-slate-400 truncate">Consolidate duplicate series records into <span class="text-amber-400 font-semibold">{{ series.name }}</span></p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="closeSeriesMergeModal()" 
+        class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700 cursor-pointer flex-shrink-0"
+        title="Close (Esc)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- Search / Filter Variants -->
+    <div class="relative flex-shrink-0">
+      <input 
+        type="text" 
+        id="series-merge-search" 
+        value="{{ search_q }}"
+        placeholder="Search other series variants to merge..." 
+        oninput="debounceSeriesMergeSearch({{ series.id }}, this.value)"
+        class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 pl-8 border border-slate-700 focus:border-amber-500 focus:outline-none"
+      />
+      <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    </div>
+
+    <!-- Target Canonical Series Card -->
+    <div class="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs flex-shrink-0">
+      <div>
+        <span class="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Target Canonical Series</span>
+        <span class="text-sm font-bold text-white">{{ series.name }}</span>
+      </div>
+      <span class="px-2 py-0.5 rounded text-[10px] bg-amber-600/30 text-amber-300 border border-amber-500/30 font-mono">ID #{{ series.id }}</span>
+    </div>
+
+    <!-- Candidate Series List (Scrollable) -->
+    <div class="space-y-1.5 overflow-y-auto pr-1 flex-1 min-h-[180px]">
+      <div class="text-[11px] text-slate-400 px-1 pb-1">Select series records to merge into <b>{{ series.name }}</b>:</div>
+      {% if candidates %}
+        {% for cand in candidates %}
+        <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800 transition-colors cursor-pointer group">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <input 
+              type="checkbox" 
+              name="merge-series-source" 
+              value="{{ cand.id }}" 
+              class="w-4 h-4 rounded text-amber-600 bg-slate-900 border-slate-700 focus:ring-amber-500 cursor-pointer"
+            />
+            <span class="text-xs font-medium text-slate-200 group-hover:text-white truncate">{{ cand.name }}</span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-[10px] text-slate-400 font-mono">{{ cand.book_count }} book{% if cand.book_count != 1 %}s{% endif %}</span>
+            <span class="text-[10px] text-slate-600 font-mono">#{{ cand.id }}</span>
+          </div>
+        </label>
+        {% endfor %}
+      {% else %}
+        <div class="text-center py-8 text-xs text-slate-500">
+          No other series variants found matching this name.
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs flex-shrink-0">
+      <button 
+        type="button" 
+        onclick="closeSeriesMergeModal()" 
+        class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+
+      <button 
+        type="button" 
+        id="btn-confirm-series-merge"
+        onclick="submitSeriesMerge({{ series.id }})" 
+        class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+        <span>Merge Selected</span>
+      </button>
+    </div>
+
+  </div>
+</div>

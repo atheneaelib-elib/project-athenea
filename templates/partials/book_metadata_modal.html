@@ -1,0 +1,192 @@
+<div id="metadata-edit-modal" class="fixed inset-0 z-[65] overflow-y-auto flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
+  <!-- Backdrop Click Area -->
+  <div class="fixed inset-0" onclick="closeMetadataModal()"></div>
+
+  <!-- Modal Dialog Card -->
+  <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden z-10 p-5 sm:p-6 space-y-4 max-h-[92vh] flex flex-col">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-base sm:text-lg font-bold text-white truncate">Edit Book Metadata</h2>
+          <p class="text-xs text-slate-400 truncate">Book #{{ book.id }} &bull; <span class="text-indigo-400">{{ book.title }}</span></p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button 
+          type="button" 
+          onclick="enrichBookMetadataOnline({{ book.id }})" 
+          id="btn-enrich-metadata"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shadow-sm"
+          title="Search OpenLibrary & Google Books for missing metadata"
+        >
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          <span>Auto-Enrich</span>
+        </button>
+
+        <button 
+          type="button" 
+          onclick="closeMetadataModal()" 
+          class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700 cursor-pointer flex-shrink-0"
+          title="Close (Esc)"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Status Banner for Auto-Enrichment -->
+    <div id="enrich-status-banner" class="hidden text-xs p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center justify-between">
+      <span id="enrich-status-text">Fetching online metadata...</span>
+      <span class="text-[10px] text-slate-400 font-mono">OpenLibrary / Google Books</span>
+    </div>
+
+    <!-- Scrollable Form Fields -->
+    <form id="edit-metadata-form" onsubmit="submitBookMetadataEdit(event, {{ book.id }})" class="space-y-3.5 overflow-y-auto pr-1 flex-1">
+      
+      <!-- Title -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Title <span class="text-rose-400">*</span></label>
+        <input 
+          type="text" 
+          id="meta-title" 
+          name="title" 
+          required 
+          value="{{ book.title }}" 
+          class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+        />
+      </div>
+
+      <!-- Authors -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Author(s) <span class="text-slate-500 font-normal">(separate multiple with commas)</span></label>
+        <input 
+          type="text" 
+          id="meta-authors" 
+          name="authors" 
+          required 
+          value="{% for a in book.authors %}{{ a.name }}{% if not loop.last %}, {% endif %}{% endfor %}" 
+          class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+        />
+      </div>
+
+      <!-- Series Name & Volume Number (2-Column Grid) -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Series Name</label>
+          <input 
+            type="text" 
+            id="meta-series-name" 
+            name="series_name" 
+            value="{{ book.series_name or '' }}" 
+            placeholder="e.g. Тайный Город, Harry Potter"
+            class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Volume / Index</label>
+          <input 
+            type="number" 
+            step="any" 
+            min="0" 
+            id="meta-series-index" 
+            name="series_index" 
+            value="{{ book.series_index.replace('#', '') if book.series_index else '' }}" 
+            placeholder="e.g. 1, 2.5" 
+            class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors font-mono"
+          />
+        </div>
+      </div>
+
+      <!-- Tags / Genres -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Tags / Genres <span class="text-slate-500 font-normal">(comma-separated)</span></label>
+        <input 
+          type="text" 
+          id="meta-tags" 
+          name="tags" 
+          value="{% for t in book.tags %}{{ t.name }}{% if not loop.last %}, {% endif %}{% endfor %}" 
+          placeholder="e.g. Science Fiction, Cyberpunk, Dystopia"
+          class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+        />
+      </div>
+
+      <!-- Publisher, Pub Date & ISBN (3-Column Grid) -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Publisher</label>
+          <input 
+            type="text" 
+            id="meta-publisher" 
+            name="publisher" 
+            value="{{ book.publisher or '' }}" 
+            class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Publication Date</label>
+          <input 
+            type="date" 
+            id="meta-pubdate" 
+            name="pubdate" 
+            value="{{ book.pubdate or '' }}" 
+            class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">ISBN</label>
+          <input 
+            type="text" 
+            id="meta-isbn" 
+            name="isbn" 
+            value="{% for ident in book.identifiers %}{% if ident.type|lower == 'isbn' %}{{ ident.val }}{% endif %}{% endfor %}" 
+            placeholder="ISBN-10 or 13"
+            class="w-full bg-slate-950/80 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors font-mono"
+          />
+        </div>
+      </div>
+
+      <!-- Synopsis / Description -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Description / Synopsis</label>
+        <textarea 
+          id="meta-description" 
+          name="description" 
+          rows="4" 
+          placeholder="Enter book description..."
+          class="w-full bg-slate-950/80 text-white text-xs rounded-xl p-3 border border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+        >{{ book.description or '' }}</textarea>
+      </div>
+
+      <!-- Hidden submit for Enter key -->
+      <button type="submit" class="hidden"></button>
+    </form>
+
+    <!-- Modal Footer Actions -->
+    <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs flex-shrink-0">
+      <button 
+        type="button" 
+        onclick="closeMetadataModal()" 
+        class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+
+      <button 
+        type="button" 
+        id="btn-save-metadata"
+        onclick="submitBookMetadataEdit(event, {{ book.id }})" 
+        class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+        <span>Save Metadata</span>
+      </button>
+    </div>
+
+  </div>
+</div>

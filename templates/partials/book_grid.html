@@ -33,8 +33,20 @@
       {% endif %}
     </div>
 
-    <!-- Active page summary & View Mode Toggle -->
-    <div class="flex items-center gap-3">
+    <!-- Active page summary, Bulk Select & View Mode Toggle -->
+    <div class="flex items-center gap-2.5">
+      <!-- Bulk Selection Toggle Button -->
+      <button 
+        type="button" 
+        id="bulk-select-toggle-btn"
+        onclick="toggleBulkSelectMode()"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+        title="Toggle multi-book selection for bulk actions"
+      >
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+        <span id="bulk-toggle-label">Select</span>
+      </button>
+
       <!-- View mode toggle: Grouped vs Grid -->
       <div class="inline-flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700">
         <button 
@@ -125,13 +137,33 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {% if current_user and author_data.author_id %}
             {% with author_id=author_data.author_id, is_favorite=author_data.is_favorite, context='inline' %}
               {% include 'partials/favorite_author_btn.html' %}
             {% endwith %}
           {% endif %}
           {% if author_data.author_id %}
+          <button 
+            type="button" 
+            onclick="openAuthorBioModal({{ author_data.author_id }})" 
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-indigo-300 border border-slate-700 transition-colors cursor-pointer"
+            title="View Author Biography & Profile"
+          >
+            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            <span>Bio</span>
+          </button>
+          {% if current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
+          <button 
+            type="button" 
+            onclick="openAuthorMergeModal({{ author_data.author_id }})" 
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/30 transition-colors cursor-pointer"
+            title="Merge duplicate author records into this author"
+          >
+            <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+            <span>Merge</span>
+          </button>
+          {% endif %}
           <button 
             type="button" 
             onclick="filterByAuthor({{ author_data.author_id }}, '{{ author_data.author_name|escape }}')"
@@ -155,8 +187,13 @@
             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex-shrink-0">
               {{ s.books|length }}
             </span>
+            {% if s.gaps and s.gaps.has_gaps %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0" title="{{ s.gaps.summary_text }}">
+              ⚠️ Missing: #{{ s.gaps.missing_indices|join(', #') }}
+            </span>
+            {% endif %}
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {% if s.series_id and current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
             <button 
               type="button" 
@@ -165,6 +202,14 @@
               title="Reorder books in {{ s.series_name }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+            </button>
+            <button 
+              type="button" 
+              onclick="openSeriesMergeModal({{ s.series_id }})"
+              class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-amber-300 border border-slate-700/80 hover:border-amber-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
+              title="Merge {{ s.series_name }} with another series"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
             </button>
             {% endif %}
             {% if current_user and s.series_id %}
@@ -286,5 +331,53 @@
   {% endif %}
 
   {% endif %}
+
+  <!-- Floating Bulk Actions Toolbar -->
+  <div id="bulk-actions-toolbar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border border-indigo-500/50 shadow-2xl shadow-indigo-950/80 rounded-2xl p-2.5 px-4 backdrop-blur-md hidden flex-wrap items-center gap-3 transition-all animate-slideUp max-w-4xl w-[94vw] sm:w-auto">
+    <div class="flex items-center gap-2 border-r border-slate-700/80 pr-3">
+      <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+      <span class="text-xs font-bold text-white"><span id="bulk-selected-count">0</span> selected</span>
+    </div>
+
+    <!-- Select / Deselect All -->
+    <div class="flex items-center gap-1.5 text-xs">
+      <button type="button" onclick="bulkSelectAll(true)" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium transition-colors cursor-pointer">All</button>
+      <button type="button" onclick="bulkSelectAll(false)" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium transition-colors cursor-pointer">None</button>
+    </div>
+
+    <!-- Actions dropdowns / buttons -->
+    <div class="flex flex-wrap items-center gap-1.5 text-xs flex-1 justify-end">
+      <!-- Shelf Dropdown -->
+      <select id="bulk-shelf-select" onchange="applyBulkShelf(this.value); this.value='';" class="bg-slate-800 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 border border-slate-700 focus:border-indigo-500 focus:outline-none cursor-pointer">
+        <option value="" disabled selected>📚 Set Shelf...</option>
+        <option value="reading">Currently Reading</option>
+        <option value="finished">Finished</option>
+        <option value="plan_to_read">Want to Read</option>
+        <option value="none">Clear Shelf</option>
+      </select>
+
+      {% if current_user and (current_user.can_edit_metadata or current_user.is_admin) %}
+      <button type="button" onclick="promptBulkTag('add')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition-colors cursor-pointer" title="Add tag to selected books">
+        + Tag
+      </button>
+      <button type="button" onclick="promptBulkTag('remove')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition-colors cursor-pointer" title="Remove tag from selected books">
+        - Tag
+      </button>
+      <button type="button" onclick="promptBulkSeries()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-medium transition-colors cursor-pointer" title="Assign selected books to series">
+        Set Series
+      </button>
+      {% endif %}
+
+      {% if current_user and (current_user.can_delete_books or current_user.is_admin) %}
+      <button type="button" onclick="executeBulkDelete()" class="px-2.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-bold transition-all cursor-pointer">
+        Delete
+      </button>
+      {% endif %}
+
+      <button type="button" onclick="toggleBulkSelectMode(false)" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-1 cursor-pointer" title="Exit select mode">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+  </div>
 
 </div>

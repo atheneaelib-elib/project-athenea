@@ -361,6 +361,14 @@ def init_auth_tables(db: Session):
             PRIMARY KEY (user_id, series_id)
         );
 
+        CREATE TABLE IF NOT EXISTS author_profiles (
+            author_id BIGINT PRIMARY KEY REFERENCES authors(id) ON DELETE CASCADE,
+            photo_url TEXT,
+            bio TEXT,
+            wikipedia_url TEXT,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS login_attempts (
             id SERIAL PRIMARY KEY,
             ip_address VARCHAR(64) NOT NULL,

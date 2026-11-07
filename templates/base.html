@@ -352,6 +352,9 @@
       vertical-align: -0.15em;
       display: inline-block;
     }
+    body.bulk-select-active .bulk-select-box {
+      display: block !important;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
@@ -747,6 +750,15 @@
   <!-- Modal Container for Series Order Management -->
   <div id="series-order-modal-container"></div>
 
+  <!-- Modal Container for Book Metadata Editor -->
+  <div id="metadata-modal-container"></div>
+
+  <!-- Modal Container for Author & Series Merging -->
+  <div id="merge-modal-container"></div>
+
+  <!-- Modal Container for Author Bio Profile -->
+  <div id="author-bio-modal-container"></div>
+
   <!-- Footer -->
   <footer class="mt-auto border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-400">
     <div class="max-w-7xl mx-auto px-4">
@@ -1110,6 +1122,486 @@
     window.seriesSortByDate = seriesSortByDate;
     window.saveSeriesOrder = saveSeriesOrder;
 
+    // ==========================================
+    // Book Metadata Modal & Online Enricher
+    // ==========================================
+    function openMetadataModal(bookId) {
+      if (!bookId) return;
+      const container = document.getElementById('metadata-modal-container');
+      if (!container) return;
+      fetch(`/admin/book/${bookId}/edit-modal`)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to load metadata editor (HTTP " + res.status + ")");
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          console.error("Open metadata modal error:", err);
+          alert("Error opening metadata editor: " + err.message);
+        });
+    }
+
+    function closeMetadataModal() {
+      const container = document.getElementById('metadata-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    async function enrichBookMetadataOnline(bookId) {
+      const banner = document.getElementById('enrich-status-banner');
+      const bannerText = document.getElementById('enrich-status-text');
+      const enrichBtn = document.getElementById('btn-enrich-metadata');
+
+      const title = (document.getElementById('meta-title')?.value || "").trim();
+      const author = (document.getElementById('meta-authors')?.value || "").trim();
+      const isbn = (document.getElementById('meta-isbn')?.value || "").trim();
+
+      if (banner) {
+        banner.classList.remove('hidden');
+        if (bannerText) bannerText.textContent = 'Searching OpenLibrary & Google Books...';
+      }
+      if (enrichBtn) {
+        enrichBtn.disabled = true;
+        enrichBtn.classList.add('opacity-60');
+      }
+
+      try {
+        const queryParams = new URLSearchParams({
+          title: title,
+          author: author,
+          isbn: isbn
+        });
+        const res = await fetch(`/api/metadata/enrich?` + queryParams.toString());
+        const data = await res.json();
+
+        if (res.ok && data.found) {
+          if (bannerText) bannerText.textContent = `Found on ${data.source}! Applying details...`;
+          if (data.title && document.getElementById('meta-title')) {
+            document.getElementById('meta-title').value = data.title;
+          }
+          if (data.authors && data.authors.length > 0 && document.getElementById('meta-authors')) {
+            document.getElementById('meta-authors').value = data.authors.join(', ');
+          }
+          if (data.publisher && document.getElementById('meta-publisher')) {
+            document.getElementById('meta-publisher').value = data.publisher;
+          }
+          if (data.pubdate && document.getElementById('meta-pubdate')) {
+            document.getElementById('meta-pubdate').value = data.pubdate;
+          }
+          if (data.isbn && document.getElementById('meta-isbn')) {
+            document.getElementById('meta-isbn').value = data.isbn;
+          }
+          if (data.description && document.getElementById('meta-description')) {
+            document.getElementById('meta-description').value = data.description;
+          }
+          if (data.tags && data.tags.length > 0 && document.getElementById('meta-tags')) {
+            const currentTags = (document.getElementById('meta-tags').value || "").split(',').map(t => t.trim()).filter(Boolean);
+            const merged = Array.from(new Set([...currentTags, ...data.tags]));
+            document.getElementById('meta-tags').value = merged.join(', ');
+          }
+          setTimeout(() => {
+            if (bannerText) bannerText.textContent = `Enriched successfully from ${data.source}! Review and click Save.`;
+          }, 600);
+        } else {
+          if (bannerText) bannerText.textContent = 'No matching metadata found on OpenLibrary / Google Books.';
+        }
+      } catch (err) {
+        console.error("Enrich metadata error:", err);
+        if (bannerText) bannerText.textContent = 'Error querying online providers: ' + err.message;
+      } finally {
+        if (enrichBtn) {
+          enrichBtn.disabled = false;
+          enrichBtn.classList.remove('opacity-60');
+        }
+      }
+    }
+
+    async function submitBookMetadataEdit(e, bookId) {
+      if (e) e.preventDefault();
+      const saveBtn = document.getElementById('btn-save-metadata');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add('opacity-75');
+      }
+
+      const payload = {
+        title: (document.getElementById('meta-title')?.value || "").trim(),
+        authors: (document.getElementById('meta-authors')?.value || "").split(',').map(s => s.trim()).filter(Boolean),
+        series_name: (document.getElementById('meta-series-name')?.value || "").trim() || null,
+        series_index: parseFloat(document.getElementById('meta-series-index')?.value) || null,
+        tags: (document.getElementById('meta-tags')?.value || "").split(',').map(s => s.trim()).filter(Boolean),
+        publisher: (document.getElementById('meta-publisher')?.value || "").trim() || null,
+        pubdate: (document.getElementById('meta-pubdate')?.value || "").trim() || null,
+        description: (document.getElementById('meta-description')?.value || "").trim() || null,
+        isbn: (document.getElementById('meta-isbn')?.value || "").trim() || null
+      };
+
+      try {
+        const res = await fetch(`/admin/book/${bookId}/edit-metadata`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          closeMetadataModal();
+          // Reload book modal if open
+          if (typeof openBookModal === 'function') {
+            openBookModal(bookId);
+          }
+          // Refresh background grid if present
+          const grid = document.getElementById('book-grid');
+          if (grid && typeof htmx !== 'undefined') {
+            htmx.trigger(grid, 'refresh');
+          }
+        } else {
+          alert("Failed to save metadata: " + (data.detail || data.error || "Unknown error"));
+        }
+      } catch (err) {
+        console.error("Save metadata error:", err);
+        alert("Network error saving metadata: " + err.message);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.classList.remove('opacity-75');
+        }
+      }
+    }
+
+    window.openMetadataModal = openMetadataModal;
+    window.closeMetadataModal = closeMetadataModal;
+    window.enrichBookMetadataOnline = enrichBookMetadataOnline;
+    window.submitBookMetadataEdit = submitBookMetadataEdit;
+
+    // ==========================================
+    // Author Merge Modal
+    // ==========================================
+    let authorMergeDebounceTimer = null;
+
+    function openAuthorMergeModal(authorId, query = "") {
+      if (!authorId) return;
+      const container = document.getElementById('merge-modal-container');
+      if (!container) return;
+      fetch(`/author/${authorId}/merge-modal?q=${encodeURIComponent(query)}`)
+        .then(res => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          alert("Error opening author merge modal: " + err.message);
+        });
+    }
+
+    function closeAuthorMergeModal() {
+      const container = document.getElementById('merge-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    function debounceAuthorMergeSearch(authorId, val) {
+      clearTimeout(authorMergeDebounceTimer);
+      authorMergeDebounceTimer = setTimeout(() => {
+        openAuthorMergeModal(authorId, val);
+      }, 300);
+    }
+
+    async function submitAuthorMerge(targetAuthorId) {
+      const checkedBoxes = Array.from(document.querySelectorAll('input[name="merge-author-source"]:checked'));
+      const sourceIds = checkedBoxes.map(cb => parseInt(cb.value, 10)).filter(Boolean);
+      if (sourceIds.length === 0) {
+        alert("Please select at least one author record to merge into this author.");
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to merge ${sourceIds.length} author record(s) into this author? All associated books and favorites will be consolidated.`)) {
+        return;
+      }
+
+      const btn = document.getElementById('btn-confirm-author-merge');
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-70');
+      }
+
+      try {
+        const res = await fetch(`/author/${targetAuthorId}/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_author_id: targetAuthorId,
+            source_author_ids: sourceIds
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          closeAuthorMergeModal();
+          window.location.reload();
+        } else {
+          alert("Merge failed: " + (data.detail || data.error || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Network error during author merge: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-70');
+        }
+      }
+    }
+
+    window.openAuthorMergeModal = openAuthorMergeModal;
+    window.closeAuthorMergeModal = closeAuthorMergeModal;
+    window.debounceAuthorMergeSearch = debounceAuthorMergeSearch;
+    window.submitAuthorMerge = submitAuthorMerge;
+
+    // ==========================================
+    // Series Merge Modal
+    // ==========================================
+    let seriesMergeDebounceTimer = null;
+
+    function openSeriesMergeModal(seriesId, query = "") {
+      if (!seriesId) return;
+      const container = document.getElementById('merge-modal-container');
+      if (!container) return;
+      fetch(`/series/${seriesId}/merge-modal?q=${encodeURIComponent(query)}`)
+        .then(res => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          alert("Error opening series merge modal: " + err.message);
+        });
+    }
+
+    function closeSeriesMergeModal() {
+      const container = document.getElementById('merge-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    function debounceSeriesMergeSearch(seriesId, val) {
+      clearTimeout(seriesMergeDebounceTimer);
+      seriesMergeDebounceTimer = setTimeout(() => {
+        openSeriesMergeModal(seriesId, val);
+      }, 300);
+    }
+
+    async function submitSeriesMerge(targetSeriesId) {
+      const checkedBoxes = Array.from(document.querySelectorAll('input[name="merge-series-source"]:checked'));
+      const sourceIds = checkedBoxes.map(cb => parseInt(cb.value, 10)).filter(Boolean);
+      if (sourceIds.length === 0) {
+        alert("Please select at least one series to merge into this series.");
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to merge ${sourceIds.length} series into this canonical series? All books and favorites will be consolidated.`)) {
+        return;
+      }
+
+      const btn = document.getElementById('btn-confirm-series-merge');
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-70');
+      }
+
+      try {
+        const res = await fetch(`/series/${targetSeriesId}/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_series_id: targetSeriesId,
+            source_series_ids: sourceIds
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          closeSeriesMergeModal();
+          window.location.reload();
+        } else {
+          alert("Series merge failed: " + (data.detail || data.error || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Network error during series merge: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-70');
+        }
+      }
+    }
+
+    window.openSeriesMergeModal = openSeriesMergeModal;
+    window.closeSeriesMergeModal = closeSeriesMergeModal;
+    window.debounceSeriesMergeSearch = debounceSeriesMergeSearch;
+    window.submitSeriesMerge = submitSeriesMerge;
+
+    // ==========================================
+    // Author Bio Profile Modal
+    // ==========================================
+    function openAuthorBioModal(authorId) {
+      if (!authorId) return;
+      const container = document.getElementById('author-bio-modal-container');
+      if (!container) return;
+      fetch(`/author/${authorId}/profile-modal`)
+        .then(res => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          alert("Error opening author biography: " + err.message);
+        });
+    }
+
+    function closeAuthorBioModal() {
+      const container = document.getElementById('author-bio-modal-container');
+      if (container) container.innerHTML = "";
+    }
+
+    window.openAuthorBioModal = openAuthorBioModal;
+    window.closeAuthorBioModal = closeAuthorBioModal;
+
+    // ==========================================
+    // Multi-Select Bulk Actions System
+    // ==========================================
+    function toggleBulkSelectMode(force) {
+      const active = typeof force === 'boolean' ? force : !document.body.classList.contains('bulk-select-active');
+      if (active) {
+        document.body.classList.add('bulk-select-active');
+        const btnLabel = document.getElementById('bulk-toggle-label');
+        if (btnLabel) btnLabel.textContent = 'Cancel';
+        const toggleBtn = document.getElementById('bulk-select-toggle-btn');
+        if (toggleBtn) toggleBtn.classList.add('bg-indigo-600', 'text-white');
+      } else {
+        document.body.classList.remove('bulk-select-active');
+        bulkSelectAll(false);
+        const btnLabel = document.getElementById('bulk-toggle-label');
+        if (btnLabel) btnLabel.textContent = 'Select';
+        const toggleBtn = document.getElementById('bulk-select-toggle-btn');
+        if (toggleBtn) toggleBtn.classList.remove('bg-indigo-600', 'text-white');
+        const toolbar = document.getElementById('bulk-actions-toolbar');
+        if (toolbar) toolbar.classList.add('hidden');
+      }
+    }
+
+    function toggleBookSelection(bookId) {
+      const chk = document.querySelector(`.bulk-book-chk[data-book-id="${bookId}"]`);
+      if (chk) {
+        chk.checked = !chk.checked;
+        onBulkCheckboxChange();
+      }
+    }
+
+    function onBulkCheckboxChange() {
+      const checkedBoxes = Array.from(document.querySelectorAll('.bulk-book-chk:checked'));
+      const count = checkedBoxes.length;
+      const countEl = document.getElementById('bulk-selected-count');
+      if (countEl) countEl.textContent = count;
+
+      const toolbar = document.getElementById('bulk-actions-toolbar');
+      if (toolbar) {
+        if (count > 0 && document.body.classList.contains('bulk-select-active')) {
+          toolbar.classList.remove('hidden');
+          toolbar.classList.add('flex');
+        } else {
+          toolbar.classList.add('hidden');
+          toolbar.classList.remove('flex');
+        }
+      }
+    }
+
+    function bulkSelectAll(select) {
+      const chks = document.querySelectorAll('.bulk-book-chk');
+      chks.forEach(c => c.checked = select);
+      onBulkCheckboxChange();
+    }
+
+    function getSelectedBookIds() {
+      const checkedBoxes = Array.from(document.querySelectorAll('.bulk-book-chk:checked'));
+      return checkedBoxes.map(c => parseInt(c.getAttribute('data-book-id'), 10)).filter(Boolean);
+    }
+
+    async function sendBulkAction(action, params = {}) {
+      const ids = getSelectedBookIds();
+      if (ids.length === 0) {
+        alert("Please select at least one book.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/books/bulk-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            book_ids: ids,
+            action: action,
+            params: params
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          toggleBulkSelectMode(false);
+          const grid = document.getElementById('book-grid');
+          if (grid && typeof htmx !== 'undefined') {
+            htmx.trigger(grid, 'refresh');
+          } else {
+            window.location.reload();
+          }
+        } else {
+          alert("Bulk operation failed: " + (data.detail || data.error || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Network error: " + err.message);
+      }
+    }
+
+    function applyBulkShelf(status) {
+      if (!status) return;
+      sendBulkAction('set_shelf', { status: status });
+    }
+
+    function promptBulkTag(mode) {
+      const actionName = mode === 'add' ? 'add' : 'remove';
+      const tag = prompt(`Enter tag name to ${actionName} for selected books:`);
+      if (tag && tag.trim()) {
+        sendBulkAction(mode === 'add' ? 'add_tag' : 'remove_tag', { tag: tag.trim() });
+      }
+    }
+
+    function promptBulkSeries() {
+      const sname = prompt("Enter series name to assign to selected books:");
+      if (sname && sname.trim()) {
+        sendBulkAction('assign_series', { series_name: sname.trim() });
+      }
+    }
+
+    function executeBulkDelete() {
+      const ids = getSelectedBookIds();
+      if (ids.length === 0) {
+        alert("Please select at least one book to delete.");
+        return;
+      }
+      if (confirm(`⚠️ Warning: Are you sure you want to permanently delete these ${ids.length} book(s) and their files from the library? This cannot be undone.`)) {
+        sendBulkAction('delete', { delete_files: true });
+      }
+    }
+
+    window.toggleBulkSelectMode = toggleBulkSelectMode;
+    window.toggleBookSelection = toggleBookSelection;
+    window.onBulkCheckboxChange = onBulkCheckboxChange;
+    window.bulkSelectAll = bulkSelectAll;
+    window.applyBulkShelf = applyBulkShelf;
+    window.promptBulkTag = promptBulkTag;
+    window.promptBulkSeries = promptBulkSeries;
+    window.executeBulkDelete = executeBulkDelete;
+
     // Close modal on Escape
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
@@ -1118,6 +1610,10 @@
         closePasswordModal();
         closeProfileModal();
         closeSeriesOrderModal();
+        closeMetadataModal();
+        closeAuthorMergeModal();
+        closeSeriesMergeModal();
+        closeAuthorBioModal();
       }
     });
 

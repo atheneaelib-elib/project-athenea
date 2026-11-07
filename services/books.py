@@ -374,6 +374,73 @@ def get_series_info(db, series_id: int) -> dict | None:
     return {"id": row.id, "name": row.name, "count": count}
 
 
+def detect_series_gaps(books: list[dict]) -> dict:
+    """
+    Detect missing volume numbers in a series based on series_index values.
+    Returns:
+        {
+            "has_gaps": bool,
+            "missing_indices": list[int],
+            "total_present": int,
+            "max_volume": int,
+            "summary_text": str
+        }
+    """
+    if not books or len(books) < 2:
+        return {
+            "has_gaps": False,
+            "missing_indices": [],
+            "total_present": len(books) if books else 0,
+            "max_volume": 1,
+            "summary_text": ""
+        }
+
+    present_ints = set()
+    for b in books:
+        val = b.get("series_index_raw") if "series_index_raw" in b else b.get("series_index")
+        if val is not None:
+            try:
+                if isinstance(val, (int, float)):
+                    f = float(val)
+                else:
+                    f = float(str(val).replace('#', '').strip())
+                if f >= 1 and f.is_integer():
+                    present_ints.add(int(f))
+            except (ValueError, TypeError):
+                pass
+
+    if not present_ints:
+        return {
+            "has_gaps": False,
+            "missing_indices": [],
+            "total_present": len(books),
+            "max_volume": len(books),
+            "summary_text": f"{len(books)} volumes"
+        }
+
+    max_vol = max(present_ints)
+    min_vol = 1
+    missing = [v for v in range(min_vol, max_vol + 1) if v not in present_ints]
+
+    has_gaps = bool(missing)
+    if has_gaps:
+        if len(missing) <= 3:
+            missing_str = ", ".join(f"#{m}" for m in missing)
+        else:
+            missing_str = ", ".join(f"#{m}" for m in missing[:3]) + f" +{len(missing)-3} more"
+        summary = f"{len(present_ints)} of {max_vol} volumes (Missing: {missing_str})"
+    else:
+        summary = f"Complete: {len(present_ints)} volumes (#{min_vol}–#{max_vol})"
+
+    return {
+        "has_gaps": has_gaps,
+        "missing_indices": missing,
+        "total_present": len(books),
+        "max_volume": max_vol,
+        "summary_text": summary
+    }
+
+
 def get_series_books(db, series_id: int) -> list[dict]:
     """Retrieve all books belonging to a series, ordered by series_index ASC NULLS LAST, b.title ASC, b.id ASC."""
     rows = db.execute(text("""
@@ -403,6 +470,20 @@ def get_series_books(db, series_id: int) -> list[dict]:
             "pubdate": r.pubdate.strftime("%Y-%m-%d") if r.pubdate else "",
         })
     return books
+
+
+def get_series_details(db, series_id: int) -> dict | None:
+    """Get metadata, books list, and gap analysis for a series."""
+    info = get_series_info(db, series_id)
+    if not info:
+        return None
+    books = get_series_books(db, series_id)
+    gaps = detect_series_gaps(books)
+    return {
+        "series": info,
+        "books": books,
+        "gaps": gaps
+    }
 
 
 def update_book_series_index(db, book_id: int, series_index: float | None) -> bool:
@@ -682,6 +763,7 @@ def group_books_by_author_and_series(
         for s in entry["series_dict"].values():
             s["books"].sort(key=lambda x: (x.get("series_index_num", 999999), x.get("title", "")))
             s["is_favorite"] = bool(fav_series_ids and s.get("series_id") in fav_series_ids)
+            s["gaps"] = detect_series_gaps(s["books"])
             series_groups.append(s)
         series_groups.sort(key=lambda s: s["series_name"].lower())
         entry["series_groups"] = series_groups
@@ -1114,6 +1196,7 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
                 "id": sb.id,
                 "title": sb.title,
                 "series_index": s_idx_str,
+                "series_index_raw": sb.series_index,
                 "has_cover": bool(sb.has_cover),
                 "thumbnail_url": f"/thumbnail/{sb.id}",
                 "is_current": (sb.id == book_id),
@@ -1127,10 +1210,20 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
                     next_series_book = series_books[idx + 1]
                 break
 
+    series_gaps = detect_series_gaps(series_books) if series_books else None
+
     # 2. "More by this Author" Recommendations
     more_by_author = []
+    author_profile = None
     if authors:
         primary_aid = authors[0]["id"]
+        try:
+            prof_row = db.execute(text("SELECT photo_url, bio, wikipedia_url FROM author_profiles WHERE author_id = :aid"), {"aid": primary_aid}).fetchone()
+            if prof_row:
+                author_profile = {"photo_url": prof_row.photo_url, "bio": prof_row.bio, "wikipedia_url": prof_row.wikipedia_url}
+        except Exception:
+            pass
+
         more_rows = db.execute(text("""
             SELECT b.id, b.title, b.has_cover, b.series_index, s.name AS series_name
             FROM book_authors ba
@@ -1164,6 +1257,8 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         "series_name": row.series_name,
         "series_index": f"#{int(row.series_index)}" if row.series_index and row.series_index == int(row.series_index) else (f"#{row.series_index:.1f}" if row.series_index else None),
         "series_books": series_books,
+        "series_gaps": series_gaps,
+        "author_profile": author_profile,
         "prev_series_book": prev_series_book,
         "next_series_book": next_series_book,
         "more_by_author": more_by_author,

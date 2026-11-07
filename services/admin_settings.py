@@ -1411,3 +1411,653 @@ def delete_book(db: Session, book_id: int, delete_files: bool = True) -> dict:
     }
 
 
+# ===================================================================
+# FULL METADATA EDITOR & ENRICHER
+# ===================================================================
+
+def update_book_metadata(
+    db: Session,
+    book_id: int,
+    title: str,
+    authors: list[str] | str,
+    series_name: str | None = None,
+    series_index: float | None = None,
+    tags: list[str] | str | None = None,
+    description: str | None = None,
+    pubdate: str | None = None,
+    publisher: str | None = None,
+    isbn: str | None = None,
+) -> dict:
+    """
+    Update all primary metadata fields of a book, maintaining Calibre relational integrity.
+    """
+    clean_title = (title or "").strip()
+    if not clean_title:
+        return {"success": False, "error": "Title cannot be empty"}
+
+    # 1. Update books table
+    parsed_pubdate = None
+    if pubdate and str(pubdate).strip():
+        try:
+            parsed_pubdate = datetime.strptime(str(pubdate).strip()[:10], "%Y-%m-%d")
+        except Exception:
+            parsed_pubdate = None
+
+    db.execute(text("""
+        UPDATE books
+        SET title = :title,
+            sort = :title,
+            series_index = :s_idx,
+            pubdate = COALESCE(:pubdate, pubdate),
+            isbn = :isbn,
+            last_modified = CURRENT_TIMESTAMP
+        WHERE id = :id
+    """), {
+        "id": book_id,
+        "title": clean_title,
+        "s_idx": series_index,
+        "pubdate": parsed_pubdate,
+        "isbn": (isbn or "").strip() or None,
+    })
+
+    # 2. Authors
+    if isinstance(authors, str):
+        authors_list = [a.strip() for a in re.split(r'[,;&/]', authors) if a.strip()]
+    else:
+        authors_list = [str(a).strip() for a in (authors or []) if str(a).strip()]
+
+    if authors_list:
+        db.execute(text("DELETE FROM book_authors WHERE book_id = :bid"), {"bid": book_id})
+        for a_name in authors_list:
+            a_row = db.execute(
+                text("SELECT id FROM authors WHERE LOWER(name) = LOWER(:name) LIMIT 1"),
+                {"name": a_name}
+            ).fetchone()
+            if a_row:
+                aid = a_row.id
+            else:
+                aid = db.execute(text("""
+                    INSERT INTO authors (name, sort) VALUES (:name, :name) RETURNING id
+                """), {"name": a_name}).scalar()
+
+            db.execute(text("""
+                INSERT INTO book_authors (book_id, author_id)
+                VALUES (:bid, :aid)
+                ON CONFLICT (book_id, author_id) DO NOTHING
+            """), {"bid": book_id, "aid": aid})
+
+        db.execute(text("""
+            UPDATE books SET author_sort = :asort WHERE id = :bid
+        """), {"asort": authors_list[0], "bid": book_id})
+
+    # 3. Series
+    s_name = (series_name or "").strip()
+    db.execute(text("DELETE FROM book_series WHERE book_id = :bid"), {"bid": book_id})
+    if s_name:
+        s_row = db.execute(
+            text("SELECT id FROM series WHERE LOWER(name) = LOWER(:s) LIMIT 1"),
+            {"s": s_name}
+        ).fetchone()
+        if s_row:
+            sid = s_row.id
+        else:
+            sid = db.execute(text("""
+                INSERT INTO series (name, sort) VALUES (:s, :s) RETURNING id
+            """), {"s": s_name}).scalar()
+
+        db.execute(text("""
+            INSERT INTO book_series (book_id, series_id)
+            VALUES (:bid, :sid)
+            ON CONFLICT (book_id, series_id) DO NOTHING
+        """), {"bid": book_id, "sid": sid})
+
+    # 4. Tags / Genres
+    if tags is not None:
+        if isinstance(tags, str):
+            tags_list = [t.strip() for t in re.split(r'[,;]', tags) if t.strip()]
+        else:
+            tags_list = [str(t).strip() for t in tags if str(t).strip()]
+
+        db.execute(text("DELETE FROM book_tags WHERE book_id = :bid"), {"bid": book_id})
+        for t_name in tags_list:
+            t_row = db.execute(
+                text("SELECT id FROM tags WHERE LOWER(name) = LOWER(:t) LIMIT 1"),
+                {"t": t_name}
+            ).fetchone()
+            if t_row:
+                tid = t_row.id
+            else:
+                tid = db.execute(text("""
+                    INSERT INTO tags (name) VALUES (:t) RETURNING id
+                """), {"t": t_name}).scalar()
+
+            db.execute(text("""
+                INSERT INTO book_tags (book_id, tag_id)
+                VALUES (:bid, :tid)
+                ON CONFLICT (book_id, tag_id) DO NOTHING
+            """), {"bid": book_id, "tid": tid})
+
+    # 5. Publisher
+    p_name = (publisher or "").strip()
+    if p_name:
+        db.execute(text("DELETE FROM book_publishers WHERE book_id = :bid"), {"bid": book_id})
+        p_row = db.execute(
+            text("SELECT id FROM publishers WHERE LOWER(name) = LOWER(:p) LIMIT 1"),
+            {"p": p_name}
+        ).fetchone()
+        if p_row:
+            pid = p_row.id
+        else:
+            pid = db.execute(text("""
+                INSERT INTO publishers (name, sort) VALUES (:p, :p) RETURNING id
+            """), {"p": p_name}).scalar()
+
+        db.execute(text("""
+            INSERT INTO book_publishers (book_id, publisher_id)
+            VALUES (:bid, :pid)
+            ON CONFLICT (book_id, publisher_id) DO NOTHING
+        """), {"bid": book_id, "pid": pid})
+
+    # 6. Description / Comments
+    desc_clean = (description or "").strip()
+    if desc_clean:
+        db.execute(text("""
+            INSERT INTO comments (book_id, text)
+            VALUES (:bid, :txt)
+            ON CONFLICT (book_id) DO UPDATE SET text = EXCLUDED.text
+        """), {"bid": book_id, "txt": desc_clean})
+    else:
+        db.execute(text("DELETE FROM comments WHERE book_id = :bid"), {"bid": book_id})
+
+    db.commit()
+
+    try:
+        book_service.invalidate_caches()
+    except Exception:
+        pass
+
+    return {"success": True, "book_id": book_id, "message": "Metadata updated successfully!"}
+
+
+def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "") -> dict:
+    """
+    Search OpenLibrary and Google Books for metadata enrichment.
+    """
+    import urllib.request
+    import urllib.parse
+    import json
+
+    result = {
+        "found": False,
+        "title": "",
+        "authors": [],
+        "description": "",
+        "publisher": "",
+        "pubdate": "",
+        "tags": [],
+        "isbn": "",
+        "cover_url": "",
+    }
+
+    clean_isbn = re.sub(r"[^0-9X]", "", (isbn or "").upper().strip())
+
+    # 1. Try OpenLibrary by ISBN
+    if clean_isbn:
+        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{clean_isbn}&format=json&jscmd=data"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    key = f"ISBN:{clean_isbn}"
+                    if key in data:
+                        b = data[key]
+                        result["found"] = True
+                        result["title"] = b.get("title", "")
+                        result["authors"] = [a.get("name", "") for a in b.get("authors", []) if a.get("name")]
+                        result["publisher"] = (b.get("publishers", [{}])[0].get("name", "") if b.get("publishers") else "")
+                        result["pubdate"] = b.get("publish_date", "")
+                        result["isbn"] = clean_isbn
+                        if "subjects" in b:
+                            result["tags"] = [s.get("name", "") for s in b["subjects"][:6] if s.get("name")]
+                        if "cover" in b and "large" in b["cover"]:
+                            result["cover_url"] = b["cover"]["large"]
+                        return result
+        except Exception as e:
+            logger.debug(f"OpenLibrary ISBN fetch error: {e}")
+
+    # 2. Try Google Books API
+    q_parts = []
+    if clean_isbn:
+        q_parts.append(f"isbn:{clean_isbn}")
+    else:
+        if title:
+            q_parts.append(f"intitle:{title.strip()}")
+        if author:
+            q_parts.append(f"inauthor:{author.strip()}")
+
+    query_str = " ".join(q_parts).strip()
+    if query_str:
+        gb_url = f"https://www.googleapis.com/books/v1/volumes?q={urllib.parse.quote(query_str)}&maxResults=1"
+        try:
+            req = urllib.request.Request(gb_url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status == 200:
+                    gb_data = json.loads(resp.read().decode("utf-8"))
+                    items = gb_data.get("items", [])
+                    if items:
+                        info = items[0].get("volumeInfo", {})
+                        result["found"] = True
+                        result["title"] = info.get("title", "")
+                        result["authors"] = info.get("authors", [])
+                        result["description"] = info.get("description", "")
+                        result["publisher"] = info.get("publisher", "")
+                        result["pubdate"] = info.get("publishedDate", "")
+                        result["tags"] = info.get("categories", [])
+                        img_links = info.get("imageLinks", {})
+                        result["cover_url"] = img_links.get("extraLarge") or img_links.get("large") or img_links.get("thumbnail") or ""
+                        for id_item in info.get("industryIdentifiers", []):
+                            if id_item.get("type") in ("ISBN_13", "ISBN_10"):
+                                result["isbn"] = id_item.get("identifier", "")
+                                break
+                        return result
+        except Exception as ge:
+            logger.debug(f"Google Books fetch error: {ge}")
+
+    # 3. Fallback: OpenLibrary Search
+    if title:
+        q_str = f"{title} {author}".strip()
+        ol_search_url = f"https://openlibrary.org/search.json?q={urllib.parse.quote(q_str)}&limit=1"
+        try:
+            req = urllib.request.Request(ol_search_url, headers={"User-Agent": "Athenea/2.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status == 200:
+                    docs = json.loads(resp.read().decode("utf-8")).get("docs", [])
+                    if docs:
+                        doc = docs[0]
+                        result["found"] = True
+                        result["title"] = doc.get("title", "")
+                        result["authors"] = doc.get("author_name", [])
+                        result["pubdate"] = str(doc.get("first_publish_year", ""))
+                        if doc.get("publisher"):
+                            result["publisher"] = doc["publisher"][0]
+                        if doc.get("subject"):
+                            result["tags"] = doc["subject"][:6]
+                        if doc.get("isbn"):
+                            result["isbn"] = doc["isbn"][0]
+                        if doc.get("cover_i"):
+                            result["cover_url"] = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
+                        return result
+        except Exception as se:
+            logger.debug(f"OpenLibrary search error: {se}")
+
+    return result
+
+
+def merge_authors(db: Session, target_author_id: int, source_author_ids: list[int]) -> dict:
+    """
+    Merge source authors into target author.
+    Consolidates book_authors and favorite_authors, updates books.author_sort, and deletes source authors.
+    """
+    target = db.execute(text("SELECT id, name FROM authors WHERE id = :id"), {"id": target_author_id}).fetchone()
+    if not target:
+        return {"success": False, "error": "Target author does not exist"}
+
+    clean_sources = [sid for sid in source_author_ids if sid != target_author_id]
+    if not clean_sources:
+        return {"success": False, "error": "No valid source authors to merge"}
+
+    moved_links = 0
+    for sid in clean_sources:
+        bids = db.execute(text("SELECT book_id FROM book_authors WHERE author_id = :sid"), {"sid": sid}).fetchall()
+        for b in bids:
+            bid = b.book_id
+            db.execute(text("""
+                INSERT INTO book_authors (book_id, author_id)
+                VALUES (:bid, :target_id)
+                ON CONFLICT (book_id, author_id) DO NOTHING
+            """), {"bid": bid, "target_id": target_author_id})
+            moved_links += 1
+
+        db.execute(text("DELETE FROM book_authors WHERE author_id = :sid"), {"sid": sid})
+
+        db.execute(text("""
+            INSERT INTO favorite_authors (user_id, author_id)
+            SELECT user_id, :target_id FROM favorite_authors WHERE author_id = :sid
+            ON CONFLICT (user_id, author_id) DO NOTHING
+        """), {"target_id": target_author_id, "sid": sid})
+        db.execute(text("DELETE FROM favorite_authors WHERE author_id = :sid"), {"sid": sid})
+
+        db.execute(text("DELETE FROM authors WHERE id = :sid"), {"sid": sid})
+
+    db.execute(text("""
+        UPDATE books
+        SET author_sort = :tname
+        WHERE id IN (
+            SELECT book_id FROM book_authors WHERE author_id = :target_id
+        ) AND (author_sort IS NULL OR author_sort = '' OR author_sort != :tname)
+    """), {"tname": target.name, "target_id": target_author_id})
+
+    db.commit()
+
+    try:
+        book_service.invalidate_caches()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "target_author_id": target_author_id,
+        "target_author_name": target.name,
+        "merged_count": len(clean_sources),
+        "message": f"Successfully merged {len(clean_sources)} author(s) into '{target.name}'"
+    }
+
+
+def merge_series(db: Session, target_series_id: int, source_series_ids: list[int]) -> dict:
+    """
+    Merge source series into target series.
+    Consolidates book_series and favorite_series, and deletes source series.
+    """
+    target = db.execute(text("SELECT id, name FROM series WHERE id = :id"), {"id": target_series_id}).fetchone()
+    if not target:
+        return {"success": False, "error": "Target series does not exist"}
+
+    clean_sources = [sid for sid in source_series_ids if sid != target_series_id]
+    if not clean_sources:
+        return {"success": False, "error": "No valid source series to merge"}
+
+    moved_links = 0
+    for sid in clean_sources:
+        bids = db.execute(text("SELECT book_id FROM book_series WHERE series_id = :sid"), {"sid": sid}).fetchall()
+        for b in bids:
+            bid = b.book_id
+            db.execute(text("""
+                INSERT INTO book_series (book_id, series_id)
+                VALUES (:bid, :target_id)
+                ON CONFLICT (book_id, series_id) DO NOTHING
+            """), {"bid": bid, "target_id": target_series_id})
+            moved_links += 1
+
+        db.execute(text("DELETE FROM book_series WHERE series_id = :sid"), {"sid": sid})
+
+        db.execute(text("""
+            INSERT INTO favorite_series (user_id, series_id)
+            SELECT user_id, :target_id FROM favorite_series WHERE series_id = :sid
+            ON CONFLICT (user_id, series_id) DO NOTHING
+        """), {"target_id": target_series_id, "sid": sid})
+        db.execute(text("DELETE FROM favorite_series WHERE series_id = :sid"), {"sid": sid})
+
+        db.execute(text("DELETE FROM series WHERE id = :sid"), {"sid": sid})
+
+    db.commit()
+
+    try:
+        book_service.invalidate_caches()
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "target_series_id": target_series_id,
+        "target_series_name": target.name,
+        "merged_count": len(clean_sources),
+        "message": f"Successfully merged {len(clean_sources)} series into '{target.name}'"
+    }
+
+
+def search_authors_to_merge(db: Session, current_author_id: int, query: str = "") -> list[dict]:
+    q = (query or "").strip().lower()
+    curr = db.execute(text("SELECT name FROM authors WHERE id = :id"), {"id": current_author_id}).fetchone()
+    curr_name = curr.name if curr else ""
+
+    params = {"curr_id": current_author_id}
+    if q:
+        sql = """
+            SELECT a.id, a.name, count(ba.book_id) as book_count
+            FROM authors a
+            LEFT JOIN book_authors ba ON a.id = ba.author_id
+            WHERE a.id != :curr_id AND LOWER(a.name) LIKE :q
+            GROUP BY a.id, a.name
+            ORDER BY book_count DESC, a.name ASC
+            LIMIT 25
+        """
+        params["q"] = f"%{q}%"
+    else:
+        tokens = [t for t in re.split(r'[\s,]+', curr_name) if len(t) > 2]
+        if tokens:
+            conds = [f"LOWER(a.name) LIKE :t{i}" for i in range(len(tokens))]
+            sql = f"""
+                SELECT a.id, a.name, count(ba.book_id) as book_count
+                FROM authors a
+                LEFT JOIN book_authors ba ON a.id = ba.author_id
+                WHERE a.id != :curr_id AND ({' OR '.join(conds)})
+                GROUP BY a.id, a.name
+                ORDER BY book_count DESC, a.name ASC
+                LIMIT 25
+            """
+            for i, tok in enumerate(tokens):
+                params[f"t{i}"] = f"%{tok.lower()}%"
+        else:
+            sql = """
+                SELECT a.id, a.name, count(ba.book_id) as book_count
+                FROM authors a
+                LEFT JOIN book_authors ba ON a.id = ba.author_id
+                WHERE a.id != :curr_id
+                GROUP BY a.id, a.name
+                ORDER BY book_count DESC, a.name ASC
+                LIMIT 25
+            """
+
+    rows = db.execute(text(sql), params).fetchall()
+    return [{"id": r.id, "name": r.name, "book_count": r.book_count} for r in rows]
+
+
+def search_series_to_merge(db: Session, current_series_id: int, query: str = "") -> list[dict]:
+    q = (query or "").strip().lower()
+    curr = db.execute(text("SELECT name FROM series WHERE id = :id"), {"id": current_series_id}).fetchone()
+    curr_name = curr.name if curr else ""
+
+    params = {"curr_id": current_series_id}
+    if q:
+        sql = """
+            SELECT s.id, s.name, count(bs.book_id) as book_count
+            FROM series s
+            LEFT JOIN book_series bs ON s.id = bs.series_id
+            WHERE s.id != :curr_id AND LOWER(s.name) LIKE :q
+            GROUP BY s.id, s.name
+            ORDER BY book_count DESC, s.name ASC
+            LIMIT 25
+        """
+        params["q"] = f"%{q}%"
+    else:
+        tokens = [t for t in re.split(r'[\s,]+', curr_name) if len(t) > 2]
+        if tokens:
+            conds = [f"LOWER(s.name) LIKE :t{i}" for i in range(len(tokens))]
+            sql = f"""
+                SELECT s.id, s.name, count(bs.book_id) as book_count
+                FROM series s
+                LEFT JOIN book_series bs ON s.id = bs.series_id
+                WHERE s.id != :curr_id AND ({' OR '.join(conds)})
+                GROUP BY s.id, s.name
+                ORDER BY book_count DESC, s.name ASC
+                LIMIT 25
+            """
+            for i, tok in enumerate(tokens):
+                params[f"t{i}"] = f"%{tok.lower()}%"
+        else:
+            sql = """
+                SELECT s.id, s.name, count(bs.book_id) as book_count
+                FROM series s
+                LEFT JOIN book_series bs ON s.id = bs.series_id
+                WHERE s.id != :curr_id
+                GROUP BY s.id, s.name
+                ORDER BY book_count DESC, s.name ASC
+                LIMIT 25
+            """
+
+    rows = db.execute(text(sql), params).fetchall()
+    return [{"id": r.id, "name": r.name, "book_count": r.book_count} for r in rows]
+
+
+def get_or_fetch_author_profile(db: Session, author_id: int, author_name: str | None = None) -> dict:
+    """
+    Retrieve author bio and photo. If missing, queries Wikipedia API automatically.
+    """
+    import urllib.request
+    import urllib.parse
+    import json
+
+    row = None
+    try:
+        row = db.execute(text("""
+            SELECT author_id, photo_url, bio, wikipedia_url, updated_at
+            FROM author_profiles
+            WHERE author_id = :aid
+        """), {"aid": author_id}).fetchone()
+    except Exception:
+        pass
+
+    if row and (row.photo_url or row.bio):
+        return {
+            "author_id": row.author_id,
+            "photo_url": row.photo_url,
+            "bio": row.bio,
+            "wikipedia_url": row.wikipedia_url,
+        }
+
+    if not author_name:
+        a_row = db.execute(text("SELECT name FROM authors WHERE id = :aid"), {"aid": author_id}).fetchone()
+        author_name = a_row.name if a_row else ""
+
+    if not author_name:
+        return {"author_id": author_id, "photo_url": None, "bio": None, "wikipedia_url": None}
+
+    clean_name = author_name.strip()
+    if "," in clean_name:
+        parts = clean_name.split(",")
+        clean_name = f"{parts[1].strip()} {parts[0].strip()}"
+
+    is_cyrillic = any('\u0400' <= char <= '\u04FF' for char in clean_name)
+    wiki_lang = "ru" if is_cyrillic else "en"
+    wiki_api_url = f"https://{wiki_lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(clean_name)}"
+
+    photo_url = None
+    bio = None
+    wiki_url = None
+
+    try:
+        req = urllib.request.Request(wiki_api_url, headers={"User-Agent": "Athenea/2.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                bio = data.get("extract", "")
+                if "thumbnail" in data and "source" in data["thumbnail"]:
+                    photo_url = data["thumbnail"]["source"]
+                if "content_urls" in data and "desktop" in data["content_urls"]:
+                    wiki_url = data["content_urls"]["desktop"].get("page", "")
+    except Exception as e:
+        logger.debug(f"Wikipedia fetch error for {clean_name}: {e}")
+
+    try:
+        db.execute(text("""
+            INSERT INTO author_profiles (author_id, photo_url, bio, wikipedia_url, updated_at)
+            VALUES (:aid, :photo, :bio, :wiki, CURRENT_TIMESTAMP)
+            ON CONFLICT (author_id) DO UPDATE SET
+                photo_url = COALESCE(EXCLUDED.photo_url, author_profiles.photo_url),
+                bio = COALESCE(EXCLUDED.bio, author_profiles.bio),
+                wikipedia_url = COALESCE(EXCLUDED.wikipedia_url, author_profiles.wikipedia_url),
+                updated_at = CURRENT_TIMESTAMP
+        """), {
+            "aid": author_id,
+            "photo": photo_url,
+            "bio": bio,
+            "wiki": wiki_url,
+        })
+        db.commit()
+    except Exception as dbe:
+        logger.warning(f"Failed to cache author profile in DB: {dbe}")
+
+    return {
+        "author_id": author_id,
+        "photo_url": photo_url,
+        "bio": bio,
+        "wikipedia_url": wiki_url,
+    }
+
+
+def execute_bulk_book_action(
+    db: Session,
+    book_ids: list[int],
+    action: str,
+    params: dict,
+    user_id: int | None = None
+) -> dict:
+    """
+    Execute bulk operations across selected books.
+    Supported actions: 'set_shelf', 'add_tag', 'remove_tag', 'assign_series', 'delete'
+    """
+    if not book_ids:
+        return {"success": False, "error": "No books selected"}
+
+    if action == "set_shelf":
+        if not user_id:
+            return {"success": False, "error": "Authentication required"}
+        shelf_status = params.get("status")
+        for bid in book_ids:
+            book_service.set_reading_status(db, user_id, bid, shelf_status)
+        return {"success": True, "count": len(book_ids), "message": f"Updated shelf status for {len(book_ids)} books."}
+
+    elif action == "add_tag":
+        tag_name = (params.get("tag") or "").strip()
+        if not tag_name:
+            return {"success": False, "error": "Tag name required"}
+        t_row = db.execute(text("SELECT id FROM tags WHERE LOWER(name) = LOWER(:t) LIMIT 1"), {"t": tag_name}).fetchone()
+        tid = t_row.id if t_row else db.execute(text("INSERT INTO tags (name) VALUES (:t) RETURNING id"), {"t": tag_name}).scalar()
+        for bid in book_ids:
+            db.execute(text("""
+                INSERT INTO book_tags (book_id, tag_id) VALUES (:bid, :tid) ON CONFLICT DO NOTHING
+            """), {"bid": bid, "tid": tid})
+        db.commit()
+        book_service.invalidate_caches()
+        return {"success": True, "count": len(book_ids), "message": f"Added tag '{tag_name}' to {len(book_ids)} books."}
+
+    elif action == "remove_tag":
+        tag_name = (params.get("tag") or "").strip()
+        if not tag_name:
+            return {"success": False, "error": "Tag name required"}
+        t_row = db.execute(text("SELECT id FROM tags WHERE LOWER(name) = LOWER(:t) LIMIT 1"), {"t": tag_name}).fetchone()
+        if t_row:
+            db.execute(text("DELETE FROM book_tags WHERE tag_id = :tid AND book_id = ANY(:bids)"), {"tid": t_row.id, "bids": book_ids})
+            db.commit()
+            book_service.invalidate_caches()
+        return {"success": True, "count": len(book_ids), "message": f"Removed tag from selected books."}
+
+    elif action == "assign_series":
+        series_name = (params.get("series_name") or "").strip()
+        if not series_name:
+            return {"success": False, "error": "Series name required"}
+        s_row = db.execute(text("SELECT id FROM series WHERE LOWER(name) = LOWER(:s) LIMIT 1"), {"s": series_name}).fetchone()
+        sid = s_row.id if s_row else db.execute(text("INSERT INTO series (name, sort) VALUES (:s, :s) RETURNING id"), {"s": series_name}).scalar()
+        start_idx = float(params.get("start_index", 1.0))
+        for i, bid in enumerate(book_ids):
+            idx = start_idx + i
+            db.execute(text("DELETE FROM book_series WHERE book_id = :bid"), {"bid": bid})
+            db.execute(text("INSERT INTO book_series (book_id, series_id) VALUES (:bid, :sid) ON CONFLICT DO NOTHING"), {"bid": bid, "sid": sid})
+            db.execute(text("UPDATE books SET series_index = :idx WHERE id = :bid"), {"idx": idx, "bid": bid})
+        db.commit()
+        book_service.invalidate_caches()
+        return {"success": True, "count": len(book_ids), "message": f"Assigned {len(book_ids)} books to series '{series_name}' starting at #{start_idx}."}
+
+    elif action == "delete":
+        delete_files = bool(params.get("delete_files", False))
+        deleted_count = 0
+        for bid in book_ids:
+            res = delete_book(db, bid, delete_files=delete_files)
+            if res.get("success"):
+                deleted_count += 1
+        return {"success": True, "count": deleted_count, "message": f"Deleted {deleted_count} book(s)."}
+
+    return {"success": False, "error": f"Unknown action: {action}"}
+
+
