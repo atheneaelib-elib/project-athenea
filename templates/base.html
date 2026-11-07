@@ -1336,8 +1336,22 @@
 
         if (res.ok && data.found) {
           if (bannerText) bannerText.textContent = `Found on ${data.source}! Applying details...`;
-          if (data.title && document.getElementById('meta-title')) {
-            document.getElementById('meta-title').value = data.title;
+          
+          const titleInput = document.getElementById('meta-title');
+          const authorInput = document.getElementById('meta-authors');
+          const currentAuthor = (authorInput ? authorInput.value : "").toLowerCase().trim();
+          
+          if (data.title && titleInput) {
+            const incoming = data.title.trim();
+            const lowerIn = incoming.toLowerCase();
+            const isAuthorName = currentAuthor && (lowerIn.includes(currentAuthor) || (currentAuthor.includes(lowerIn) && lowerIn.length > 5));
+            const isBioArticle = lowerIn.includes('(писатель') || lowerIn.includes('(автор') || lowerIn.includes('(writer') || lowerIn.includes('(author') || lowerIn.includes('(biography');
+            
+            if (!isAuthorName && !isBioArticle) {
+              if (!titleInput.value.trim() || titleInput.value.trim().toLowerCase() === lowerIn) {
+                titleInput.value = incoming;
+              }
+            }
           }
           if (data.authors && data.authors.length > 0 && document.getElementById('meta-authors')) {
             document.getElementById('meta-authors').value = data.authors.join(', ');

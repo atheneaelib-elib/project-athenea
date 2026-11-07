@@ -1710,70 +1710,91 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
     def _fetch_fantlab(t: str, a: str) -> dict | None:
         if not t:
             return None
-        q_str = f"{t} {a}".strip() if a else t
-        url = f"https://api.fantlab.ru/search-works?q={urllib.parse.quote(q_str)}"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            with urllib.request.urlopen(req, timeout=7) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    matches = data.get("matches", []) if isinstance(data, dict) else []
-                    if matches:
-                        top = matches[0]
-                        work_id = top.get("work_id")
-                        if work_id:
-                            ext_url = f"https://api.fantlab.ru/work/{work_id}/extended"
-                            ext_req = urllib.request.Request(ext_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-                            with urllib.request.urlopen(ext_req, timeout=7) as ext_resp:
-                                if ext_resp.status == 200:
-                                    ext = json.loads(ext_resp.read().decode("utf-8"))
-                                    
-                                    # Extract tags from classificatory
-                                    tags = []
-                                    classif = ext.get("classificatory", {})
-                                    if isinstance(classif, dict) and "genre_group" in classif:
-                                        for grp in classif.get("genre_group", [])[:2]:
-                                            for g in grp.get("genre", []):
-                                                lbl = g.get("label")
-                                                if lbl and lbl not in tags:
-                                                    tags.append(lbl)
-                                                for sub_g in g.get("genre", []):
-                                                    sub_lbl = sub_g.get("label")
-                                                    if sub_lbl and sub_lbl not in tags:
-                                                        tags.append(sub_lbl)
+        author_words = [w for w in re.split(r"[\s,]+", a or "") if len(w) > 2]
+        last_name = author_words[-1] if author_words else ""
+        
+        candidates = []
+        if last_name:
+            candidates.append(f"{t} {last_name}")
+        candidates.append(t)
+        
+        for q_str in candidates:
+            url = f"https://api.fantlab.ru/search-works?q={urllib.parse.quote(q_str)}"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                with urllib.request.urlopen(req, timeout=7) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        matches = data.get("matches", []) if isinstance(data, dict) else []
+                        if matches:
+                            top = None
+                            if last_name:
+                                for m in matches:
+                                    aut = (m.get("all_autor_rusname") or "").lower()
+                                    if last_name.lower() in aut:
+                                        top = m
+                                        break
+                            if not top:
+                                top = matches[0]
+                            
+                            work_id = top.get("work_id")
+                            if work_id:
+                                ext_url = f"https://api.fantlab.ru/work/{work_id}/extended"
+                                ext_req = urllib.request.Request(ext_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                                with urllib.request.urlopen(ext_req, timeout=7) as ext_resp:
+                                    if ext_resp.status == 200:
+                                        ext = json.loads(ext_resp.read().decode("utf-8"))
+                                        
+                                        # Extract tags from classificatory
+                                        tags = []
+                                        classif = ext.get("classificatory", {})
+                                        if isinstance(classif, dict) and "genre_group" in classif:
+                                            for grp in classif.get("genre_group", [])[:2]:
+                                                for g in grp.get("genre", []):
+                                                    lbl = g.get("label")
+                                                    if lbl and lbl not in tags:
+                                                        tags.append(lbl)
+                                                    for sub_g in g.get("genre", []):
+                                                        sub_lbl = sub_g.get("label")
+                                                        if sub_lbl and sub_lbl not in tags:
+                                                            tags.append(sub_lbl)
 
-                                    # Extract series name
-                                    series_name = ""
-                                    parents = ext.get("parents", {})
-                                    if isinstance(parents, dict) and parents.get("cycles"):
-                                        for cycle_list in parents.get("cycles", []):
-                                            if cycle_list and isinstance(cycle_list, list) and cycle_list[0].get("work_name"):
-                                                series_name = cycle_list[0].get("work_name")
-                                                break
+                                        # Extract series name
+                                        series_name = ""
+                                        parents = ext.get("parents", {})
+                                        if isinstance(parents, dict) and parents.get("cycles"):
+                                            for cycle_list in parents.get("cycles", []):
+                                                if cycle_list and isinstance(cycle_list, list) and cycle_list[0].get("work_name"):
+                                                    series_name = cycle_list[0].get("work_name")
+                                                    break
 
-                                    authors = []
-                                    if ext.get("work_description_author"):
-                                        authors.append(ext.get("work_description_author"))
-                                    elif top.get("all_autor_rusname"):
-                                        authors.append(top.get("all_autor_rusname"))
+                                        authors = []
+                                        if ext.get("work_description_author"):
+                                            authors.append(ext.get("work_description_author"))
+                                        elif top.get("all_autor_rusname"):
+                                            authors.append(top.get("all_autor_rusname"))
 
-                                    cover = f"https://fantlab.ru{ext['image']}" if ext.get("image") else ""
-                                    return {
-                                        "found": True,
-                                        "source": "FantLab",
-                                        "title": ext.get("work_name") or top.get("rusname") or t,
-                                        "authors": authors or ([a] if a else []),
-                                        "description": ext.get("work_description", "") or "",
-                                        "publisher": "",
-                                        "pubdate": str(ext.get("work_year") or top.get("year") or ""),
-                                        "tags": tags[:8],
-                                        "isbn": clean_isbn,
-                                        "series_name": series_name,
-                                        "series_index": None,
-                                        "cover_url": cover
-                                    }
-        except Exception as e:
-            logger.debug(f"FantLab fetch error: {e}")
+                                        cover = f"https://fantlab.ru{ext['image']}" if ext.get("image") else ""
+                                        
+                                        # Title protection: preserve provided t if available
+                                        resolved_title = t if t else (ext.get("work_name") or top.get("rusname") or t)
+                                        
+                                        return {
+                                            "found": True,
+                                            "source": "FantLab",
+                                            "title": resolved_title,
+                                            "authors": [a] if a else (authors or []),
+                                            "description": ext.get("work_description", "") or "",
+                                            "publisher": "",
+                                            "pubdate": str(ext.get("work_year") or top.get("year") or ""),
+                                            "tags": tags[:8],
+                                            "isbn": clean_isbn,
+                                            "series_name": series_name,
+                                            "series_index": None,
+                                            "cover_url": cover
+                                        }
+            except Exception as e:
+                logger.debug(f"FantLab fetch error for '{q_str}': {e}")
         return None
 
     def _fetch_archive_org(t: str, a: str, target_isbn: str) -> dict | None:
@@ -1823,31 +1844,74 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
             logger.debug(f"Internet Archive fetch error: {e}")
         return None
 
+    def _is_wiki_person_article(page_title: str, desc: str = "", author_hint: str = "") -> bool:
+        t_low = page_title.lower()
+        d_low = (desc or "").lower()
+        
+        person_markers = [
+            "(писатель", "(писательница", "(автор", "(поэт", "(романист", "(сценарист",
+            "(учёный", "(политик", "(деятель", "(актёр", "(актриса", "(персона",
+            "(writer", "(author", "(poet", "(novelist", "(biography", "(person", "(actor", "(actress"
+        ]
+        for m in person_markers:
+            if m in t_low or m in d_low:
+                return True
+                
+        desc_words = ["писатель", "писательница", "биография", "родился", "родилась", "writer", "author", "novelist", "poet", "born "]
+        for w in desc_words:
+            if w in d_low:
+                return True
+
+        if author_hint:
+            a_parts = [p.lower() for p in re.split(r"[\s,]+", author_hint) if len(p) > 2]
+            if a_parts and all(p in t_low for p in a_parts):
+                return True
+
+        if "," in page_title and not any(kw in t_low for kw in ["vol", "том", "книга", "часть", "№"]):
+            return True
+
+        return False
+
+    def _clean_wiki_title(title: str) -> str:
+        return re.sub(r"\s*\((?:роман|повесть|рассказ|книга|серия книг|цикл|фильм|novel|book|series|short story)\)\s*$", "", title, flags=re.IGNORECASE).strip()
+
     def _fetch_wikipedia(t: str, a: str) -> dict | None:
         if not t:
             return None
         has_cyrillic = bool(re.search(r"[\u0400-\u04FF]", t + (a or "")))
         lang = "ru" if has_cyrillic else "en"
-        search_q = f"{t} {a}".strip() if a else t
-        search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(search_q)}&format=json&utf8=1"
-        try:
-            req = urllib.request.Request(search_url, headers={"User-Agent": "Athenea/2.0 (admin@example.com)"})
-            with urllib.request.urlopen(req, timeout=7) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    hits = data.get("query", {}).get("search", [])
-                    if hits:
-                        page_title = hits[0].get("title", "")
-                        if page_title:
+        
+        # Search exact title in quotes first, then plain title
+        queries = [f'"{t}"', t]
+        
+        for q in queries:
+            search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(q)}&format=json&utf8=1"
+            try:
+                req = urllib.request.Request(search_url, headers={"User-Agent": "Athenea/2.0 (admin@example.com)"})
+                with urllib.request.urlopen(req, timeout=7) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        hits = data.get("query", {}).get("search", [])
+                        for hit in hits[:5]:
+                            page_title = hit.get("title", "")
+                            if not page_title:
+                                continue
                             summary_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(page_title)}"
                             s_req = urllib.request.Request(summary_url, headers={"User-Agent": "Athenea/2.0 (admin@example.com)"})
                             with urllib.request.urlopen(s_req, timeout=7) as s_resp:
                                 if s_resp.status == 200:
                                     s_data = json.loads(s_resp.read().decode("utf-8"))
+                                    desc = s_data.get("description", "") or ""
+                                    if _is_wiki_person_article(page_title, desc, a):
+                                        continue  # Skip biographies / person articles!
+                                    
+                                    cleaned = _clean_wiki_title(page_title)
+                                    resolved_title = t if t else cleaned
+                                    
                                     return {
                                         "found": True,
                                         "source": f"Wikipedia ({lang.upper()})",
-                                        "title": s_data.get("title", "") or t,
+                                        "title": resolved_title,
                                         "authors": [a] if a else [],
                                         "description": s_data.get("extract", "") or "",
                                         "publisher": "",
@@ -1858,8 +1922,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                                         "series_index": None,
                                         "cover_url": s_data.get("thumbnail", {}).get("source", "")
                                     }
-        except Exception as e:
-            logger.debug(f"Wikipedia fetch error: {e}")
+            except Exception as e:
+                logger.debug(f"Wikipedia fetch error for '{q}': {e}")
         return None
 
     def _fetch_crossref(t: str, a: str, target_isbn: str) -> dict | None:
