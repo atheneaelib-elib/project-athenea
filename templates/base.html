@@ -906,7 +906,7 @@
       if (!container) return;
       fetch(`/series/${seriesId}/order-modal`)
         .then(res => {
-          if (!res.ok) throw new Error("Failed to load series order modal");
+          if (!res.ok) throw new Error("Failed to load series order modal (HTTP " + res.status + ")");
           return res.text();
         })
         .then(html => {
@@ -914,6 +914,7 @@
         })
         .catch(err => {
           console.error(err);
+          alert("Error opening series modal: " + err.message);
         });
     }
 
@@ -923,6 +924,191 @@
     }
     window.openSeriesOrderModal = openSeriesOrderModal;
     window.closeSeriesOrderModal = closeSeriesOrderModal;
+
+    let draggedSeriesRow = null;
+
+    function onSeriesDragStart(e) {
+      const tag = (e.target.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'BUTTON' || e.target.closest('button') || e.target.closest('input')) {
+        return;
+      }
+      draggedSeriesRow = e.currentTarget;
+      e.dataTransfer.effectAllowed = 'move';
+      try {
+        e.dataTransfer.setData('text/plain', draggedSeriesRow.id);
+      } catch (err) {}
+      draggedSeriesRow.classList.add('opacity-40');
+    }
+
+    function onSeriesDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const target = e.currentTarget;
+      if (target && draggedSeriesRow && target !== draggedSeriesRow && target.classList.contains('series-item')) {
+        const rect = target.getBoundingClientRect();
+        const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+        target.parentNode.insertBefore(draggedSeriesRow, next ? target.nextSibling : target);
+      }
+    }
+
+    function onSeriesDrop(e) {
+      e.preventDefault();
+      if (draggedSeriesRow) {
+        draggedSeriesRow.classList.remove('opacity-40');
+        draggedSeriesRow = null;
+      }
+    }
+
+    function onSeriesDragEnd(e) {
+      if (draggedSeriesRow) {
+        draggedSeriesRow.classList.remove('opacity-40');
+        draggedSeriesRow = null;
+      }
+    }
+
+    function moveSeriesRow(bookId, direction) {
+      const row = document.getElementById(`series-row-${bookId}`);
+      if (!row) return;
+      if (direction === -1 && row.previousElementSibling) {
+        row.parentNode.insertBefore(row, row.previousElementSibling);
+        row.classList.add('ring-2', 'ring-indigo-500');
+        setTimeout(() => row.classList.remove('ring-2', 'ring-indigo-500'), 400);
+      } else if (direction === 1 && row.nextElementSibling) {
+        row.parentNode.insertBefore(row.nextElementSibling, row);
+        row.classList.add('ring-2', 'ring-indigo-500');
+        setTimeout(() => row.classList.remove('ring-2', 'ring-indigo-500'), 400);
+      }
+    }
+
+    function moveSeriesRowToEdge(bookId, edge) {
+      const row = document.getElementById(`series-row-${bookId}`);
+      if (!row) return;
+      const parent = row.parentNode;
+      if (edge === 'top') {
+        parent.insertBefore(row, parent.firstChild);
+      } else if (edge === 'bottom') {
+        parent.appendChild(row);
+      }
+      row.classList.add('ring-2', 'ring-indigo-500');
+      setTimeout(() => row.classList.remove('ring-2', 'ring-indigo-500'), 400);
+    }
+
+    function seriesAutoRenumber() {
+      const list = document.getElementById('series-books-list');
+      if (!list) return;
+      const rows = list.querySelectorAll('.series-item');
+      rows.forEach((row, idx) => {
+        const input = row.querySelector('.series-idx-input');
+        if (input) {
+          input.value = idx + 1;
+          input.classList.add('ring-2', 'ring-indigo-500');
+          setTimeout(() => input.classList.remove('ring-2', 'ring-indigo-500'), 600);
+        }
+      });
+    }
+
+    function seriesSortByTitle() {
+      const list = document.getElementById('series-books-list');
+      if (!list) return;
+      const rows = Array.from(list.querySelectorAll('.series-item'));
+      rows.sort((a, b) => {
+        const tA = (a.dataset.title || '').trim();
+        const tB = (b.dataset.title || '').trim();
+        return tA.localeCompare(tB);
+      });
+      rows.forEach(r => list.appendChild(r));
+    }
+
+    function seriesSortByDate() {
+      const list = document.getElementById('series-books-list');
+      if (!list) return;
+      const rows = Array.from(list.querySelectorAll('.series-item'));
+      rows.sort((a, b) => {
+        const dA = (a.dataset.date || '9999-99-99');
+        const dB = (b.dataset.date || '9999-99-99');
+        return dA.localeCompare(dB);
+      });
+      rows.forEach(r => list.appendChild(r));
+    }
+
+    async function saveSeriesOrder(seriesId) {
+      const list = document.getElementById('series-books-list');
+      if (!list) return;
+      const saveBtns = document.querySelectorAll('.series-order-save-btn');
+      const statusEl = document.getElementById('series-order-status');
+      
+      const rows = list.querySelectorAll('.series-item');
+      const items = [];
+      rows.forEach(row => {
+        const bid = parseInt(row.dataset.bookId, 10);
+        const input = row.querySelector('.series-idx-input');
+        const val = input ? parseFloat(input.value) : null;
+        items.push({
+          book_id: bid,
+          series_index: isNaN(val) ? null : val
+        });
+      });
+
+      saveBtns.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('opacity-75');
+      });
+
+      try {
+        const res = await fetch(`/series/${seriesId}/order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: items })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (statusEl) {
+            statusEl.classList.remove('hidden');
+          }
+          // If book modal is open, refresh it
+          const bookModal = document.getElementById('book-modal');
+          if (bookModal) {
+            const currentBookId = bookModal.dataset.bookId;
+            if (currentBookId && typeof openBookModal === 'function') {
+              openBookModal(parseInt(currentBookId, 10));
+            }
+          }
+          // Refresh main book grid
+          if (typeof triggerGridUpdate === 'function') {
+            triggerGridUpdate();
+          } else {
+            const grid = document.getElementById('book-grid');
+            if (grid && typeof htmx !== 'undefined') {
+              htmx.trigger(grid, 'refresh');
+            } else {
+              window.location.reload();
+            }
+          }
+          setTimeout(() => closeSeriesOrderModal(), 800);
+        } else {
+          alert("Failed to save series order: " + (data.detail || data.error || "Unknown error"));
+        }
+      } catch (err) {
+        console.error("Save series order error:", err);
+        alert("Network error while saving series order: " + err.message);
+      } finally {
+        saveBtns.forEach(btn => {
+          btn.disabled = false;
+          btn.classList.remove('opacity-75');
+        });
+      }
+    }
+
+    window.onSeriesDragStart = onSeriesDragStart;
+    window.onSeriesDragOver = onSeriesDragOver;
+    window.onSeriesDrop = onSeriesDrop;
+    window.onSeriesDragEnd = onSeriesDragEnd;
+    window.moveSeriesRow = moveSeriesRow;
+    window.moveSeriesRowToEdge = moveSeriesRowToEdge;
+    window.seriesAutoRenumber = seriesAutoRenumber;
+    window.seriesSortByTitle = seriesSortByTitle;
+    window.seriesSortByDate = seriesSortByDate;
+    window.saveSeriesOrder = saveSeriesOrder;
 
     // Close modal on Escape
     document.addEventListener('keydown', function(e) {

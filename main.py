@@ -1681,7 +1681,7 @@ def series_order_modal_view(
 
 class SeriesOrderItem(BaseModel):
     book_id: int
-    series_index: float | None = None
+    series_index: float | int | str | None = None
 
 
 class UpdateSeriesOrderRequest(BaseModel):

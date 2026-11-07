@@ -69,7 +69,7 @@
           type="button" 
           id="series-order-save-btn"
           onclick="saveSeriesOrder({{ series.id }})" 
-          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+          class="series-order-save-btn inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
           <span>Save Order</span>
@@ -89,18 +89,19 @@
       <div 
         id="series-row-{{ b.id }}"
         data-book-id="{{ b.id }}"
-        data-title="{{ b.title|lower }}"
+        data-title="{{ (b.title|default(''))|escape }}"
         data-date="{{ b.pubdate or '9999-99-99' }}"
         draggable="true"
         ondragstart="onSeriesDragStart(event)"
         ondragover="onSeriesDragOver(event)"
         ondrop="onSeriesDrop(event)"
+        ondragend="onSeriesDragEnd(event)"
         class="series-item flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800/80 hover:border-indigo-500/30 transition-colors group"
       >
         <!-- Drag Handle & Up/Down Arrows -->
         <div class="flex items-center gap-1 flex-shrink-0">
-          <div class="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 px-1 py-1" title="Drag to reorder">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" /></svg>
+          <div class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 px-1 py-1" title="Drag to reorder">
+            <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" /></svg>
           </div>
           <div class="flex flex-col">
             <button 
@@ -195,7 +196,7 @@
       <button 
         type="button" 
         onclick="saveSeriesOrder({{ series.id }})" 
-        class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+        class="series-order-save-btn px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save Changes</span>
@@ -203,160 +204,4 @@
     </div>
 
   </div>
-
-  <script>
-    let draggedRow = null;
-
-    function onSeriesDragStart(e) {
-      draggedRow = e.currentTarget;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/html', draggedRow.outerHTML);
-      draggedRow.classList.add('opacity-40');
-    }
-
-    function onSeriesDragOver(e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const target = e.currentTarget;
-      if (target && target !== draggedRow && target.classList.contains('series-item')) {
-        const rect = target.getBoundingClientRect();
-        const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
-        const parent = target.parentNode;
-        parent.insertBefore(draggedRow, next ? target.nextSibling : target);
-      }
-    }
-
-    function onSeriesDrop(e) {
-      e.preventDefault();
-      if (draggedRow) {
-        draggedRow.classList.remove('opacity-40');
-        draggedRow = null;
-      }
-    }
-
-    function moveSeriesRow(bookId, direction) {
-      const row = document.getElementById(`series-row-${bookId}`);
-      if (!row) return;
-      if (direction === -1 && row.previousElementSibling) {
-        row.parentNode.insertBefore(row, row.previousElementSibling);
-      } else if (direction === 1 && row.nextElementSibling) {
-        row.parentNode.insertBefore(row.nextElementSibling, row);
-      }
-    }
-
-    function moveSeriesRowToEdge(bookId, edge) {
-      const row = document.getElementById(`series-row-${bookId}`);
-      if (!row) return;
-      const parent = row.parentNode;
-      if (edge === 'top') {
-        parent.insertBefore(row, parent.firstChild);
-      } else if (edge === 'bottom') {
-        parent.appendChild(row);
-      }
-    }
-
-    function seriesAutoRenumber() {
-      const list = document.getElementById('series-books-list');
-      if (!list) return;
-      const rows = list.querySelectorAll('.series-item');
-      rows.forEach((row, idx) => {
-        const input = row.querySelector('.series-idx-input');
-        if (input) {
-          input.value = idx + 1;
-          input.classList.add('ring-2', 'ring-indigo-500');
-          setTimeout(() => input.classList.remove('ring-2', 'ring-indigo-500'), 600);
-        }
-      });
-    }
-
-    function seriesSortByTitle() {
-      const list = document.getElementById('series-books-list');
-      if (!list) return;
-      const rows = Array.from(list.querySelectorAll('.series-item'));
-      rows.sort((a, b) => {
-        const tA = (a.dataset.title || '').trim();
-        const tB = (b.dataset.title || '').trim();
-        return tA.localeCompare(tB);
-      });
-      rows.forEach(r => list.appendChild(r));
-    }
-
-    function seriesSortByDate() {
-      const list = document.getElementById('series-books-list');
-      if (!list) return;
-      const rows = Array.from(list.querySelectorAll('.series-item'));
-      rows.sort((a, b) => {
-        const dA = (a.dataset.date || '9999-99-99');
-        const dB = (b.dataset.date || '9999-99-99');
-        return dA.localeCompare(dB);
-      });
-      rows.forEach(r => list.appendChild(r));
-    }
-
-    async function saveSeriesOrder(seriesId) {
-      const list = document.getElementById('series-books-list');
-      if (!list) return;
-      const btn = document.getElementById('series-order-save-btn');
-      const statusEl = document.getElementById('series-order-status');
-      
-      const rows = list.querySelectorAll('.series-item');
-      const items = [];
-      rows.forEach(row => {
-        const bid = parseInt(row.dataset.bookId, 10);
-        const input = row.querySelector('.series-idx-input');
-        const val = input ? parseFloat(input.value) : null;
-        items.push({
-          book_id: bid,
-          series_index: isNaN(val) ? null : val
-        });
-      });
-
-      if (btn) {
-        btn.disabled = true;
-        btn.classList.add('opacity-75');
-      }
-
-      try {
-        const res = await fetch(`/series/${seriesId}/order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: items })
-        });
-        const data = await res.json();
-        if (data.success) {
-          if (statusEl) {
-            statusEl.classList.remove('hidden');
-            setTimeout(() => statusEl.classList.add('hidden'), 2500);
-          }
-          // If book modal is currently open, refresh it
-          const bookModal = document.getElementById('book-modal');
-          if (bookModal) {
-            const currentBookId = bookModal.dataset.bookId;
-            if (currentBookId && typeof openBookModal === 'function') {
-              openBookModal(parseInt(currentBookId, 10));
-            }
-          }
-          // Refresh main book grid if we are currently filtered by this series or browsing
-          const filterInput = document.getElementById('input-series-id');
-          if (filterInput && parseInt(filterInput.value, 10) === seriesId && typeof triggerSearch === 'function') {
-            triggerSearch();
-          } else if (typeof htmx !== 'undefined') {
-            const grid = document.getElementById('book-grid');
-            if (grid) htmx.trigger(grid, 'refresh');
-          }
-          setTimeout(() => closeSeriesOrderModal(), 800);
-        } else {
-          alert("Failed to save series order: " + (data.detail || "Unknown error"));
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Network error while saving series order");
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.classList.remove('opacity-75');
-        }
-      }
-    }
-  </script>
 </div>
