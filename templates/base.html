@@ -20,6 +20,10 @@
         } else {
           document.documentElement.classList.add('dark');
         }
+        var savedProfile = localStorage.getItem('athenea_ui_profile') || 'reader';
+        document.documentElement.classList.add('profile-' + savedProfile);
+        var savedDensity = localStorage.getItem('athenea_grid_density') || 'normal';
+        document.documentElement.classList.add('density-' + savedDensity);
       } catch (e) {}
     })();
   </script>
@@ -355,6 +359,57 @@
     body.bulk-select-active .bulk-select-box {
       display: block !important;
     }
+
+    /* UI Profile Mode: Reader vs Curator */
+    body.profile-reader .curator-only,
+    html.profile-reader .curator-only {
+      display: none !important;
+    }
+
+    /* Card Density System */
+    body.density-cozy .books-grid-layout,
+    html.density-cozy .books-grid-layout {
+      grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)) !important;
+      gap: 1.5rem !important;
+    }
+    body.density-compact .books-grid-layout,
+    html.density-compact .books-grid-layout {
+      grid-template-columns: 1fr !important;
+      gap: 0.5rem !important;
+    }
+    body.density-compact .book-card-item,
+    html.density-compact .book-card-item {
+      flex-direction: row !important;
+      align-items: center !important;
+      height: 4.85rem !important;
+      padding: 0.35rem 0.75rem !important;
+    }
+    body.density-compact .book-card-cover-container,
+    html.density-compact .book-card-cover-container {
+      width: 3.25rem !important;
+      aspect-ratio: auto !important;
+      height: 100% !important;
+      flex-shrink: 0 !important;
+      border-radius: 0.375rem !important;
+      overflow: hidden !important;
+    }
+    body.density-compact .book-card-info-footer,
+    html.density-compact .book-card-info-footer {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 0.25rem 0.75rem !important;
+      width: 100% !important;
+    }
+    body.density-compact .book-card-badges,
+    html.density-compact .book-card-badges {
+      display: none !important;
+    }
+    body.density-compact .book-card-actions,
+    html.density-compact .book-card-actions {
+      margin-top: 0 !important;
+      opacity: 1 !important;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
@@ -487,6 +542,31 @@
             {% endif %}
 
           </div>
+
+          <!-- UI Profile Mode Toggle (Reader vs Curator) -->
+          {% if current_user %}
+          <button 
+            type="button" 
+            onclick="toggleUiProfile()" 
+            id="ui-profile-toggle-btn"
+            class="h-9 px-2.5 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-semibold whitespace-nowrap inline-flex items-center justify-center gap-1.5 transition-all flex-shrink-0 cursor-pointer shadow-sm select-none"
+            title="Switch UI Mode: Reader (clean & simple) vs Curator (power tools & bulk actions) [Shortcut: C]"
+          >
+            <span id="ui-profile-icon" class="text-sm">📖</span>
+            <span id="ui-profile-label" class="hidden xs:inline">Reader</span>
+          </button>
+          {% endif %}
+
+          <!-- Keyboard Shortcuts Cheat Sheet Button (?) -->
+          <button 
+            type="button" 
+            onclick="toggleShortcutsModal()" 
+            id="nav-shortcuts-btn"
+            class="h-9 w-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-slate-600 text-xs font-bold whitespace-nowrap inline-flex items-center justify-center transition-all flex-shrink-0 cursor-pointer shadow-sm"
+            title="Keyboard Shortcuts [?]"
+          >
+            <span>?</span>
+          </button>
 
           <!-- UI Theme Selector Dropdown -->
           <div class="relative inline-block text-left flex-shrink-0 z-50" id="theme-dropdown-wrapper">
@@ -662,7 +742,7 @@
               hx-target="#book-grid"
               hx-include="#filter-inputs, #sort-select"
               hx-indicator="#search-spinner"
-              oninput="syncSearchInputs(this.value);"
+              oninput="syncSearchInputs(this.value); debounceFetchSearchSuggestions(this.value);"
             />
             <!-- Search icon -->
             <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -685,6 +765,12 @@
                 {{ t('navbar.search_button') }}
               </button>
             </div>
+
+            <!-- Live Search Suggestions Dropdown Box -->
+            <div 
+              id="search-suggestions-box" 
+              class="hidden absolute left-0 right-0 top-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-800 max-h-96 overflow-y-auto"
+            ></div>
           </div>
 
           <!-- Include descriptions checkbox -->
@@ -724,6 +810,59 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Visual Quick-Filter Pills Bar -->
+      <div class="pb-2.5 pt-0.5 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none text-xs">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex-shrink-0 mr-0.5 hidden sm:inline">Views:</span>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('all')" 
+          id="qf-pill-all"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-indigo-600 text-white shadow-sm"
+        >
+          <span>All Books</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('reading')" 
+          id="qf-pill-reading"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+        >
+          <span>📖 Reading Now</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('favorites')" 
+          id="qf-pill-favorites"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+        >
+          <span>⭐ Favorites</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('plan_to_read')" 
+          id="qf-pill-plan"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+        >
+          <span>🔖 Want to Read</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('finished')" 
+          id="qf-pill-finished"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+        >
+          <span>✅ Finished</span>
+        </button>
+        <button 
+          type="button" 
+          onclick="applyQuickFilter('recent')" 
+          id="qf-pill-recent"
+          class="qf-pill px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60"
+        >
+          <span>🆕 Recently Added</span>
+        </button>
       </div>
       {% endif %}
 
@@ -770,6 +909,9 @@
 
   <!-- Modal Container for Author Bio Profile -->
   <div id="author-bio-modal-container"></div>
+
+  <!-- Modal Container for Keyboard Shortcuts -->
+  <div id="shortcuts-modal-container"></div>
 
   <!-- Footer -->
   <footer class="mt-auto border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-400">
@@ -1682,10 +1824,431 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       parseAllEmojis(document.body);
+      const savedProfile = localStorage.getItem('athenea_ui_profile') || 'reader';
+      syncUiProfileUI(savedProfile);
+      const savedDensity = localStorage.getItem('athenea_grid_density') || 'normal';
+      syncGridDensityUI(savedDensity);
     });
 
     document.body.addEventListener('htmx:afterSwap', function(e) {
       parseAllEmojis(e.detail.target || document.body);
+      const savedDensity = localStorage.getItem('athenea_grid_density') || 'normal';
+      syncGridDensityUI(savedDensity);
+    });
+
+    /* ==========================================================================
+       UI Profile Mode System (Reader vs Curator)
+       ========================================================================== */
+    function syncUiProfileUI(profile) {
+      const isReader = profile === 'reader';
+      document.body.classList.toggle('profile-reader', isReader);
+      document.body.classList.toggle('profile-curator', !isReader);
+      document.documentElement.classList.toggle('profile-reader', isReader);
+      document.documentElement.classList.toggle('profile-curator', !isReader);
+
+      const btn = document.getElementById('ui-profile-toggle-btn');
+      const icon = document.getElementById('ui-profile-icon');
+      const label = document.getElementById('ui-profile-label');
+      if (btn && icon && label) {
+        if (isReader) {
+          icon.textContent = '📖';
+          label.textContent = 'Reader';
+          btn.classList.remove('bg-amber-600/30', 'text-amber-200', 'border-amber-500/50');
+          btn.classList.add('bg-slate-800', 'text-slate-200', 'border-slate-700');
+          btn.title = "Current: Reader Mode (clean & simple). Click to switch to Curator Mode (IDs, series reorder, merge tools, bulk select) [C]";
+        } else {
+          icon.textContent = '🛠️';
+          label.textContent = 'Curator';
+          btn.classList.remove('bg-slate-800', 'text-slate-200', 'border-slate-700');
+          btn.classList.add('bg-amber-600/30', 'text-amber-200', 'border-amber-500/50');
+          btn.title = "Current: Curator Mode (power tools active). Click to switch to Reader Mode [C]";
+        }
+      }
+    }
+
+    function setUiProfile(profile) {
+      if (profile !== 'reader' && profile !== 'curator') profile = 'reader';
+      try {
+        localStorage.setItem('athenea_ui_profile', profile);
+      } catch (e) {}
+      syncUiProfileUI(profile);
+    }
+
+    function toggleUiProfile() {
+      const current = localStorage.getItem('athenea_ui_profile') || 'reader';
+      const next = current === 'reader' ? 'curator' : 'reader';
+      setUiProfile(next);
+    }
+    window.setUiProfile = setUiProfile;
+    window.toggleUiProfile = toggleUiProfile;
+
+    /* ==========================================================================
+       Card Grid Density System (Cozy / Normal / Compact)
+       ========================================================================== */
+    function syncGridDensityUI(density) {
+      if (!['cozy', 'normal', 'compact'].includes(density)) density = 'normal';
+      document.body.classList.remove('density-cozy', 'density-normal', 'density-compact');
+      document.body.classList.add('density-' + density);
+      document.documentElement.classList.remove('density-cozy', 'density-normal', 'density-compact');
+      document.documentElement.classList.add('density-' + density);
+
+      document.querySelectorAll('.density-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById('density-btn-' + density);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-indigo-600', 'text-white');
+        activeBtn.classList.remove('text-slate-400');
+      }
+    }
+
+    function setGridDensity(density) {
+      if (!['cozy', 'normal', 'compact'].includes(density)) density = 'normal';
+      try {
+        localStorage.setItem('athenea_grid_density', density);
+      } catch (e) {}
+      syncGridDensityUI(density);
+    }
+    window.setGridDensity = setGridDensity;
+
+    /* ==========================================================================
+       Visual Quick-Filter Pills System
+       ========================================================================== */
+    function applyQuickFilter(type) {
+      document.querySelectorAll('.qf-pill').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+        btn.classList.add('bg-slate-800/80', 'text-slate-300', 'border', 'border-slate-700/60');
+      });
+      const targetPill = document.getElementById('qf-pill-' + (type === 'plan_to_read' ? 'plan' : type));
+      if (targetPill) {
+        targetPill.classList.remove('bg-slate-800/80', 'text-slate-300', 'border', 'border-slate-700/60');
+        targetPill.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+      }
+
+      const favInput = document.getElementById('input-favorites-only');
+      const shelfInput = document.getElementById('input-shelf');
+      const sortSelect = document.getElementById('sort-select');
+      const pageInput = document.getElementById('input-page');
+      const authorInput = document.getElementById('input-author-id');
+      const seriesInput = document.getElementById('input-series-id');
+      const tagInput = document.getElementById('input-tag-id');
+      const searchInput = document.getElementById('search-input');
+
+      if (pageInput) pageInput.value = '1';
+
+      if (type === 'all') {
+        if (favInput) favInput.value = '';
+        if (shelfInput) shelfInput.value = '';
+        if (sortSelect) sortSelect.value = 'recent';
+        if (authorInput) authorInput.value = '';
+        if (seriesInput) seriesInput.value = '';
+        if (tagInput) tagInput.value = '';
+        if (searchInput) searchInput.value = '';
+      } else if (type === 'reading') {
+        if (favInput) favInput.value = '';
+        if (shelfInput) shelfInput.value = 'reading';
+      } else if (type === 'favorites') {
+        if (favInput) favInput.value = '1';
+        if (shelfInput) shelfInput.value = '';
+      } else if (type === 'plan_to_read') {
+        if (favInput) favInput.value = '';
+        if (shelfInput) shelfInput.value = 'plan_to_read';
+      } else if (type === 'finished') {
+        if (favInput) favInput.value = '';
+        if (shelfInput) shelfInput.value = 'finished';
+      } else if (type === 'recent') {
+        if (favInput) favInput.value = '';
+        if (shelfInput) shelfInput.value = '';
+        if (sortSelect) sortSelect.value = 'recent';
+      }
+
+      if (window.triggerGridUpdate) {
+        window.triggerGridUpdate();
+      } else if (typeof htmx !== 'undefined') {
+        htmx.ajax('GET', '/books/grid', {
+          target: '#book-grid',
+          include: '#filter-inputs, #search-input, #sort-select'
+        });
+      }
+    }
+    window.applyQuickFilter = applyQuickFilter;
+
+    /* ==========================================================================
+       Live Grouped Search Suggestions Dropdown
+       ========================================================================== */
+    let searchSuggestionTimer = null;
+
+    function closeSearchSuggestions() {
+      const box = document.getElementById('search-suggestions-box');
+      if (box) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+      }
+    }
+    window.closeSearchSuggestions = closeSearchSuggestions;
+
+    function debounceFetchSearchSuggestions(query) {
+      if (searchSuggestionTimer) clearTimeout(searchSuggestionTimer);
+      const q = (query || '').trim();
+      if (q.length < 2) {
+        closeSearchSuggestions();
+        return;
+      }
+      searchSuggestionTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/search/suggestions?q=' + encodeURIComponent(q));
+          if (!res.ok) return;
+          const data = await res.json();
+          renderSearchSuggestions(data, q);
+        } catch (e) {
+          console.warn("Suggestions error:", e);
+        }
+      }, 220);
+    }
+    window.debounceFetchSearchSuggestions = debounceFetchSearchSuggestions;
+
+    function renderSearchSuggestions(data, query) {
+      const box = document.getElementById('search-suggestions-box');
+      if (!box) return;
+      const authors = data.authors || [];
+      const series = data.series || [];
+      const books = data.books || [];
+
+      if (authors.length === 0 && series.length === 0 && books.length === 0) {
+        closeSearchSuggestions();
+        return;
+      }
+
+      let html = '';
+
+      if (authors.length > 0) {
+        html += `
+          <div class="p-2">
+            <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>✍️ Authors</span>
+            </div>
+            <div class="space-y-0.5">
+              ${authors.map(a => `
+                <button type="button" onclick="selectSuggestion('author', ${a.id}, '${escapeHtml(a.name)}')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-200 hover:text-white hover:bg-indigo-600/25 transition-colors cursor-pointer">
+                  <span class="font-medium truncate">${escapeHtml(a.name)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-indigo-300 font-mono flex-shrink-0 ml-2">${a.books_count} books</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (series.length > 0) {
+        html += `
+          <div class="p-2">
+            <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>📚 Series</span>
+            </div>
+            <div class="space-y-0.5">
+              ${series.map(s => `
+                <button type="button" onclick="selectSuggestion('series', ${s.id}, '${escapeHtml(s.name)}')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-200 hover:text-white hover:bg-indigo-600/25 transition-colors cursor-pointer">
+                  <span class="font-medium truncate">${escapeHtml(s.name)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-purple-300 font-mono flex-shrink-0 ml-2">${s.books_count} books</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (books.length > 0) {
+        html += `
+          <div class="p-2">
+            <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>📖 Books</span>
+            </div>
+            <div class="space-y-1">
+              ${books.map(b => `
+                <button type="button" onclick="selectSuggestion('book', ${b.id})" class="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-xs text-slate-200 hover:text-white hover:bg-indigo-600/25 transition-colors cursor-pointer group">
+                  <div class="w-7 h-10 bg-slate-800 rounded overflow-hidden flex-shrink-0 border border-slate-700 shadow-sm">
+                    ${b.has_cover ? `<img src="/cover/${b.id}?thumb=1" alt="" class="w-full h-full object-cover"/>` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-500">📖</div>`}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="font-semibold text-slate-100 group-hover:text-indigo-200 truncate">${escapeHtml(b.title)}</p>
+                    <p class="text-[11px] text-slate-400 truncate">${escapeHtml(b.author || '')}</p>
+                  </div>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      box.innerHTML = html;
+      box.classList.remove('hidden');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function selectSuggestion(type, id, label) {
+      closeSearchSuggestions();
+      if (type === 'book') {
+        openBookModal(id);
+      } else if (type === 'author') {
+        const input = document.getElementById('search-input');
+        if (input) input.value = '';
+        const aid = document.getElementById('input-author-id');
+        if (aid) aid.value = id;
+        const sid = document.getElementById('input-series-id');
+        if (sid) sid.value = '';
+        if (window.triggerGridUpdate) window.triggerGridUpdate();
+        else if (input) htmx.trigger(input, 'search');
+      } else if (type === 'series') {
+        const input = document.getElementById('search-input');
+        if (input) input.value = '';
+        const sid = document.getElementById('input-series-id');
+        if (sid) sid.value = id;
+        const aid = document.getElementById('input-author-id');
+        if (aid) aid.value = '';
+        if (window.triggerGridUpdate) window.triggerGridUpdate();
+        else if (input) htmx.trigger(input, 'search');
+      }
+    }
+    window.selectSuggestion = selectSuggestion;
+
+    /* Click outside to close search suggestions */
+    document.addEventListener('click', function(e) {
+      const searchBox = document.getElementById('search-suggestions-box');
+      const searchInput = document.getElementById('search-input');
+      if (searchBox && !searchBox.contains(e.target) && e.target !== searchInput) {
+        closeSearchSuggestions();
+      }
+    });
+
+    /* ==========================================================================
+       Keyboard Shortcuts Overlay Modal (?)
+       ========================================================================== */
+    function toggleShortcutsModal() {
+      const container = document.getElementById('shortcuts-modal-container');
+      if (!container) return;
+      const existing = document.getElementById('shortcuts-modal');
+      if (existing) {
+        existing.remove();
+        return;
+      }
+
+      container.innerHTML = `
+        <div id="shortcuts-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn" onclick="if(event.target===this) toggleShortcutsModal();">
+          <div class="relative w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden p-6 text-slate-200">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">⌨️</span>
+                <h3 class="text-base font-bold text-white">Keyboard Shortcuts & Navigation</h3>
+              </div>
+              <button type="button" onclick="toggleShortcutsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors text-lg font-bold">
+                &times;
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div class="space-y-2.5">
+                <h4 class="text-[11px] font-bold uppercase tracking-wider text-indigo-400">🔍 Search & Discovery</h4>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Focus Search Bar</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">/</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Surprise Me (Random Book)</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">R</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Toggle Favorites</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">F</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Close Modals / Popups</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">Esc</kbd>
+                </div>
+              </div>
+
+              <div class="space-y-2.5">
+                <h4 class="text-[11px] font-bold uppercase tracking-wider text-purple-400">🎨 Modes & Density</h4>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Toggle Reader / Curator</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">C</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Cozy Grid (Large Covers)</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">1</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Normal Grid (Standard)</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">2</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Compact List (Dense)</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">3</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-800">
+                  <span class="text-slate-300">Bulk Select Mode</span>
+                  <kbd class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[11px] font-bold border border-slate-600">X</kbd>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-5 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+              <span>Tip: Press <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-bold text-white">?</kbd> anywhere to toggle this guide</span>
+              <button type="button" onclick="toggleShortcutsModal()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-xs transition-colors cursor-pointer">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    window.toggleShortcutsModal = toggleShortcutsModal;
+
+    // Global Keydown Listeners for Shortcuts
+    document.addEventListener('keydown', function(e) {
+      const activeTag = (document.activeElement && document.activeElement.tagName) || '';
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || (document.activeElement && document.activeElement.isContentEditable);
+
+      if (e.key === 'Escape') {
+        closeSearchSuggestions();
+        const scModal = document.getElementById('shortcuts-modal');
+        if (scModal) scModal.remove();
+        return;
+      }
+
+      if (isInput) return; // Ignore single-key shortcuts while typing in inputs
+
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        toggleShortcutsModal();
+      } else if (e.key === 'c' || e.key === 'C') {
+        toggleUiProfile();
+      } else if (e.key === 'x' || e.key === 'X') {
+        if (typeof toggleBulkSelectMode === 'function') toggleBulkSelectMode();
+      } else if (e.key === '1') {
+        setGridDensity('cozy');
+      } else if (e.key === '2') {
+        setGridDensity('normal');
+      } else if (e.key === '3') {
+        setGridDensity('compact');
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFavoritesFilter();
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (typeof htmx !== 'undefined') {
+          htmx.ajax('GET', '/books/random/modal', { target: '#modal-container', swap: 'innerHTML' });
+        }
+      }
     });
   </script>
 </body>

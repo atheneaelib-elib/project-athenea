@@ -24,7 +24,7 @@
       <button 
         type="button" 
         onclick="openSeriesOrderModal({{ current_series_id }})"
-        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all cursor-pointer shadow-sm"
+        class="curator-only inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all cursor-pointer shadow-sm"
         title="Reorder books in this series"
       >
         <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
@@ -33,19 +33,50 @@
       {% endif %}
     </div>
 
-    <!-- Active page summary, Bulk Select & View Mode Toggle -->
-    <div class="flex items-center gap-2.5">
-      <!-- Bulk Selection Toggle Button -->
+    <!-- Active page summary, Bulk Select, Density & View Mode Toggle -->
+    <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+      <!-- Bulk Selection Toggle Button (Curator Mode Only) -->
       <button 
         type="button" 
         id="bulk-select-toggle-btn"
         onclick="toggleBulkSelectMode()"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+        class="curator-only inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
         title="Toggle multi-book selection for bulk actions"
       >
         <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
         <span id="bulk-toggle-label">Select</span>
       </button>
+
+      <!-- Density Toggle: Cozy / Normal / Compact -->
+      <div class="inline-flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs">
+        <button 
+          type="button" 
+          onclick="setGridDensity('cozy')" 
+          id="density-btn-cozy" 
+          class="density-btn px-2 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-white transition-all cursor-pointer" 
+          title="Cozy (Large covers & text)"
+        >
+          Cozy
+        </button>
+        <button 
+          type="button" 
+          onclick="setGridDensity('normal')" 
+          id="density-btn-normal" 
+          class="density-btn px-2 py-1 rounded text-[11px] font-semibold text-white bg-indigo-600 transition-all cursor-pointer" 
+          title="Standard grid"
+        >
+          Normal
+        </button>
+        <button 
+          type="button" 
+          onclick="setGridDensity('compact')" 
+          id="density-btn-compact" 
+          class="density-btn px-2 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-white transition-all cursor-pointer" 
+          title="Compact high-density list"
+        >
+          Compact
+        </button>
+      </div>
 
       <!-- View mode toggle: Grouped vs Grid -->
       <div class="inline-flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700">
@@ -157,7 +188,7 @@
           <button 
             type="button" 
             onclick="openAuthorMergeModal({{ author_data.author_id }})" 
-            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/30 transition-colors cursor-pointer"
+            class="curator-only inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/30 transition-colors cursor-pointer"
             title="Merge duplicate author records into this author"
           >
             <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
@@ -188,7 +219,7 @@
               {{ s.books|length }}
             </span>
             {% if s.gaps and s.gaps.has_gaps %}
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0" title="{{ s.gaps.summary_text }}">
+            <span class="curator-only px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0" title="{{ s.gaps.summary_text }}">
               ⚠️ Missing: #{{ s.gaps.missing_indices|join(', #') }}
             </span>
             {% endif %}
@@ -198,7 +229,7 @@
             <button 
               type="button" 
               onclick="openSeriesOrderModal({{ s.series_id }})"
-              class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-indigo-300 border border-slate-700/80 hover:border-indigo-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
+              class="curator-only w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-indigo-300 border border-slate-700/80 hover:border-indigo-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
               title="Reorder books in {{ s.series_name }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
@@ -206,7 +237,7 @@
             <button 
               type="button" 
               onclick="openSeriesMergeModal({{ s.series_id }})"
-              class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-amber-300 border border-slate-700/80 hover:border-amber-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
+              class="curator-only w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-amber-300 border border-slate-700/80 hover:border-amber-500/40 inline-flex items-center justify-center transition-all cursor-pointer"
               title="Merge {{ s.series_name }} with another series"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
@@ -230,7 +261,7 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+        <div class="books-grid-layout grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
           {% for book in s.books %}
             {% include 'partials/book_card.html' %}
           {% endfor %}
@@ -251,7 +282,7 @@
         </div>
         {% endif %}
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+        <div class="books-grid-layout grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
           {% for book in author_data.standalone_books %}
             {% include 'partials/book_card.html' %}
           {% endfor %}
@@ -264,7 +295,7 @@
   </div>
   {% else %}
   <!-- Book Cards Flat Grid (2 cols mobile, 3 tablet, 4 desktop, 6 large) -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+  <div class="books-grid-layout grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
     {% for book in books %}
       {% include 'partials/book_card.html' %}
     {% endfor %}

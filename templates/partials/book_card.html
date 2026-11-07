@@ -1,4 +1,4 @@
-<div class="group relative flex flex-col bg-slate-900/60 hover:bg-slate-800/80 rounded-xl overflow-hidden border border-slate-800/80 hover:border-indigo-500/50 shadow-md hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 cursor-pointer"
+<div class="book-card-item group relative flex flex-col bg-slate-900/60 hover:bg-slate-800/80 rounded-xl overflow-hidden border border-slate-800/80 hover:border-indigo-500/50 shadow-md hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 cursor-pointer"
      onclick="if(document.body.classList.contains('bulk-select-active')){ event.preventDefault(); event.stopPropagation(); toggleBookSelection({{ book.id }}); }"
      hx-get="/book/{{ book.id }}/modal"
      hx-target="#modal-container"
@@ -15,7 +15,7 @@
   </div>
 
   <!-- Cover Image Container (Fixed 2:3 Aspect Ratio) -->
-  <div class="relative w-full aspect-[2/3] bg-slate-950 overflow-hidden">
+  <div class="book-card-cover-container relative w-full aspect-[2/3] bg-slate-950 overflow-hidden">
     <!-- Favorite Toggle Button -->
     {% set book_id = book.id %}
     {% set is_favorite = book.is_favorite %}
@@ -39,7 +39,7 @@
     {% endif %}
 
     <!-- Top Floating Badges (Language, Shelves & Formats) -->
-    <div class="absolute top-2 right-2 left-11 flex flex-wrap justify-end gap-1 pointer-events-none z-[5]">
+    <div class="book-card-badges absolute top-2 right-2 left-11 flex flex-wrap justify-end gap-1 pointer-events-none z-[5]">
       {% if book.reading_status == 'reading' %}
       <span class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/90 text-white shadow-sm backdrop-blur-sm" title="{{ t('sidebar.shelf_reading') }}">{{ t('card.reading') }}</span>
       {% elif book.reading_status == 'finished' %}
@@ -84,7 +84,7 @@
   </div>
 
   <!-- Book Info Footer -->
-  <div class="p-3 flex flex-col flex-1 justify-between gap-1">
+  <div class="book-card-info-footer p-3 flex flex-col flex-1 justify-between gap-1">
     <div>
       <h3 class="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-indigo-300 line-clamp-2 transition-colors" title="{{ book.title }}">
         {{ book.title }}
@@ -96,8 +96,8 @@
 
     <!-- Quick action indicator -->
     <div class="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-      <span>#{{ book.id }}</span>
-      <span class="group-hover:text-indigo-400 flex items-center gap-1 font-medium transition-colors">
+      <span class="curator-only font-mono text-[10px] text-slate-500">#{{ book.id }}</span>
+      <span class="group-hover:text-indigo-400 flex items-center gap-1 font-medium transition-colors ml-auto">
         {{ t('card.read_and_details') }}
         <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
       </span>

@@ -2719,6 +2719,52 @@ def api_suggest_series(q: str = Query(..., min_length=2), db: Session = Depends(
     return [{"id": r.id, "name": r.name} for r in rows]
 
 
+@app.get("/api/search/suggestions")
+def api_search_suggestions(q: str = Query("", min_length=2), db: Session = Depends(get_db)):
+    clean_q = (q or "").strip()
+    if len(clean_q) < 2:
+        return {"authors": [], "series": [], "books": []}
+
+    pattern = f"%{clean_q}%"
+    
+    # 1. Matching authors
+    author_rows = db.execute(text("""
+        SELECT a.id, a.name, count(ba.book_id) as book_count
+        FROM authors a
+        JOIN book_authors ba ON a.id = ba.author_id
+        WHERE a.name ILIKE :q
+        GROUP BY a.id, a.name
+        ORDER BY book_count DESC, a.name ASC
+        LIMIT 4
+    """), {"q": pattern}).fetchall()
+
+    # 2. Matching series
+    series_rows = db.execute(text("""
+        SELECT s.id, s.name, count(bs.book_id) as book_count
+        FROM series s
+        JOIN book_series bs ON s.id = bs.series_id
+        WHERE s.name ILIKE :q
+        GROUP BY s.id, s.name
+        ORDER BY book_count DESC, s.name ASC
+        LIMIT 4
+    """), {"q": pattern}).fetchall()
+
+    # 3. Matching books
+    book_rows = db.execute(text("""
+        SELECT b.id, b.title, b.author_sort, b.has_cover
+        FROM books b
+        WHERE b.title ILIKE :q
+        ORDER BY b.id DESC
+        LIMIT 4
+    """), {"q": pattern}).fetchall()
+
+    return {
+        "authors": [{"id": r.id, "name": r.name, "book_count": r.book_count} for r in author_rows],
+        "series": [{"id": r.id, "name": r.name, "book_count": r.book_count} for r in series_rows],
+        "books": [{"id": r.id, "title": r.title, "author": r.author_sort or "", "has_cover": bool(r.has_cover)} for r in book_rows]
+    }
+
+
 # ===================================================================
 # TEXT-TO-SPEECH (TTS) AUDIOBOOK ROUTES (KOKORO-82M NEURAL)
 # ===================================================================

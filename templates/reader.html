@@ -156,6 +156,109 @@
     <div class="flex items-center gap-1 sm:gap-2">
       
       {% if fmt == 'epub' %}
+      <!-- Quick Comfort Presets (Aa) -->
+      <div class="relative inline-block text-left" id="quick-comfort-wrapper">
+        <button 
+          id="quick-comfort-btn"
+          type="button" 
+          onclick="toggleQuickComfortPanel(event)"
+          class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white transition-all border border-slate-700 flex-shrink-0 cursor-pointer shadow-sm select-none"
+          title="Reading Comfort & Quick Presets (Aa)"
+        >
+          <span class="text-sm font-serif">Aa</span>
+          <span class="hidden sm:inline font-sans text-xs font-semibold">Comfort</span>
+          <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+
+        <!-- Floating Quick Comfort Dropdown Card -->
+        <div 
+          id="quick-comfort-panel" 
+          class="hidden absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl p-3.5 z-50 text-xs animate-fadeIn space-y-3"
+        >
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span class="font-bold text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <span>✨ 1-Tap Comfort Presets</span>
+            </span>
+            <button type="button" onclick="toggleQuickComfortPanel(event)" class="text-slate-400 hover:text-white p-0.5 text-base leading-none cursor-pointer">&times;</button>
+          </div>
+
+          <!-- 1-Tap Presets -->
+          <div class="grid grid-cols-3 gap-1.5">
+            <button 
+              type="button" 
+              onclick="applyReadingPreset('large')" 
+              class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700 text-slate-200 transition-all text-center cursor-pointer group"
+            >
+              <span class="text-base font-bold text-indigo-400 mb-0.5">A+</span>
+              <span class="font-semibold text-[11px]">Large Print</span>
+              <span class="text-[9px] text-slate-400 leading-tight">140% • Scroll</span>
+            </button>
+            <button 
+              type="button" 
+              onclick="applyReadingPreset('night')" 
+              class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-purple-600/20 hover:border-purple-500/40 border border-slate-700 text-slate-200 transition-all text-center cursor-pointer group"
+            >
+              <span class="text-base mb-0.5">🌙</span>
+              <span class="font-semibold text-[11px]">Night Owl</span>
+              <span class="text-[9px] text-slate-400 leading-tight">Dark • Soft</span>
+            </button>
+            <button 
+              type="button" 
+              onclick="applyReadingPreset('paperback')" 
+              class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-amber-600/20 hover:border-amber-500/40 border border-slate-700 text-slate-200 transition-all text-center cursor-pointer group"
+            >
+              <span class="text-base mb-0.5">📜</span>
+              <span class="font-semibold text-[11px]">Paperback</span>
+              <span class="text-[9px] text-slate-400 leading-tight">Sepia • Spread</span>
+            </button>
+          </div>
+
+          <!-- Font Size Stepper -->
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between text-slate-300 text-[11px]">
+              <span class="font-semibold">Text Size</span>
+              <span id="quick-font-size-label" class="font-mono text-indigo-400 font-bold">100%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button 
+                type="button" 
+                onclick="changeFontSize(-10); syncQuickComfortLabels();" 
+                class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 active:scale-95 transition-all text-center cursor-pointer text-xs"
+              >
+                Smaller (A-)
+              </button>
+              <button 
+                type="button" 
+                onclick="changeFontSize(10); syncQuickComfortLabels();" 
+                class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border border-slate-700 active:scale-95 transition-all text-center cursor-pointer text-xs"
+              >
+                Larger (A+)
+              </button>
+            </div>
+          </div>
+
+          <!-- Themes -->
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-300">Theme</span>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button type="button" onclick="setTheme('dark'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">🌙 Dark</button>
+              <button type="button" onclick="setTheme('light'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">☀️ Light</button>
+              <button type="button" onclick="setTheme('sepia'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">📜 Sepia</button>
+            </div>
+          </div>
+
+          <!-- Page Flow -->
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-300">Layout</span>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button type="button" onclick="changeLayout('single'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">📄 1 Page</button>
+              <button type="button" onclick="changeLayout('double'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">📖 2 Spread</button>
+              <button type="button" onclick="changeLayout('scroll'); syncQuickComfortLabels();" class="py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-medium text-center cursor-pointer">📜 Scroll</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Font Size Controls (Available on both Mobile & Desktop) -->
       <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
         <button 
@@ -1150,7 +1253,79 @@
     function updateFontSizeUI() {
       const label = document.getElementById('font-size-label');
       if (label) label.innerText = currentFontSize + "%";
+      const qLabel = document.getElementById('quick-font-size-label');
+      if (qLabel) qLabel.innerText = currentFontSize + "%";
     }
+
+    function toggleQuickComfortPanel(e) {
+      if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+      }
+      const panel = document.getElementById('quick-comfort-panel');
+      if (panel) {
+        panel.classList.toggle('hidden');
+        syncQuickComfortLabels();
+      }
+    }
+
+    function syncQuickComfortLabels() {
+      const qLabel = document.getElementById('quick-font-size-label');
+      if (qLabel && typeof currentFontSize !== 'undefined') {
+        qLabel.innerText = currentFontSize + "%";
+      }
+      const layoutSelect = document.getElementById('layout-select');
+      if (layoutSelect && typeof currentLayout !== 'undefined') {
+        layoutSelect.value = currentLayout;
+      }
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect && typeof currentTheme !== 'undefined') {
+        themeSelect.value = currentTheme;
+      }
+      const widthSelect = document.getElementById('width-select');
+      if (widthSelect && typeof currentWidth !== 'undefined') {
+        widthSelect.value = currentWidth;
+      }
+    }
+
+    function applyReadingPreset(preset) {
+      if (preset === 'large') {
+        currentFontSize = 140;
+        localStorage.setItem(STORAGE_KEY_FONT_SIZE, 140);
+        updateFontSizeUI();
+        if (rendition) rendition.themes.fontSize("140%");
+        setTheme('dark');
+        changeWidth('medium');
+        changeLayout('scroll');
+      } else if (preset === 'night') {
+        currentFontSize = 105;
+        localStorage.setItem(STORAGE_KEY_FONT_SIZE, 105);
+        updateFontSizeUI();
+        if (rendition) rendition.themes.fontSize("105%");
+        setTheme('dark');
+        changeWidth('medium');
+        changeLayout('single');
+      } else if (preset === 'paperback') {
+        currentFontSize = 110;
+        localStorage.setItem(STORAGE_KEY_FONT_SIZE, 110);
+        updateFontSizeUI();
+        if (rendition) rendition.themes.fontSize("110%");
+        setTheme('sepia');
+        changeWidth('medium');
+        changeLayout('double');
+      }
+      syncQuickComfortLabels();
+      const panel = document.getElementById('quick-comfort-panel');
+      if (panel) panel.classList.add('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+      const wrapper = document.getElementById('quick-comfort-wrapper');
+      const panel = document.getElementById('quick-comfort-panel');
+      if (wrapper && panel && !wrapper.contains(e.target)) {
+        panel.classList.add('hidden');
+      }
+    });
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
