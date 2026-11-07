@@ -38,15 +38,18 @@
       width: 100%;
       height: 100%;
       position: relative;
+      overflow-anchor: none !important;
     }
     .flow-scroll #viewer-container {
       overflow: hidden !important;
+      overflow-anchor: none !important;
     }
     .flow-scroll .epub-container {
       overflow-y: scroll !important;
       overflow-x: hidden !important;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
+      overflow-anchor: none !important;
       width: 100% !important;
       height: 100% !important;
     }
@@ -829,13 +832,18 @@
         snap: false
       };
       if (currentLayout === "scroll") {
-        renditionOptions.offset = 1200;       // Smooth lookahead buffer without abrupt loads
-        renditionOptions.offsetDelta = 400;
+        renditionOptions.offset = 400;       // Buffer next/prev sections smoothly
+        renditionOptions.offsetDelta = 200;
         renditionOptions.afterScrolledTimeout = 150; // Debounce CFI computation while scrolling
       }
       rendition = book.renderTo("viewer", renditionOptions);
 
-      // Forward wheel events on viewer container
+      // Disable browser scroll anchoring to prevent snap-back loops
+      if (rendition.manager && rendition.manager.container) {
+        rendition.manager.container.style.overflowAnchor = "none";
+      }
+
+      // Forward wheel events on viewer container when hovering over background/margins
       viewer.onwheel = function(e) {
         if (currentLayout === 'scroll') {
           const scroller = document.querySelector('.epub-container');
@@ -851,18 +859,9 @@
           const doc = contents.document;
           if (!doc) return;
 
-          // Forward mouse wheel & trackpad scroll from inside the iframe to the parent epub-container
-          doc.addEventListener('wheel', function(e) {
-            if (currentLayout === 'scroll') {
-              const scroller = document.querySelector('.epub-container') || document.getElementById('viewer');
-              if (scroller) {
-                scroller.scrollTop += e.deltaY;
-                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-                  scroller.scrollLeft += e.deltaX;
-                }
-              }
-            }
-          }, { passive: true });
+          // Prevent scroll anchoring inside iframe from fighting with scroll position
+          if (doc.documentElement) doc.documentElement.style.overflowAnchor = "none";
+          if (doc.body) doc.body.style.overflowAnchor = "none";
 
           // 1. Normalize SVG covers (specifically Calibre's preserveAspectRatio="none")
           const svgs = doc.querySelectorAll('svg');
