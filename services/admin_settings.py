@@ -26,7 +26,7 @@ logger = logging.getLogger("bookserver.admin_settings")
 PRIMARY_ENV_PATH = Path("/etc/athenea.env")
 LEGACY_ENV_PATH = Path("/etc/bookserver.env")
 FALLBACK_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/var/backups/athenea" if Path("/var/backups/athenea").exists() else str(Path(__file__).resolve().parent.parent / "backups")))
+BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/data/backups" if Path("/data/backups").exists() else "/var/backups/athenea" if Path("/var/backups/athenea").exists() else str(Path(__file__).resolve().parent.parent / "backups")))
 BACKUP_SCRIPT = (
     Path("/opt/athenea/backup_db.sh") if Path("/opt/athenea/backup_db.sh").exists()
     else Path("/opt/bookserver/backup_db.sh") if Path("/opt/bookserver/backup_db.sh").exists()
@@ -664,21 +664,22 @@ def flush_query_cache() -> dict:
 
 
 def trigger_manual_backup() -> dict:
-    """Trigger the automated PostgreSQL backup script via sudo."""
+    """Trigger the automated PostgreSQL backup script directly as the running service user."""
     if not BACKUP_SCRIPT.is_file():
         return {"success": False, "message": f"Backup script {BACKUP_SCRIPT} not found."}
 
     try:
         res = subprocess.run(
-            ["sudo", "-n", str(BACKUP_SCRIPT)],
+            ["bash", str(BACKUP_SCRIPT)],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=180
         )
         if res.returncode == 0:
             return {"success": True, "message": "Database backup completed successfully."}
         else:
-            return {"success": False, "message": f"Backup script error: {res.stderr.strip()}"}
+            err = res.stderr.strip() or res.stdout.strip()
+            return {"success": False, "message": f"Backup script error: {err}"}
     except Exception as e:
         logger.error(f"Error running manual backup: {e}")
         return {"success": False, "message": str(e)}

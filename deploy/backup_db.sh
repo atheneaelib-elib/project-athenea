@@ -19,14 +19,14 @@ elif [ -f "$(dirname "$0")/../.env" ]; then
     set +a
 fi
 
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/athenea}"
+BACKUP_DIR="${BACKUP_DIR:-/data/backups}"
 mkdir -p "$BACKUP_DIR"
 
 DATE_STR=$(date +"%Y%m%d_%H%M%S")
 DOW=$(date +"%u") # 1-7 (7 is Sunday)
 DB_NAME="${DB_NAME:-athenea}"
 TARGET_FILE="$BACKUP_DIR/${DB_NAME}_${DATE_STR}.sql.gz"
-LOG_FILE="${LOG_FILE:-/var/log/athenea_backup.log}"
+LOG_FILE="${LOG_FILE:-$BACKUP_DIR/backup.log}"
 
 echo "[$(date -Iseconds)] Starting PostgreSQL database backup for $DB_NAME..." >> "$LOG_FILE"
 
