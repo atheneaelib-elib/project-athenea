@@ -26,39 +26,51 @@
       </button>
     </div>
 
-    <!-- 6-Metric Stat Grid -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+    <!-- 8-Metric Stat Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.finished_books') }}</div>
         <div class="text-2xl font-bold text-emerald-400 font-mono mt-0.5">{{ stats.shelf_counts.finished }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.finished_sub') }}</div>
       </div>
 
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.currently_reading') }}</div>
         <div class="text-2xl font-bold text-amber-400 font-mono mt-0.5">{{ stats.shelf_counts.reading }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.reading_sub') }}</div>
       </div>
 
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.want_to_read') }}</div>
         <div class="text-2xl font-bold text-sky-400 font-mono mt-0.5">{{ stats.shelf_counts.plan_to_read }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.want_sub') }}</div>
       </div>
 
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.favorites') }}</div>
         <div class="text-2xl font-bold text-rose-400 font-mono mt-0.5">{{ stats.favorites_count }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.favorites_sub') }}</div>
       </div>
 
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Favorite Authors</div>
+        <div class="text-2xl font-bold text-pink-400 font-mono mt-0.5">{{ stats.favorite_authors_count|default(0) }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Followed authors</div>
+      </div>
+
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div class="text-[11px] text-slate-400 font-medium">Favorite Series</div>
+        <div class="text-2xl font-bold text-fuchsia-400 font-mono mt-0.5">{{ stats.favorite_series_count|default(0) }}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Followed sagas</div>
+      </div>
+
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.notes_highlights') }}</div>
         <div class="text-2xl font-bold text-indigo-400 font-mono mt-0.5">{{ stats.notes_count }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.notes_sub') }}</div>
       </div>
 
-      <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+      <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div class="text-[11px] text-slate-400 font-medium">{{ t('activity.bookmarks') }}</div>
         <div class="text-2xl font-bold text-purple-400 font-mono mt-0.5">{{ stats.bookmarks_count }}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">{{ t('activity.bookmarks_sub') }}</div>
@@ -118,6 +130,53 @@
         </span>
         {% endfor %}
       </div>
+    </div>
+    {% endif %}
+
+    <!-- Favorite Authors & Series Section -->
+    {% if stats.favorite_authors or stats.favorite_series %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800/80">
+      {% if stats.favorite_authors %}
+      <div class="space-y-2">
+        <span class="font-bold text-rose-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 fill-current text-rose-500" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+          <span>Favorite Authors</span>
+        </span>
+        <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+          {% for a in stats.favorite_authors %}
+          <button 
+            type="button" 
+            onclick="closeProfileModal(); filterByAuthor({{ a.id }}, '{{ a.name|escape }}');"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-rose-500/40 transition-colors cursor-pointer"
+          >
+            <span>{{ a.name }}</span>
+            <span class="text-[10px] font-mono text-slate-500 font-bold">({{ a.count }})</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if stats.favorite_series %}
+      <div class="space-y-2">
+        <span class="font-bold text-rose-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 fill-current text-rose-500" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+          <span>Favorite Series</span>
+        </span>
+        <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+          {% for s in stats.favorite_series %}
+          <button 
+            type="button" 
+            onclick="closeProfileModal(); filterBySeries({{ s.id }}, '{{ s.name|escape }}');"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-rose-500/40 transition-colors cursor-pointer"
+          >
+            <span>{{ s.name }}</span>
+            <span class="text-[10px] font-mono text-slate-500 font-bold">({{ s.count }})</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </div>
     {% endif %}
 

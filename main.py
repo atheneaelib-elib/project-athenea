@@ -1339,6 +1339,8 @@ def index_page(
 
     sidebar_data = book_service.get_sidebar_data(db)
     fav_count = book_service.get_user_favorites_count(db, user_id)
+    fav_authors = book_service.get_user_favorite_authors(db, user_id)
+    fav_series = book_service.get_user_favorite_series(db, user_id)
     shelf_counts = book_service.get_user_shelf_counts(db, user_id)
 
     books_data = book_service.get_books(
@@ -1411,6 +1413,10 @@ def index_page(
             "current_favorites_only": fav_only,
             "current_shelf": shelf or "",
             "favorites_count": fav_count,
+            "favorite_authors": fav_authors,
+            "favorite_series": fav_series,
+            "favorite_author_ids": {a["id"] for a in fav_authors},
+            "favorite_series_ids": {s["id"] for s in fav_series},
             "shelf_counts": shelf_counts,
             "search_desc": search_desc_bool,
             "current_view_mode": books_data["view_mode"],
@@ -1567,6 +1573,79 @@ def toggle_book_favorite(
         }
     })
     return response
+
+
+@app.post("/author/{author_id}/favorite", response_class=HTMLResponse)
+def toggle_author_favorite_route(
+    request: Request,
+    author_id: int,
+    context: str = "inline",
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    is_fav = book_service.toggle_favorite_author(db, current_user["id"], author_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/favorite_author_btn.html",
+        context={
+            "author_id": author_id,
+            "is_favorite": is_fav,
+            "context": context,
+        }
+    )
+
+
+@app.post("/series/{series_id}/favorite", response_class=HTMLResponse)
+def toggle_series_favorite_route(
+    request: Request,
+    series_id: int,
+    context: str = "inline",
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    is_fav = book_service.toggle_favorite_series(db, current_user["id"], series_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/favorite_series_btn.html",
+        context={
+            "series_id": series_id,
+            "is_favorite": is_fav,
+            "context": context,
+        }
+    )
+
+
+@app.post("/api/favorite/author/{author_id}")
+def api_toggle_author_favorite(
+    request: Request,
+    author_id: int,
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    is_fav = book_service.toggle_favorite_author(db, current_user["id"], author_id)
+    return {"success": True, "favorited": is_fav, "author_id": author_id}
+
+
+@app.post("/api/favorite/series/{series_id}")
+def api_toggle_series_favorite(
+    request: Request,
+    series_id: int,
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    is_fav = book_service.toggle_favorite_series(db, current_user["id"], series_id)
+    return {"success": True, "favorited": is_fav, "series_id": series_id}
+
 
 
 # ===================================================================

@@ -249,6 +249,122 @@ def get_user_favorites_count(db, user_id: int | None) -> int:
     ).scalar() or 0
 
 
+def toggle_favorite_author(db, user_id: int, author_id: int) -> bool:
+    """Toggle an author favorite for a given user. Returns True if favorited, False if unfavorited."""
+    existing = db.execute(
+        text("SELECT 1 FROM favorite_authors WHERE user_id = :uid AND author_id = :aid"),
+        {"uid": user_id, "aid": author_id}
+    ).fetchone()
+    if existing:
+        db.execute(
+            text("DELETE FROM favorite_authors WHERE user_id = :uid AND author_id = :aid"),
+            {"uid": user_id, "aid": author_id}
+        )
+        db.commit()
+        return False
+    else:
+        db.execute(
+            text("INSERT INTO favorite_authors (user_id, author_id) VALUES (:uid, :aid) ON CONFLICT DO NOTHING"),
+            {"uid": user_id, "aid": author_id}
+        )
+        db.commit()
+        return True
+
+
+def is_favorite_author(db, user_id: int, author_id: int) -> bool:
+    row = db.execute(
+        text("SELECT 1 FROM favorite_authors WHERE user_id = :uid AND author_id = :aid"),
+        {"uid": user_id, "aid": author_id}
+    ).fetchone()
+    return bool(row)
+
+
+def get_user_favorite_author_ids(db, user_id: int | None) -> set[int]:
+    if not user_id:
+        return set()
+    rows = db.execute(
+        text("SELECT author_id FROM favorite_authors WHERE user_id = :uid"),
+        {"uid": user_id}
+    ).fetchall()
+    return {r.author_id for r in rows}
+
+
+def get_user_favorite_authors(db, user_id: int | None) -> list[dict]:
+    if not user_id:
+        return []
+    rows = db.execute(
+        text("""
+            SELECT a.id, a.name, count(ba.book_id) as count
+            FROM favorite_authors fa
+            JOIN authors a ON fa.author_id = a.id
+            LEFT JOIN book_authors ba ON a.id = ba.author_id
+            WHERE fa.user_id = :uid
+            GROUP BY a.id, a.name
+            ORDER BY a.name ASC
+        """),
+        {"uid": user_id}
+    ).fetchall()
+    return [{"id": r.id, "name": r.name, "count": r.count, "is_favorite": True} for r in rows]
+
+
+def toggle_favorite_series(db, user_id: int, series_id: int) -> bool:
+    """Toggle a series favorite for a given user. Returns True if favorited, False if unfavorited."""
+    existing = db.execute(
+        text("SELECT 1 FROM favorite_series WHERE user_id = :uid AND series_id = :sid"),
+        {"uid": user_id, "sid": series_id}
+    ).fetchone()
+    if existing:
+        db.execute(
+            text("DELETE FROM favorite_series WHERE user_id = :uid AND series_id = :sid"),
+            {"uid": user_id, "sid": series_id}
+        )
+        db.commit()
+        return False
+    else:
+        db.execute(
+            text("INSERT INTO favorite_series (user_id, series_id) VALUES (:uid, :sid) ON CONFLICT DO NOTHING"),
+            {"uid": user_id, "sid": series_id}
+        )
+        db.commit()
+        return True
+
+
+def is_favorite_series(db, user_id: int, series_id: int) -> bool:
+    row = db.execute(
+        text("SELECT 1 FROM favorite_series WHERE user_id = :uid AND series_id = :sid"),
+        {"uid": user_id, "sid": series_id}
+    ).fetchone()
+    return bool(row)
+
+
+def get_user_favorite_series_ids(db, user_id: int | None) -> set[int]:
+    if not user_id:
+        return set()
+    rows = db.execute(
+        text("SELECT series_id FROM favorite_series WHERE user_id = :uid"),
+        {"uid": user_id}
+    ).fetchall()
+    return {r.series_id for r in rows}
+
+
+def get_user_favorite_series(db, user_id: int | None) -> list[dict]:
+    if not user_id:
+        return []
+    rows = db.execute(
+        text("""
+            SELECT s.id, s.name, count(bs.book_id) as count
+            FROM favorite_series fs
+            JOIN series s ON fs.series_id = s.id
+            LEFT JOIN book_series bs ON s.id = bs.series_id
+            WHERE fs.user_id = :uid
+            GROUP BY s.id, s.name
+            ORDER BY s.name ASC
+        """),
+        {"uid": user_id}
+    ).fetchall()
+    return [{"id": r.id, "name": r.name, "count": r.count, "is_favorite": True} for r in rows]
+
+
 def get_user_shelf_counts(db, user_id: int | None) -> dict:
     counts = {"reading": 0, "plan_to_read": 0, "finished": 0}
     if not user_id:
@@ -419,7 +535,12 @@ def get_sidebar_data(db, force_refresh: bool = False):
 
 
 
-def group_books_by_author_and_series(books: list[dict], query: str | None = None) -> list[dict]:
+def group_books_by_author_and_series(
+    books: list[dict],
+    query: str | None = None,
+    fav_author_ids: set[int] | None = None,
+    fav_series_ids: set[int] | None = None,
+) -> list[dict]:
     """
     Groups books into a structured author and series hierarchy for clean visual presentation.
     """
@@ -447,6 +568,7 @@ def group_books_by_author_and_series(books: list[dict], query: str | None = None
                 "author_sort": author_sort,
                 "initials": initials,
                 "name_match": name_match,
+                "is_favorite": bool(fav_author_ids and b.get("author_id") in fav_author_ids),
                 "total_books": 0,
                 "series_dict": {},
                 "standalone_books": [],
@@ -455,6 +577,8 @@ def group_books_by_author_and_series(books: list[dict], query: str | None = None
             # Prefer a valid author_id and direct display name if available
             if not author_map[a_key]["author_id"] and b.get("author_id"):
                 author_map[a_key]["author_id"] = b.get("author_id")
+                if fav_author_ids and b.get("author_id") in fav_author_ids:
+                    author_map[a_key]["is_favorite"] = True
             if "," in author_map[a_key]["author_name"] and "," not in author_name:
                 author_map[a_key]["author_name"] = author_name
 
@@ -481,6 +605,7 @@ def group_books_by_author_and_series(books: list[dict], query: str | None = None
         series_groups = []
         for s in entry["series_dict"].values():
             s["books"].sort(key=lambda x: (x.get("series_index_num", 999999), x.get("title", "")))
+            s["is_favorite"] = bool(fav_series_ids and s.get("series_id") in fav_series_ids)
             series_groups.append(s)
         series_groups.sort(key=lambda s: s["series_name"].lower())
         entry["series_groups"] = series_groups
@@ -766,7 +891,9 @@ def get_books(
             "reading_status": shelf_map.get(r.id),
         })
 
-    grouped_authors = group_books_by_author_and_series(books, q) if effective_view_mode == "grouped" else []
+    fav_author_ids = get_user_favorite_author_ids(db, user_id) if user_id else set()
+    fav_series_ids = get_user_favorite_series_ids(db, user_id) if user_id else set()
+    grouped_authors = group_books_by_author_and_series(books, q, fav_author_ids, fav_series_ids) if effective_view_mode == "grouped" else []
 
     return {
         "books": books,
@@ -814,7 +941,8 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         JOIN book_authors ba ON a.id = ba.author_id
         WHERE ba.book_id = :id
     """), {"id": book_id}).fetchall()
-    authors = [{"id": a.id, "name": a.name} for a in authors_rows]
+    fav_author_ids = get_user_favorite_author_ids(db, user_id) if user_id else set()
+    authors = [{"id": a.id, "name": a.name, "is_favorite": (a.id in fav_author_ids)} for a in authors_rows]
 
     # Tags
     tags_rows = db.execute(text("""
@@ -881,10 +1009,13 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         pubdate_str = row.pubdate.strftime("%Y-%m-%d")
 
     is_fav = False
+    is_fav_series = False
     reading_prog = None
     reading_stat = None
     if user_id:
         is_fav = is_favorite(db, user_id, book_id)
+        if row.series_id:
+            is_fav_series = is_favorite_series(db, user_id, row.series_id)
         reading_prog = get_reading_progress(db, user_id, book_id)
         reading_stat = get_reading_status(db, user_id, book_id)
 
@@ -972,6 +1103,8 @@ def get_book_details(db, book_id: int, user_id: int | None = None):
         "formats": formats,
         "path": row.path,
         "is_favorite": is_fav,
+        "is_favorite_series": is_fav_series,
+        "is_favorite_author": bool(authors and authors[0].get("is_favorite")),
         "reading_progress": reading_prog,
         "reading_status": reading_stat,
     }
@@ -1163,9 +1296,16 @@ def get_user_reading_stats(db, user_id: int) -> dict:
     """), {"uid": user_id}).fetchall()
     genres_list = [{"name": r.name, "count": r.count} for r in top_genres]
 
+    fav_authors = get_user_favorite_authors(db, user_id)
+    fav_series = get_user_favorite_series(db, user_id)
+
     return {
         "shelf_counts": shelf_counts,
         "favorites_count": fav_count,
+        "favorite_authors": fav_authors,
+        "favorite_series": fav_series,
+        "favorite_authors_count": len(fav_authors),
+        "favorite_series_count": len(fav_series),
         "notes_count": notes_count,
         "bookmarks_count": bookmarks_count,
         "in_progress_books": in_progress_books,

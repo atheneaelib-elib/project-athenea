@@ -347,6 +347,20 @@ def init_auth_tables(db: Session):
             PRIMARY KEY (user_id, book_id)
         );
 
+        CREATE TABLE IF NOT EXISTS favorite_authors (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            author_id BIGINT NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, author_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS favorite_series (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            series_id BIGINT NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, series_id)
+        );
+
         CREATE TABLE IF NOT EXISTS login_attempts (
             id SERIAL PRIMARY KEY,
             ip_address VARCHAR(64) NOT NULL,
@@ -358,6 +372,10 @@ def init_auth_tables(db: Session):
         CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
         CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
         CREATE INDEX IF NOT EXISTS idx_favorites_book ON favorites(book_id);
+        CREATE INDEX IF NOT EXISTS idx_favorite_authors_user ON favorite_authors(user_id);
+        CREATE INDEX IF NOT EXISTS idx_favorite_authors_author ON favorite_authors(author_id);
+        CREATE INDEX IF NOT EXISTS idx_favorite_series_user ON favorite_series(user_id);
+        CREATE INDEX IF NOT EXISTS idx_favorite_series_series ON favorite_series(series_id);
         CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, attempted_at);
         CREATE INDEX IF NOT EXISTS idx_login_attempts_user ON login_attempts(LOWER(username), attempted_at);
     """))
