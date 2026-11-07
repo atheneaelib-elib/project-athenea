@@ -2232,20 +2232,23 @@ async function scanForDuplicates() {
         const card = document.createElement('div');
         card.className = "p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2";
         let booksHtml = group.books.map(b => `
-          <div id="dup-book-row-${b.id}" class="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="font-mono text-slate-500 font-bold">#${b.id}</span>
-              <span class="text-white font-medium truncate max-w-xs">${b.title}</span>
-              <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-indigo-300 font-mono">${b.formats}</span>
-              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${b.language && b.language !== 'Unknown' ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-400'}" title="Language">${b.language_flag ? b.language_flag + ' ' : ''}${b.language || 'Unknown'}</span>
+          <div id="dup-book-row-${b.id}" class="flex items-center justify-between gap-3 p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <span class="font-mono text-slate-500 font-bold w-16 sm:w-20 flex-shrink-0 text-left">#${b.id}</span>
+              <span class="text-white font-medium truncate flex-1 min-w-0" title="${b.title}">${b.title}</span>
+              <span class="inline-flex items-center justify-center w-12 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-indigo-300 font-mono font-semibold flex-shrink-0">${b.formats}</span>
+              <span class="inline-flex items-center justify-center gap-1.5 min-w-[4.6rem] px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider flex-shrink-0 ${b.language && b.language !== 'Unknown' ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-400'}" title="Language: ${b.language || 'Unknown'}">
+                <span class="inline-flex items-center justify-center w-4 h-4 flex-shrink-0 leading-none">${b.language_flag || '🌐'}</span>
+                <span>${b.language && b.language !== 'Unknown' ? b.language.split(',')[0].trim() : 'UNK'}</span>
+              </span>
             </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <span class="text-[10px] text-slate-500 hidden sm:inline">${b.pubdate}</span>
-              <a href="/cover/${b.id}" target="_blank" class="text-xs text-indigo-400 hover:underline">Cover</a>
+            <div class="flex items-center gap-3 flex-shrink-0">
+              <span class="text-[10px] text-slate-500 hidden sm:inline w-20 text-right font-mono">${b.pubdate}</span>
+              <a href="/cover/${b.id}" target="_blank" class="text-xs text-indigo-400 hover:underline w-10 text-center">Cover</a>
               <button
                 type="button"
                 onclick="deleteDuplicateBook(${b.id}, ${JSON.stringify(b.title).replace(/"/g, '&quot;')})"
-                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-950/70 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-colors cursor-pointer"
+                class="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-rose-950/70 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-colors cursor-pointer"
                 title="Delete Book #${b.id} and its files"
               >
                 Delete
@@ -2263,6 +2266,14 @@ async function scanForDuplicates() {
         `;
         list.appendChild(card);
       });
+
+      if (window.twemoji) {
+        twemoji.parse(list, {
+          folder: 'svg',
+          ext: '.svg',
+          base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/'
+        });
+      }
     }
   } catch (err) {
     showAlert("Error scanning duplicates: " + err.message, true);

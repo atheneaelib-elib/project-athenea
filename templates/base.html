@@ -25,6 +25,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -343,6 +344,13 @@
     }
     .htmx-request.htmx-indicator {
       opacity: 1;
+    }
+    img.emoji {
+      height: 1.15em;
+      width: 1.15em;
+      margin: 0 0.15em;
+      vertical-align: -0.15em;
+      display: inline-block;
     }
   </style>
 </head>
