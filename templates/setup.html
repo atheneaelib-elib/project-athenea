@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ t('setup.wizard_title') }} - Athenea</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
   <style>
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -12,6 +13,14 @@
     }
     .animate-fadeIn {
       animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    img.emoji {
+      height: 1.15em;
+      width: 1.15em;
+      margin: 0 0.15em;
+      vertical-align: -0.15em;
+      display: inline-block;
+      object-fit: contain;
     }
   </style>
 </head>
@@ -42,6 +51,7 @@
           class="setup-lang-btn px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer {% if get_current_lang() == lang.code %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40{% else %}bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80{% endif %}"
           title="{{ lang.name }}"
         >
+          <span class="inline-flex items-center justify-center w-4 h-4 leading-none text-sm">{{ lang.flag }}</span>
           <span class="font-mono uppercase font-bold text-[10px] text-indigo-300 bg-slate-900/60 px-1 rounded">{{ lang.code }}</span>
           <span>{{ lang.native }}</span>
         </button>
@@ -337,6 +347,12 @@
         btn.innerHTML = `<span>${getI18nString("setup.run_setup_btn", "Complete Setup & Launch Athenea")}</span>`;
       }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.twemoji) {
+        twemoji.parse(document.body, { folder: 'svg', ext: '.svg', base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/' });
+      }
+    });
   </script>
 </body>
 </html>

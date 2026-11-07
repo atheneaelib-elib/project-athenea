@@ -69,10 +69,14 @@
           type="button" 
           onclick="toggleLangDropdown(event)" 
           id="lang-menu-btn"
-          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium transition-all cursor-pointer shadow-sm"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-medium transition-all cursor-pointer shadow-sm select-none"
           title="{{ t('navbar.select_language') }}"
         >
-          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          {% for l in SUPPORTED_LANGUAGES %}
+            {% if l.code == get_current_lang() %}
+            <span class="inline-flex items-center justify-center w-4 h-4 leading-none text-sm">{{ l.flag }}</span>
+            {% endif %}
+          {% endfor %}
           <span class="font-mono uppercase font-bold text-[11px]">{{ get_current_lang() }}</span>
           <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </button>
@@ -80,9 +84,9 @@
         <!-- Dropdown Menu -->
         <div 
           id="lang-dropdown-menu" 
-          class="hidden absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
+          class="hidden absolute right-0 mt-2 w-48 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 text-xs animate-fadeIn backdrop-blur-xl"
         >
-          <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
             {{ t('navbar.select_language') }}
           </div>
           <div class="py-1 max-h-60 overflow-y-auto">
@@ -91,12 +95,13 @@
               href="/api/set-language?lang={{ lang.code }}&next={{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
               class="flex items-center justify-between px-3 py-1.5 text-slate-300 hover:text-white hover:bg-indigo-600/20 transition-colors {% if get_current_lang() == lang.code %}bg-indigo-600/30 text-indigo-300 font-semibold{% endif %}"
             >
-              <span class="flex items-center gap-2">
-                <span class="font-mono uppercase font-semibold text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">{{ lang.code }}</span>
-                <span>{{ lang.native }}</span>
+              <span class="flex items-center gap-2 min-w-0">
+                <span class="inline-flex items-center justify-center w-4 h-4 leading-none text-sm flex-shrink-0">{{ lang.flag }}</span>
+                <span class="truncate">{{ lang.native }}</span>
+                <span class="font-mono uppercase font-semibold text-[9px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded border border-slate-700 flex-shrink-0">{{ lang.code }}</span>
               </span>
               {% if get_current_lang() == lang.code %}
-              <svg class="w-3.5 h-3.5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+              <svg class="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
               {% endif %}
             </a>
             {% endfor %}

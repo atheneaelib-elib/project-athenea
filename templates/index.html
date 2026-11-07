@@ -184,6 +184,7 @@
             class="px-2 py-1 rounded-lg text-[11px] font-medium transition-all bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/80 hover:border-indigo-500 cursor-pointer flex items-center gap-1.5 shadow-sm"
             title="{{ lang.name }} ({{ lang.count }} books)"
           >
+            {% if lang.flag %}<span class="inline-flex items-center justify-center w-3.5 h-3.5 leading-none">{{ lang.flag }}</span>{% endif %}
             <span class="font-mono text-[9px] font-bold uppercase text-indigo-400 bg-indigo-950/60 px-1 rounded">{{ lang.code }}</span>
             <span>{{ lang.name }}</span>
           </button>
@@ -212,9 +213,10 @@
           data-lang-search="{{ lang.name|lower }} {{ lang.code|lower }}"
           class="lang-item flex items-center justify-between py-1 px-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors group cursor-pointer"
         >
-          <span class="truncate flex items-center gap-1.5">
-            <span class="px-1 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono">{{ lang.code }}</span>
-            <span>{{ lang.name }}</span>
+          <span class="truncate flex items-center gap-1.5 min-w-0">
+            {% if lang.flag %}<span class="inline-flex items-center justify-center w-3.5 h-3.5 leading-none flex-shrink-0">{{ lang.flag }}</span>{% endif %}
+            <span class="px-1 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-mono flex-shrink-0">{{ lang.code }}</span>
+            <span class="truncate">{{ lang.name }}</span>
           </span>
           <span class="text-[10px] text-slate-400 font-mono group-hover:text-slate-300 bg-slate-800/60 px-1.5 py-0.5 rounded-full">{{ lang.count }}</span>
         </a>
