@@ -247,7 +247,7 @@ Athenea includes an administrative suite accessible at `/admin/settings` (and `/
   * `can_delete_books`: Delete books from the catalog with optional physical disk file removal.
 * **Database & Pool Reconfiguration**: Update PostgreSQL connection parameters with live hot-reloading.
 * **SMTP Diagnostics**: Test email delivery with live diagnostic ping and auto-detection of STARTTLS vs SSL.
-* **Fail2ban Integration**: View active failed logins, banned IPs, and unban addresses with 1-click.
+* **Fail2ban Integration (Optional)**: If Fail2ban is installed, view active failed logins, banned IPs, and unban addresses with 1-click directly from the dashboard.
 
 ---
 
@@ -299,9 +299,37 @@ All settings can be configured via environment variables, `.env`, or `/etc/athen
 
 * **Path Traversal Guards**: Every file access is strictly validated against `assert_safe_path` to prevent directory traversal exploits (`../../`).
 * **Session Cookie Hardening**: HTTP-only, SameSite=Lax signed session cookies with optional secure flag.
-* **Brute-Force Protection**: IP rate-limiting on authentication endpoints and built-in fail2ban jail integration.
+* **Built-in Brute-Force Rate Limiting**: Built-in sliding-window protection automatically blocks IPs exceeding 5 failed login attempts in 5 minutes (no external software required).
+* **Least-Privilege Execution**: Athenea runs as an unprivileged system user (`athenea`) and requires zero `sudo` elevation for daily operations and backups.
 * **Admin Lockdown**: All `/admin/*` and `/setup` endpoints require authenticated administrator session tokens.
 * **Responsible Disclosure**: Review [SECURITY.md](SECURITY.md) for vulnerability reporting guidelines.
+
+### 🛡️ Optional: Setting Up OS-Level Fail2ban
+
+Fail2ban is **not installed by default** since Athenea already includes built-in rate limiting. If you wish to enable OS-level firewall blocking (`iptables`/`nftables`) with live dashboard stats, run:
+
+```bash
+# 1. Install Fail2ban
+sudo apt update && sudo apt install -y fail2ban python3-systemd
+
+# 2. Deploy Athenea filter and jail configuration
+sudo cp /opt/athenea/deploy/fail2ban/filter.d/athenea.conf /etc/fail2ban/filter.d/
+sudo cp /opt/athenea/deploy/fail2ban/jail.d/athenea.local /etc/fail2ban/jail.d/
+
+# 3. Configure systemd backend (required for Debian 12 / Ubuntu)
+sudo tee /etc/fail2ban/jail.local << 'EOF'
+[DEFAULT]
+backend = systemd
+EOF
+
+# 4. Allow the unprivileged athenea user to query status and unban IPs via sudoers
+echo "athenea ALL=(ALL) NOPASSWD: /usr/bin/fail2ban-client status athenea, /usr/bin/fail2ban-client set athenea unbanip *" | sudo tee /etc/sudoers.d/athenea-fail2ban
+sudo chmod 0440 /etc/sudoers.d/athenea-fail2ban
+
+# 5. Enable and start Fail2ban
+sudo systemctl restart fail2ban
+sudo systemctl enable fail2ban
+```
 
 ---
 
