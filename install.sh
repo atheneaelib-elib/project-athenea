@@ -304,6 +304,14 @@ if command -v fail2ban-client &>/dev/null; then
     F2B_BIN=$(command -v fail2ban-client)
     echo "$APP_USER ALL=(ALL) NOPASSWD: $F2B_BIN status athenea, $F2B_BIN status bookserver, $F2B_BIN set athenea unbanip *, $F2B_BIN set bookserver unbanip *" > /etc/sudoers.d/athenea-fail2ban
     chmod 0440 /etc/sudoers.d/athenea-fail2ban
+
+    # Fix Debian 12 / Ubuntu journald backend so sshd jail does not crash searching for /var/log/auth.log
+    if [ ! -f /etc/fail2ban/jail.local ]; then
+        echo -e "[DEFAULT]\nbackend = systemd" > /etc/fail2ban/jail.local
+    fi
+    cp -f "$INSTALL_DIR/deploy/fail2ban/filter.d/athenea.conf" /etc/fail2ban/filter.d/ 2>/dev/null || true
+    cp -f "$INSTALL_DIR/deploy/fail2ban/jail.d/athenea.local" /etc/fail2ban/jail.d/ 2>/dev/null || true
+    systemctl restart fail2ban 2>/dev/null || true
 fi
 
 systemctl daemon-reload
