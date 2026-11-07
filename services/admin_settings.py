@@ -1598,6 +1598,111 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
     clean_title = (title or "").strip()
     clean_author = (author or "").strip()
 
+    ROMAN_TO_INT = {
+        'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'v': 5, 'vi': 6, 'vii': 7, 'viii': 8, 'ix': 9, 'x': 10,
+        'xi': 11, 'xii': 12, 'xiii': 13, 'xiv': 14, 'xv': 15, 'xvi': 16, 'xvii': 17, 'xviii': 18, 'xix': 19, 'xx': 20
+    }
+
+    WORD_TO_INT = {
+        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+        'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5, 'sixth': 6, 'seventh': 7, 'eighth': 8, 'ninth': 9, 'tenth': 10,
+        'первая': 1, 'вторая': 2, 'третья': 3, 'четвертая': 4, 'четвёртая': 4, 'пятая': 5, 'шестая': 6, 'седьмая': 7, 'восьмая': 8, 'девятая': 9, 'десятая': 10,
+        'первый': 1, 'второй': 2, 'третий': 3, 'четвертый': 4, 'четвёртый': 4, 'пятый': 5, 'шестой': 6, 'седьмой': 7, 'восьмой': 8, 'девятый': 9, 'десятый': 10,
+        'первую': 1, 'вторую': 2, 'третью': 3,
+    }
+
+    def _parse_series_and_index(*texts) -> tuple[str, float | None]:
+        found_series = ""
+        found_index = None
+
+        for raw in texts:
+            if not raw:
+                continue
+            items = raw if isinstance(raw, list) else [raw]
+
+            for item_val in items:
+                if not item_val or not isinstance(item_val, str):
+                    continue
+                text = item_val.strip()
+                if not text:
+                    continue
+
+                # 1. Pattern like "Series Name (Book 2)" or "Series Name, #3" or "Series Name - Vol. 1"
+                m_series = re.search(
+                    r'([A-Za-zА-Яа-я0-9\s\'\-]{2,50}?)\s*[\(\[\,\-]\s*(?:book|vol(?:ume|\.)?|part|bk\.?|книга|том|часть|выпуск|[#№])\s*([0-9ivxIVX]+(?:\.\d+)?)\s*[\)\]]?',
+                    text,
+                    re.IGNORECASE
+                )
+                if m_series:
+                    s_candidate = m_series.group(1).strip()
+                    idx_candidate = m_series.group(2).strip().lower()
+                    if not found_series and len(s_candidate) > 2 and not s_candidate.lower().startswith(('the ', 'a ')):
+                        found_series = s_candidate
+                    if found_index is None:
+                        if idx_candidate in ROMAN_TO_INT:
+                            found_index = float(ROMAN_TO_INT[idx_candidate])
+                        else:
+                            try:
+                                found_index = float(idx_candidate)
+                            except ValueError:
+                                pass
+
+                # 2. General volume index search: "Book 1", "Vol. 2", "Volume 3", "Часть 4", "Книга 1"
+                if found_index is None:
+                    m = re.search(r'\b(?:book|vol(?:ume|\.)?|part|bk\.?|книга|том|часть|выпуск)\s*[:#№]?\s*(\d+(?:\.\d+)?)\b', text, re.IGNORECASE)
+                    if m:
+                        try:
+                            found_index = float(m.group(1))
+                        except ValueError:
+                            pass
+
+                # 3. Pattern with # or №: "#1", "№ 2"
+                if found_index is None:
+                    m = re.search(r'(?:^|[\s,\(\[])[#№]\s*(\d+(?:\.\d+)?)(?:[\s,\)\]]|$)', text)
+                    if m:
+                        try:
+                            found_index = float(m.group(1))
+                        except ValueError:
+                            pass
+
+                # 4. Pattern with Roman numerals: "Book II", "Part III", "Том IV", "Книга I"
+                if found_index is None:
+                    m = re.search(r'\b(?:book|vol(?:ume|\.)?|part|bk\.?|книга|том|часть)\s*[:#№]?\s*([ivx]+)\b', text, re.IGNORECASE)
+                    if m:
+                        val = m.group(1).lower()
+                        if val in ROMAN_TO_INT:
+                            found_index = float(ROMAN_TO_INT[val])
+
+                # 5. English / Russian phrase patterns: "the second novel in the ... series", "первый роман цикла"
+                if found_index is None:
+                    m = re.search(r'\b(?:the\s+)?([a-z]+)\s+novel\s+in\s+the\s+([A-Za-z0-9\s\'-]+?)\s+(?:series|saga|trilogy|chronicles)\b', text, re.IGNORECASE)
+                    if m:
+                        ord_word = m.group(1).lower()
+                        if ord_word in WORD_TO_INT:
+                            found_index = float(WORD_TO_INT[ord_word])
+                        if not found_series:
+                            found_series = m.group(2).strip()
+
+                    m_ru = re.search(r'([а-яё]+)\s+(?:[а-яё]+\s+)?(?:роман|книга)\s+цикла(?:\s+(?:«([^»]+)»|([А-Яа-я0-9\s]+)))?', text, re.IGNORECASE)
+                    if m_ru:
+                        ord_word = m_ru.group(1).lower()
+                        if ord_word in WORD_TO_INT:
+                            found_index = float(WORD_TO_INT[ord_word])
+                        if not found_series and (m_ru.group(2) or m_ru.group(3)):
+                            found_series = (m_ru.group(2) or m_ru.group(3) or "").strip()
+
+                # 6. Ordinal words with optional adjective: "первая книга", "первая изданная книга", "second novel", "Book One"
+                if found_index is None:
+                    m = re.search(r'\b([a-zа-яё]+)\s+(?:[a-zа-яё]+\s+)?(?:book|novel|книга|том|роман|часть)\b', text, re.IGNORECASE)
+                    if m and m.group(1).lower() in WORD_TO_INT:
+                        found_index = float(WORD_TO_INT[m.group(1).lower()])
+                    else:
+                        m2 = re.search(r'\b(?:book|novel|книга|том|роман|часть)\s+([a-zа-яё]+)\b', text, re.IGNORECASE)
+                        if m2 and m2.group(1).lower() in WORD_TO_INT:
+                            found_index = float(WORD_TO_INT[m2.group(1).lower()])
+
+        return found_series, found_index
+
     def _fetch_openlibrary_isbn(target_isbn: str) -> dict | None:
         if not target_isbn:
             return None
@@ -1612,6 +1717,7 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                         b = data[key]
                         tags = [s.get("name", "") for s in b.get("subjects", [])[:8] if s.get("name")]
                         cover = b.get("cover", {}).get("large") or b.get("cover", {}).get("medium") or ""
+                        parsed_s, parsed_idx = _parse_series_and_index(b.get("series"), b.get("subtitle"), b.get("title"))
                         return {
                             "found": True,
                             "source": "OpenLibrary (ISBN)",
@@ -1622,8 +1728,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             "pubdate": b.get("publish_date", ""),
                             "tags": tags,
                             "isbn": target_isbn,
-                            "series_name": "",
-                            "series_index": None,
+                            "series_name": parsed_s or "",
+                            "series_index": parsed_idx,
                             "cover_url": cover
                         }
         except Exception as e:
@@ -1643,6 +1749,7 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                     if docs:
                         doc = docs[0]
                         cover = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg" if doc.get("cover_i") else ""
+                        parsed_s, parsed_idx = _parse_series_and_index(doc.get("series"), doc.get("subtitle"), doc.get("title"))
                         return {
                             "found": True,
                             "source": "OpenLibrary",
@@ -1653,8 +1760,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             "pubdate": str(doc.get("first_publish_year", "")),
                             "tags": doc.get("subject", [])[:8],
                             "isbn": doc.get("isbn", [""])[0] if doc.get("isbn") else clean_isbn,
-                            "series_name": "",
-                            "series_index": None,
+                            "series_name": parsed_s or "",
+                            "series_index": parsed_idx,
                             "cover_url": cover
                         }
         except Exception as e:
@@ -1689,6 +1796,24 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             if id_item.get("type") in ("ISBN_13", "ISBN_10"):
                                 found_isbn = id_item.get("identifier", found_isbn)
                                 break
+                        
+                        s_name = ""
+                        s_idx = None
+                        series_info = info.get("seriesInfo")
+                        if isinstance(series_info, dict):
+                            s_name = series_info.get("shortSeriesBookTitle") or ""
+                            raw_num = series_info.get("bookDisplayNumber")
+                            if raw_num is not None:
+                                try:
+                                    s_idx = float(raw_num)
+                                except ValueError:
+                                    pass
+                        parsed_s, parsed_idx = _parse_series_and_index(info.get("subtitle"), info.get("title"), info.get("description"))
+                        if not s_name and parsed_s:
+                            s_name = parsed_s
+                        if s_idx is None and parsed_idx is not None:
+                            s_idx = parsed_idx
+
                         return {
                             "found": True,
                             "source": "Google Books",
@@ -1699,8 +1824,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             "pubdate": info.get("publishedDate", "") or "",
                             "tags": info.get("categories", []) or [],
                             "isbn": found_isbn,
-                            "series_name": "",
-                            "series_index": None,
+                            "series_name": s_name,
+                            "series_index": s_idx,
                             "cover_url": cover
                         }
         except Exception as e:
@@ -1759,14 +1884,36 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                                                         if sub_lbl and sub_lbl not in tags:
                                                             tags.append(sub_lbl)
 
-                                        # Extract series name
+                                        # Extract series name and cycle position
                                         series_name = ""
+                                        series_index = None
                                         parents = ext.get("parents", {})
                                         if isinstance(parents, dict) and parents.get("cycles"):
                                             for cycle_list in parents.get("cycles", []):
                                                 if cycle_list and isinstance(cycle_list, list) and cycle_list[0].get("work_name"):
                                                     series_name = cycle_list[0].get("work_name")
+                                                    cycle_id = cycle_list[0].get("work_id")
+                                                    if cycle_id:
+                                                        try:
+                                                            c_url = f"https://api.fantlab.ru/work/{cycle_id}/extended"
+                                                            c_req = urllib.request.Request(c_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                                                            with urllib.request.urlopen(c_req, timeout=3) as c_resp:
+                                                                if c_resp.status == 200:
+                                                                    c_data = json.loads(c_resp.read().decode("utf-8"))
+                                                                    c_children = [c for c in c_data.get("children", []) if c.get("work_id")]
+                                                                    for pos, child in enumerate(c_children, start=1):
+                                                                        if child.get("work_id") == work_id:
+                                                                            series_index = float(pos)
+                                                                            break
+                                                        except Exception as err:
+                                                            logger.debug(f"FantLab cycle fetch error: {err}")
                                                     break
+
+                                        parsed_s, parsed_idx = _parse_series_and_index(ext.get("work_description"), ext.get("work_notes"), top.get("fullname"), t)
+                                        if not series_name and parsed_s:
+                                            series_name = parsed_s
+                                        if parsed_idx is not None:
+                                            series_index = parsed_idx
 
                                         authors = []
                                         if ext.get("work_description_author"):
@@ -1790,7 +1937,7 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                                             "tags": tags[:8],
                                             "isbn": clean_isbn,
                                             "series_name": series_name,
-                                            "series_index": None,
+                                            "series_index": series_index,
                                             "cover_url": cover
                                         }
             except Exception as e:
@@ -1826,6 +1973,7 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                         if isinstance(subjects, str):
                             subjects = [s.strip() for s in subjects.split(";") if s.strip()]
                         ident = doc.get("identifier", "")
+                        parsed_s, parsed_idx = _parse_series_and_index(doc.get("description"), doc.get("title"))
                         return {
                             "found": True,
                             "source": "Internet Archive",
@@ -1836,8 +1984,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             "pubdate": str(doc.get("year", "") or ""),
                             "tags": subjects[:8],
                             "isbn": doc.get("isbn", [""])[0] if isinstance(doc.get("isbn"), list) else (doc.get("isbn") or target_isbn),
-                            "series_name": "",
-                            "series_index": None,
+                            "series_name": parsed_s or "",
+                            "series_index": parsed_idx,
                             "cover_url": f"https://archive.org/services/img/{ident}" if ident else ""
                         }
         except Exception as e:
@@ -1908,6 +2056,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                                     cleaned = _clean_wiki_title(page_title)
                                     resolved_title = t if t else cleaned
                                     
+                                    parsed_s, parsed_idx = _parse_series_and_index(s_data.get("extract", ""), page_title, desc)
+                                    
                                     return {
                                         "found": True,
                                         "source": f"Wikipedia ({lang.upper()})",
@@ -1918,8 +2068,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                                         "pubdate": "",
                                         "tags": [],
                                         "isbn": clean_isbn,
-                                        "series_name": "",
-                                        "series_index": None,
+                                        "series_name": parsed_s or "",
+                                        "series_index": parsed_idx,
                                         "cover_url": s_data.get("thumbnail", {}).get("source", "")
                                     }
             except Exception as e:
@@ -1952,6 +2102,7 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                         pubdate_parts = item.get("published", {}).get("date-parts", [[]])[0] if item.get("published") else []
                         pubdate = "-".join(str(p).zfill(2) for p in pubdate_parts) if pubdate_parts else ""
                         series_name = item.get("container-title", [""])[0] if item.get("container-title") else ""
+                        parsed_s, parsed_idx = _parse_series_and_index(series_name, title_res, item.get("abstract"))
                         return {
                             "found": True,
                             "source": "Crossref",
@@ -1962,8 +2113,8 @@ def fetch_metadata_online(isbn: str = "", title: str = "", author: str = "", pro
                             "pubdate": pubdate,
                             "tags": item.get("subject", []) or [],
                             "isbn": item.get("ISBN", [target_isbn])[0] if item.get("ISBN") else target_isbn,
-                            "series_name": series_name,
-                            "series_index": None,
+                            "series_name": parsed_s or series_name,
+                            "series_index": parsed_idx,
                             "cover_url": ""
                         }
         except Exception as e:
