@@ -551,7 +551,7 @@ def test_smtp_connection(
 
 
 def get_fail2ban_status() -> dict:
-    """Fetch live fail2ban status for bookserver jail via sudo."""
+    """Fetch live fail2ban status for athenea jail without sudo."""
     status_data = {
         "active": False,
         "failed_current": 0,
@@ -562,11 +562,18 @@ def get_fail2ban_status() -> dict:
     }
     try:
         res = subprocess.run(
-            ["sudo", "-n", "fail2ban-client", "status", "bookserver"],
+            ["fail2ban-client", "status", "athenea"],
             capture_output=True,
             text=True,
             timeout=5
         )
+        if res.returncode != 0:
+            res = subprocess.run(
+                ["fail2ban-client", "status", "bookserver"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
         if res.returncode == 0:
             status_data["active"] = True
             for line in res.stdout.splitlines():
@@ -584,12 +591,12 @@ def get_fail2ban_status() -> dict:
                     if raw_ips:
                         status_data["banned_ips"] = [ip.strip() for ip in raw_ips.split() if ip.strip()]
     except Exception as e:
-        logger.warning(f"Error reading fail2ban status: {e}")
+        logger.debug(f"fail2ban status not available: {e}")
     return status_data
 
 
 def unban_ip(ip: str) -> dict:
-    """Unban an IP address in fail2ban."""
+    """Unban an IP address in fail2ban without sudo."""
     ip = ip.strip()
     # Basic IP validation
     if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", ip):
@@ -597,11 +604,18 @@ def unban_ip(ip: str) -> dict:
 
     try:
         res = subprocess.run(
-            ["sudo", "-n", "fail2ban-client", "set", "bookserver", "unbanip", ip],
+            ["fail2ban-client", "set", "athenea", "unbanip", ip],
             capture_output=True,
             text=True,
             timeout=5
         )
+        if res.returncode != 0:
+            res = subprocess.run(
+                ["fail2ban-client", "set", "bookserver", "unbanip", ip],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
         if res.returncode == 0:
             return {"success": True, "message": f"IP {ip} has been unbanned successfully."}
         else:
