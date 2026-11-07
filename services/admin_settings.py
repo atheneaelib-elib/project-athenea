@@ -550,8 +550,16 @@ def test_smtp_connection(
         }
 
 
+def _run_fail2ban_cmd(args: list[str]) -> subprocess.CompletedProcess:
+    """Run fail2ban-client directly as athenea user without sudo."""
+    try:
+        return subprocess.run(["fail2ban-client"] + args, capture_output=True, text=True, timeout=5)
+    except Exception as e:
+        return subprocess.CompletedProcess(args=["fail2ban-client"] + args, returncode=1, stdout="", stderr=str(e))
+
+
 def get_fail2ban_status() -> dict:
-    """Fetch live fail2ban status for athenea jail without sudo."""
+    """Fetch live fail2ban status for athenea jail."""
     status_data = {
         "active": False,
         "failed_current": 0,
@@ -561,20 +569,14 @@ def get_fail2ban_status() -> dict:
         "banned_ips": []
     }
     try:
-        res = subprocess.run(
-            ["fail2ban-client", "status", "athenea"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if res.returncode != 0:
-            res = subprocess.run(
-                ["fail2ban-client", "status", "bookserver"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-        if res.returncode == 0:
+        res = None
+        for jail in ("athenea", "bookserver"):
+            r = _run_fail2ban_cmd(["status", jail])
+            if r.returncode == 0:
+                res = r
+                break
+
+        if res and res.returncode == 0:
             status_data["active"] = True
             for line in res.stdout.splitlines():
                 line = line.strip()
@@ -596,30 +598,18 @@ def get_fail2ban_status() -> dict:
 
 
 def unban_ip(ip: str) -> dict:
-    """Unban an IP address in fail2ban without sudo."""
+    """Unban an IP address in fail2ban."""
     ip = ip.strip()
     # Basic IP validation
     if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", ip):
         return {"success": False, "message": "Invalid IPv4 address format."}
 
     try:
-        res = subprocess.run(
-            ["fail2ban-client", "set", "athenea", "unbanip", ip],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if res.returncode != 0:
-            res = subprocess.run(
-                ["fail2ban-client", "set", "bookserver", "unbanip", ip],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-        if res.returncode == 0:
-            return {"success": True, "message": f"IP {ip} has been unbanned successfully."}
-        else:
-            return {"success": False, "message": f"Failed to unban IP: {res.stderr.strip()}"}
+        for jail in ("athenea", "bookserver"):
+            res = _run_fail2ban_cmd(["set", jail, "unbanip", ip])
+            if res.returncode == 0:
+                return {"success": True, "message": f"IP {ip} has been unbanned successfully from {jail}."}
+        return {"success": False, "message": "Failed to unban IP (jail inactive or IP not banned)."}
     except Exception as e:
         logger.error(f"Error unbanning IP {ip}: {e}")
         return {"success": False, "message": str(e)}
