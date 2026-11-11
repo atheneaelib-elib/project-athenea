@@ -269,22 +269,31 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
 
         # ── OPDS Authentication & Permission handling ──────────────
         accept_header = request.headers.get("accept", "").lower()
-        is_opds_req = path.startswith("/opds") or ("atom+xml" in accept_header and path in ("/search", "/opds/search"))
+        is_opds_req = (
+            path.startswith("/opds") 
+            or path.startswith("/download/")
+            or ("atom+xml" in accept_header and path in ("/search", "/opds/search"))
+        )
         if is_opds_req:
             # Allow OpenSearch descriptor XML without challenge
             if path == "/opds/opensearch.xml":
                 return await call_next(request)
 
             if not user:
-                guest_opds_allowed = False
+                guest_perms = {}
                 db = db_module.SessionLocal()
                 try:
                     guest_perms = auth_service.get_guest_permissions(db)
-                    guest_opds_allowed = guest_perms.get("can_use_opds", False)
                 except Exception:
                     pass
                 finally:
                     db.close()
+
+                # If it's a download and guests are allowed to download, allow through
+                if path.startswith(("/download/", "/opds/download/")) and guest_perms.get("can_download", False):
+                    return await call_next(request)
+
+                guest_opds_allowed = guest_perms.get("can_use_opds", False)
                 if not guest_opds_allowed:
                     from starlette.responses import Response as StarletteResponse
                     return StarletteResponse(
@@ -294,6 +303,16 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                         headers={"WWW-Authenticate": 'Basic realm="eBook Library OPDS"'}
                     )
                 return await call_next(request)
+
+            if path.startswith(("/download/", "/opds/download/")):
+                if not user.get("can_download", True):
+                    from starlette.responses import Response as StarletteResponse
+                    return StarletteResponse(
+                        status_code=403,
+                        content="Downloads are disabled for this account."
+                    )
+                return await call_next(request)
+
             if not user.get("can_use_opds", True):
                 from starlette.responses import Response as StarletteResponse
                 return StarletteResponse(
@@ -2587,6 +2606,7 @@ def get_thumbnail(book_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/download/{book_id}/{fmt}")
+@app.get("/opds/download/{book_id}/{fmt}")
 def download_book(
     request: Request,
     book_id: int,
@@ -2598,9 +2618,11 @@ def download_book(
     if not user:
         guest_perms = auth_service.get_guest_permissions(db)
         if not guest_perms.get("can_download", False):
-            raise HTTPException(
+            from starlette.responses import Response as StarletteResponse
+            return StarletteResponse(
                 status_code=401,
-                detail="Authentication required. Please sign in to download book files."
+                content='Authentication required. Please sign in to download book files.',
+                headers={"WWW-Authenticate": 'Basic realm="eBook Library OPDS"'}
             )
     elif not user.get("can_download", True):
         raise HTTPException(

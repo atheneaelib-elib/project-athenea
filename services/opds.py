@@ -215,7 +215,7 @@ def generate_acquisition_feed(
             fmt_name = fmt.get("format", "").upper()
             fmt_lower = fmt_name.lower()
             mime = MIME_TYPES.get(fmt_lower, "application/octet-stream")
-            dl_url = f"{base_url}/download/{bid}/{fmt_lower}"
+            dl_url = f"{base_url}/opds/download/{bid}/{fmt_lower}"
             acq_links.append(
                 f"""    <link rel="http://opds-spec.org/acquisition" href="{dl_url}" type="{mime}" title="{fmt_name}" />"""
             )
