@@ -5,7 +5,7 @@ from pathlib import Path
 
 OPDS_MIME_NAVIGATION = "application/atom+xml;profile=opds-catalog;kind=navigation;charset=utf-8"
 OPDS_MIME_ACQUISITION = "application/atom+xml;profile=opds-catalog;kind=acquisition;charset=utf-8"
-OPENSEARCH_MIME = "application/opensearchdescription+xml;charset=utf-8"
+OPENSEARCH_MIME = "application/opensearchdescription+xml"
 
 MIME_TYPES = {
     "epub": "application/epub+zip",
@@ -33,13 +33,16 @@ def _now_iso() -> str:
 
 def generate_opensearch_xml(base_url: str = "") -> str:
     search_url = f"{base_url}/opds/search?q={{searchTerms}}"
+    esc_url = _escape(search_url)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
   <ShortName>Athenea</ShortName>
   <Description>Search Athenea by Title, Author, or Keywords</Description>
   <InputEncoding>UTF-8</InputEncoding>
   <OutputEncoding>UTF-8</OutputEncoding>
-  <Url type="application/atom+xml;profile=opds-catalog;kind=acquisition" template="{_escape(search_url)}" />
+  <Url type="application/atom+xml;profile=opds-catalog;kind=acquisition" template="{esc_url}" />
+  <Url type="application/atom+xml;profile=opds-catalog" template="{esc_url}" />
+  <Url type="application/atom+xml" template="{esc_url}" />
 </OpenSearchDescription>"""
 
 

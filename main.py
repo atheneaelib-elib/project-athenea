@@ -249,11 +249,12 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
 
         # ── HTTP Basic Auth check (for OPDS e-readers or automated clients) ─
         if not user and "authorization" in request.headers:
-            auth_header = request.headers.get("authorization", "")
-            if auth_header.startswith("Basic "):
+            auth_header = request.headers.get("authorization", "").strip()
+            if auth_header.lower().startswith("basic "):
                 try:
                     import base64
-                    creds = base64.b64decode(auth_header[6:]).decode("utf-8").split(":", 1)
+                    b64_part = auth_header.split(" ", 1)[1]
+                    creds = base64.b64decode(b64_part).decode("utf-8").split(":", 1)
                     if len(creds) == 2:
                         db = db_module.SessionLocal()
                         try:
@@ -267,7 +268,13 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                     pass
 
         # ── OPDS Authentication & Permission handling ──────────────
-        if path.startswith("/opds"):
+        accept_header = request.headers.get("accept", "").lower()
+        is_opds_req = path.startswith("/opds") or ("atom+xml" in accept_header and path in ("/search", "/opds/search"))
+        if is_opds_req:
+            # Allow OpenSearch descriptor XML without challenge
+            if path == "/opds/opensearch.xml":
+                return await call_next(request)
+
             if not user:
                 guest_opds_allowed = False
                 db = db_module.SessionLocal()
@@ -282,7 +289,8 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                     from starlette.responses import Response as StarletteResponse
                     return StarletteResponse(
                         status_code=401,
-                        content="Authentication required for OPDS catalog",
+                        content='<?xml version="1.0" encoding="UTF-8"?><error>Authentication required for OPDS catalog</error>',
+                        media_type="application/atom+xml; charset=utf-8",
                         headers={"WWW-Authenticate": 'Basic realm="eBook Library OPDS"'}
                     )
                 return await call_next(request)
@@ -290,7 +298,8 @@ class RequireLoginMiddleware(BaseHTTPMiddleware):
                 from starlette.responses import Response as StarletteResponse
                 return StarletteResponse(
                     status_code=403,
-                    content="OPDS access is disabled for this account."
+                    content='<?xml version="1.0" encoding="UTF-8"?><error>OPDS access is disabled for this account.</error>',
+                    media_type="application/atom+xml; charset=utf-8"
                 )
             return await call_next(request)
 
@@ -3050,9 +3059,18 @@ def api_send_book_email(
 # OPDS 1.2 CATALOG FEED ROUTES (FOR MOON+, APPLE BOOKS, KOReader, etc.)
 # ===================================================================
 
+def _get_opds_base_url(request: Request) -> str:
+    """Resolve correct base URL behind reverse proxies and TLS terminators."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
 @app.get("/opds")
 def opds_root(request: Request, db: Session = Depends(get_db)):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     stats = book_service.get_stats(db)
     xml_content = opds_service.generate_root_catalog(base_url=base_url, stats=stats)
     return Response(content=xml_content, media_type=opds_service.OPDS_MIME_NAVIGATION)
@@ -3060,7 +3078,7 @@ def opds_root(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/opds/opensearch.xml")
 def opds_opensearch(request: Request):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     xml_content = opds_service.generate_opensearch_xml(base_url=base_url)
     return Response(content=xml_content, media_type=opds_service.OPENSEARCH_MIME)
 
@@ -3072,7 +3090,7 @@ def opds_recent(
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     res = book_service.get_books(db, page=page, size=size, sort_by="recent")
     self_url = f"{base_url}/opds/recent?page={res['page']}"
     next_url = f"{base_url}/opds/recent?page={res['page']+1}" if res['page'] < res['total_pages'] else None
@@ -3092,21 +3110,43 @@ def opds_recent(
 
 
 @app.get("/opds/search")
+@app.get("/opds/search/")
+@app.get("/search")
 def opds_search(
     request: Request,
     q: str = "",
+    query: str = "",
+    searchTerms: str = "",
+    searchTerm: str = "",
     page: int = 1,
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
-    res = book_service.get_books(db, page=page, size=size, q=q, search_descriptions=True)
-    q_enc = urllib.parse.quote(q)
+    search_query = (q or query or searchTerms or searchTerm or "").strip()
+    accept_hdr = request.headers.get("accept", "").lower()
+    is_opds = (
+        request.url.path.startswith("/opds") 
+        or "atom+xml" in accept_hdr 
+        or getattr(request.state, "basic_auth_user", None) is not None
+        or bool(searchTerms or searchTerm)
+    )
+
+    # If a standard browser visits /search directly, redirect to home catalog with ?q=
+    if not is_opds and request.url.path == "/search":
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(
+            url=f"/?q={urllib.parse.quote(search_query)}" if search_query else "/",
+            status_code=302
+        )
+
+    base_url = _get_opds_base_url(request)
+    res = book_service.get_books(db, page=page, size=size, q=search_query, search_descriptions=True)
+    q_enc = urllib.parse.quote(search_query)
     self_url = f"{base_url}/opds/search?q={q_enc}&page={res['page']}"
     next_url = f"{base_url}/opds/search?q={q_enc}&page={res['page']+1}" if res['page'] < res['total_pages'] else None
     prev_url = f"{base_url}/opds/search?q={q_enc}&page={res['page']-1}" if res['page'] > 1 else None
     xml_content = opds_service.generate_acquisition_feed(
-        title=f"Search: {q}",
+        title=f"Search: {search_query}" if search_query else "Search",
         feed_id=f"urn:opds:search:{q_enc}",
         self_url=self_url,
         books=res["books"],
@@ -3121,7 +3161,7 @@ def opds_search(
 
 @app.get("/opds/authors")
 def opds_authors(request: Request, db: Session = Depends(get_db)):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     rows = db.execute(text("""
         SELECT a.id, a.name, count(*) AS count
         FROM authors a
@@ -3149,7 +3189,7 @@ def opds_author_books(
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     author_name = db.execute(text("SELECT name FROM authors WHERE id = :id"), {"id": author_id}).scalar() or f"Author #{author_id}"
     res = book_service.get_books(db, page=page, size=size, author_id=author_id)
     self_url = f"{base_url}/opds/authors/{author_id}?page={res['page']}"
@@ -3171,7 +3211,7 @@ def opds_author_books(
 
 @app.get("/opds/series")
 def opds_series(request: Request, db: Session = Depends(get_db)):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     rows = db.execute(text("""
         SELECT s.id, s.name, count(*) AS count
         FROM series s
@@ -3199,7 +3239,7 @@ def opds_series_books(
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     series_name = db.execute(text("SELECT name FROM series WHERE id = :id"), {"id": series_id}).scalar() or f"Series #{series_id}"
     res = book_service.get_books(db, page=page, size=size, series_id=series_id)
     self_url = f"{base_url}/opds/series/{series_id}?page={res['page']}"
@@ -3221,7 +3261,7 @@ def opds_series_books(
 
 @app.get("/opds/genres")
 def opds_genres(request: Request, db: Session = Depends(get_db)):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     rows = db.execute(text("""
         SELECT t.id, t.name, count(*) AS count
         FROM tags t
@@ -3249,7 +3289,7 @@ def opds_genre_books(
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     tag_name = db.execute(text("SELECT name FROM tags WHERE id = :id"), {"id": tag_id}).scalar() or f"Genre #{tag_id}"
     res = book_service.get_books(db, page=page, size=size, tag_id=tag_id)
     self_url = f"{base_url}/opds/genres/{tag_id}?page={res['page']}"
@@ -3271,7 +3311,7 @@ def opds_genre_books(
 
 @app.get("/opds/languages")
 def opds_languages(request: Request, db: Session = Depends(get_db)):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     rows = db.execute(text("""
         SELECT l.id, l.lang_code, count(*) AS count
         FROM languages l
@@ -3307,7 +3347,7 @@ def opds_language_books(
     size: int = 30,
     db: Session = Depends(get_db)
 ):
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _get_opds_base_url(request)
     lang_code = db.execute(text("SELECT lang_code FROM languages WHERE id = :id"), {"id": lang_id}).scalar()
     lang_name = book_service.format_language_name(lang_code) if lang_code else f"Language #{lang_id}"
     res = book_service.get_books(db, page=page, size=size, language_id=lang_id)
