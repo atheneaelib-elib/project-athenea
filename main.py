@@ -3072,8 +3072,205 @@ def _get_opds_base_url(request: Request) -> str:
 def opds_root(request: Request, db: Session = Depends(get_db)):
     base_url = _get_opds_base_url(request)
     stats = book_service.get_stats(db)
-    xml_content = opds_service.generate_root_catalog(base_url=base_url, stats=stats)
+    user = get_current_user(request, db)
+    user_fav_stats = None
+    if user:
+        user_id = user.get("id")
+        fav_count = book_service.get_user_favorites_count(db, user_id)
+        fav_authors = book_service.get_user_favorite_authors(db, user_id)
+        fav_series = book_service.get_user_favorite_series(db, user_id)
+        shelf_counts = book_service.get_user_shelf_counts(db, user_id)
+        user_fav_stats = {
+            "favorites_count": fav_count,
+            "favorite_authors_count": len(fav_authors),
+            "favorite_series_count": len(fav_series),
+            "shelf_counts": shelf_counts,
+        }
+    xml_content = opds_service.generate_root_catalog(
+        base_url=base_url,
+        stats=stats,
+        user=user,
+        user_fav_stats=user_fav_stats
+    )
     return Response(content=xml_content, media_type=opds_service.OPDS_MIME_NAVIGATION)
+
+
+@app.get("/opds/favorites/books")
+def opds_favorite_books(
+    request: Request,
+    page: int = 1,
+    size: int = 30,
+    db: Session = Depends(get_db)
+):
+    base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    res = book_service.get_books(db, page=page, size=size, favorites_only=True, user_id=user_id)
+    self_url = f"{base_url}/opds/favorites/books?page={res['page']}"
+    next_url = f"{base_url}/opds/favorites/books?page={res['page']+1}" if res['page'] < res['total_pages'] else None
+    prev_url = f"{base_url}/opds/favorites/books?page={res['page']-1}" if res['page'] > 1 else None
+    xml_content = opds_service.generate_acquisition_feed(
+        title="Favorite Books",
+        feed_id="urn:opds:favorites:books",
+        self_url=self_url,
+        books=res["books"],
+        page=res["page"],
+        total_pages=res["total_pages"],
+        base_url=base_url,
+        next_url=next_url,
+        prev_url=prev_url
+    )
+    return Response(content=xml_content, media_type=opds_service.OPDS_MIME_ACQUISITION)
+
+
+@app.get("/opds/favorites/authors")
+def opds_favorite_authors(request: Request, db: Session = Depends(get_db)):
+    base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    rows = book_service.get_user_favorite_authors(db, user_id)
+    items = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "count": r["count"],
+            "href": f"{base_url}/opds/authors/{r['id']}",
+            "toggle_fav_href": f"{base_url}/opds/favorites/toggle/author/{r['id']}",
+            "is_favorite": True
+        }
+        for r in rows
+    ]
+    xml_content = opds_service.generate_navigation_list_feed(
+        title="Favorite Authors",
+        feed_id="urn:opds:favorites:authors",
+        self_url=f"{base_url}/opds/favorites/authors",
+        items=items,
+        base_url=base_url
+    )
+    return Response(content=xml_content, media_type=opds_service.OPDS_MIME_NAVIGATION)
+
+
+@app.get("/opds/favorites/series")
+def opds_favorite_series(request: Request, db: Session = Depends(get_db)):
+    base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    rows = book_service.get_user_favorite_series(db, user_id)
+    items = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "count": r["count"],
+            "href": f"{base_url}/opds/series/{r['id']}",
+            "toggle_fav_href": f"{base_url}/opds/favorites/toggle/series/{r['id']}",
+            "is_favorite": True
+        }
+        for r in rows
+    ]
+    xml_content = opds_service.generate_navigation_list_feed(
+        title="Favorite Series",
+        feed_id="urn:opds:favorites:series",
+        self_url=f"{base_url}/opds/favorites/series",
+        items=items,
+        base_url=base_url
+    )
+    return Response(content=xml_content, media_type=opds_service.OPDS_MIME_NAVIGATION)
+
+
+@app.get("/opds/shelf/{shelf_name}")
+def opds_shelf_books(
+    request: Request,
+    shelf_name: str,
+    page: int = 1,
+    size: int = 30,
+    db: Session = Depends(get_db)
+):
+    base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    shelf_map = {
+        "reading": "Currently Reading",
+        "plan_to_read": "Plan to Read",
+        "finished": "Finished Books"
+    }
+    clean_shelf = shelf_name.strip().lower()
+    title_label = shelf_map.get(clean_shelf, f"Shelf: {shelf_name}")
+    res = book_service.get_books(db, page=page, size=size, reading_status=clean_shelf, user_id=user_id)
+    self_url = f"{base_url}/opds/shelf/{clean_shelf}?page={res['page']}"
+    next_url = f"{base_url}/opds/shelf/{clean_shelf}?page={res['page']+1}" if res['page'] < res['total_pages'] else None
+    prev_url = f"{base_url}/opds/shelf/{clean_shelf}?page={res['page']-1}" if res['page'] > 1 else None
+    xml_content = opds_service.generate_acquisition_feed(
+        title=title_label,
+        feed_id=f"urn:opds:shelf:{clean_shelf}",
+        self_url=self_url,
+        books=res["books"],
+        page=res["page"],
+        total_pages=res["total_pages"],
+        base_url=base_url,
+        next_url=next_url,
+        prev_url=prev_url
+    )
+    return Response(content=xml_content, media_type=opds_service.OPDS_MIME_ACQUISITION)
+
+
+@app.get("/opds/favorites/toggle/{item_type}/{item_id}")
+def opds_toggle_favorite(
+    request: Request,
+    item_type: str,
+    item_id: int,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required to modify favorites")
+    user_id = user.get("id")
+    clean_type = item_type.strip().lower()
+    status = False
+    name_label = ""
+    if clean_type == "book":
+        status = book_service.toggle_favorite(db, user_id, item_id)
+        book_row = db.execute(text("SELECT title FROM books WHERE id = :id"), {"id": item_id}).fetchone()
+        name_label = book_row.title if book_row else f"Book #{item_id}"
+    elif clean_type == "author":
+        status = book_service.toggle_favorite_author(db, user_id, item_id)
+        auth_row = db.execute(text("SELECT name FROM authors WHERE id = :id"), {"id": item_id}).fetchone()
+        name_label = auth_row.name if auth_row else f"Author #{item_id}"
+    elif clean_type == "series":
+        status = book_service.toggle_favorite_series(db, user_id, item_id)
+        ser_row = db.execute(text("SELECT name FROM series WHERE id = :id"), {"id": item_id}).fetchone()
+        name_label = ser_row.name if ser_row else f"Series #{item_id}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid item type")
+
+    action_text = "added to" if status else "removed from"
+    icon = "⭐" if status else "⚪"
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Favorite Updated</title>
+<style>
+  body {{ background: #0f172a; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+  .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 28px 24px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }}
+  .icon {{ font-size: 40px; margin-bottom: 12px; }}
+  h2 {{ color: #f8fafc; font-size: 20px; margin: 0 0 10px 0; }}
+  p {{ color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0; }}
+  .item-title {{ color: #818cf8; font-weight: 600; }}
+  .btn {{ display: inline-block; padding: 12px 24px; background: #6366f1; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 12px; transition: background 0.2s; }}
+  .btn:hover {{ background: #4f46e5; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">{icon}</div>
+  <h2>Favorites Updated</h2>
+  <p><span class="item-title">{name_label}</span> has been successfully <strong>{action_text}</strong> your favorites.</p>
+  <a href="javascript:window.history.back()" class="btn">Return to Catalog</a>
+</div>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @app.get("/opds/opensearch.xml")
@@ -3162,6 +3359,9 @@ def opds_search(
 @app.get("/opds/authors")
 def opds_authors(request: Request, db: Session = Depends(get_db)):
     base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    fav_ids = book_service.get_user_favorite_author_ids(db, user_id) if user_id else set()
     rows = db.execute(text("""
         SELECT a.id, a.name, count(*) AS count
         FROM authors a
@@ -3170,7 +3370,17 @@ def opds_authors(request: Request, db: Session = Depends(get_db)):
         ORDER BY a.name
         LIMIT 100
     """)).fetchall()
-    items = [{"id": r.id, "name": r.name, "count": r.count, "href": f"{base_url}/opds/authors/{r.id}"} for r in rows]
+    items = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "count": r.count,
+            "href": f"{base_url}/opds/authors/{r.id}",
+            "toggle_fav_href": f"{base_url}/opds/favorites/toggle/author/{r.id}",
+            "is_favorite": (r.id in fav_ids)
+        }
+        for r in rows
+    ]
     xml_content = opds_service.generate_navigation_list_feed(
         title="Authors",
         feed_id="urn:opds:authors",
@@ -3212,6 +3422,9 @@ def opds_author_books(
 @app.get("/opds/series")
 def opds_series(request: Request, db: Session = Depends(get_db)):
     base_url = _get_opds_base_url(request)
+    user = get_current_user(request, db)
+    user_id = user.get("id") if user else None
+    fav_ids = book_service.get_user_favorite_series_ids(db, user_id) if user_id else set()
     rows = db.execute(text("""
         SELECT s.id, s.name, count(*) AS count
         FROM series s
@@ -3220,7 +3433,17 @@ def opds_series(request: Request, db: Session = Depends(get_db)):
         ORDER BY count DESC
         LIMIT 100
     """)).fetchall()
-    items = [{"id": r.id, "name": r.name, "count": r.count, "href": f"{base_url}/opds/series/{r.id}"} for r in rows]
+    items = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "count": r.count,
+            "href": f"{base_url}/opds/series/{r.id}",
+            "toggle_fav_href": f"{base_url}/opds/favorites/toggle/series/{r.id}",
+            "is_favorite": (r.id in fav_ids)
+        }
+        for r in rows
+    ]
     xml_content = opds_service.generate_navigation_list_feed(
         title="Series",
         feed_id="urn:opds:series",

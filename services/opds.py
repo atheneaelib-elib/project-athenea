@@ -46,12 +46,78 @@ def generate_opensearch_xml(base_url: str = "") -> str:
 </OpenSearchDescription>"""
 
 
-def generate_root_catalog(base_url: str = "", stats: dict | None = None) -> str:
+def generate_root_catalog(
+    base_url: str = "",
+    stats: dict | None = None,
+    user: dict | None = None,
+    user_fav_stats: dict | None = None,
+) -> str:
     updated = _now_iso()
     books_count = stats.get("books", 0) if stats else 0
     authors_count = stats.get("authors", 0) if stats else 0
     series_count = stats.get("series", 0) if stats else 0
     tags_count = stats.get("tags", 0) if stats else 0
+
+    user_entries = []
+    if user and user_fav_stats:
+        fav_books = user_fav_stats.get("favorites_count", 0)
+        fav_authors = user_fav_stats.get("favorite_authors_count", 0)
+        fav_series = user_fav_stats.get("favorite_series_count", 0)
+        shelf_counts = user_fav_stats.get("shelf_counts", {})
+        reading_count = shelf_counts.get("reading", 0)
+        plan_count = shelf_counts.get("plan_to_read", 0)
+        finished_count = shelf_counts.get("finished", 0)
+
+        user_entries.append(f"""  <entry>
+    <title>⭐ Favorite Books ({fav_books:,})</title>
+    <id>urn:opds:favorites:books</id>
+    <updated>{updated}</updated>
+    <content type="text">Your starred and favorite books</content>
+    <link rel="subsection" href="{base_url}/opds/favorites/books" type="{OPDS_MIME_ACQUISITION}" />
+  </entry>""")
+
+        user_entries.append(f"""  <entry>
+    <title>⭐ Favorite Authors ({fav_authors:,})</title>
+    <id>urn:opds:favorites:authors</id>
+    <updated>{updated}</updated>
+    <content type="text">Books by your favorite authors</content>
+    <link rel="subsection" href="{base_url}/opds/favorites/authors" type="{OPDS_MIME_NAVIGATION}" />
+  </entry>""")
+
+        user_entries.append(f"""  <entry>
+    <title>⭐ Favorite Series ({fav_series:,})</title>
+    <id>urn:opds:favorites:series</id>
+    <updated>{updated}</updated>
+    <content type="text">Your favorite book series and sagas</content>
+    <link rel="subsection" href="{base_url}/opds/favorites/series" type="{OPDS_MIME_NAVIGATION}" />
+  </entry>""")
+
+        user_entries.append(f"""  <entry>
+    <title>📖 Currently Reading ({reading_count:,})</title>
+    <id>urn:opds:shelf:reading</id>
+    <updated>{updated}</updated>
+    <content type="text">Books you are currently reading</content>
+    <link rel="subsection" href="{base_url}/opds/shelf/reading" type="{OPDS_MIME_ACQUISITION}" />
+  </entry>""")
+
+        user_entries.append(f"""  <entry>
+    <title>📌 Plan to Read ({plan_count:,})</title>
+    <id>urn:opds:shelf:plan_to_read</id>
+    <updated>{updated}</updated>
+    <content type="text">Books in your reading wish list</content>
+    <link rel="subsection" href="{base_url}/opds/shelf/plan_to_read" type="{OPDS_MIME_ACQUISITION}" />
+  </entry>""")
+
+        if finished_count > 0:
+            user_entries.append(f"""  <entry>
+    <title>✅ Finished Books ({finished_count:,})</title>
+    <id>urn:opds:shelf:finished</id>
+    <updated>{updated}</updated>
+    <content type="text">Books you have finished reading</content>
+    <link rel="subsection" href="{base_url}/opds/shelf/finished" type="{OPDS_MIME_ACQUISITION}" />
+  </entry>""")
+
+    personal_block = ("\n\n".join(user_entries) + "\n\n") if user_entries else ""
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom"
@@ -67,7 +133,7 @@ def generate_root_catalog(base_url: str = "", stats: dict | None = None) -> str:
   <link rel="start" href="{base_url}/opds" type="{OPDS_MIME_NAVIGATION}" />
   <link rel="search" href="{base_url}/opds/opensearch.xml" type="{OPENSEARCH_MIME}" title="Search Athenea" />
 
-  <entry>
+{personal_block}  <entry>
     <title>Recently Added Books</title>
     <id>urn:opds:recent</id>
     <updated>{updated}</updated>
@@ -154,6 +220,10 @@ def generate_acquisition_feed(
                 f"""    <link rel="http://opds-spec.org/acquisition" href="{dl_url}" type="{mime}" title="{fmt_name}" />"""
             )
 
+        # Web link and favorite toggle links
+        web_link = f"""    <link rel="alternate" href="{base_url}/book/{bid}" type="text/html" title="View Book on Web" />
+    <link rel="related" href="{base_url}/opds/favorites/toggle/book/{bid}" type="text/html" title="⭐ Toggle Favorite (Add/Remove)" />"""
+
         acq_str = "\n".join(acq_links)
         lang_tag = f"<dc:language>{lang.lower()}</dc:language>" if lang else ""
 
@@ -166,6 +236,7 @@ def generate_acquisition_feed(
     {lang_tag}
     {series_str}
 {images_xml}
+{web_link}
 {acq_str}
   </entry>""")
 
@@ -210,12 +281,16 @@ def generate_navigation_list_feed(
         iname = _escape(item["name"])
         icount = item.get("count", 0)
         href = item["href"]
+        toggle_fav_xml = ""
+        if item.get("toggle_fav_href"):
+            fav_action = "Unfavorite" if item.get("is_favorite") else "Favorite"
+            toggle_fav_xml = f"""\n    <link rel="related" href="{item['toggle_fav_href']}" type="text/html" title="⭐ Toggle {fav_action}" />"""
         entries_xml.append(f"""  <entry>
     <title>{iname} ({icount:,})</title>
     <id>{feed_id}:{iid}</id>
     <updated>{updated}</updated>
     <content type="text">{icount:,} books available</content>
-    <link rel="subsection" href="{href}" type="{OPDS_MIME_ACQUISITION}" />
+    <link rel="subsection" href="{href}" type="{OPDS_MIME_ACQUISITION}" />{toggle_fav_xml}
   </entry>""")
 
     all_entries = "\n".join(entries_xml)
