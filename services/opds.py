@@ -202,12 +202,15 @@ def generate_acquisition_feed(
             s_idx = b.get("series_index") or ""
             series_str = f"""<category term="{s_name}" label="Series: {s_name} {s_idx}" />"""
 
-        # Cover links
-        cover_url = f"{base_url}/cover/{bid}"
-        thumb_url = f"{base_url}/thumbnail/{bid}"
-        images_xml = f"""
+        # Cover and thumbnail links (JPEG for universal e-reader compatibility, including iOS 12 KyBook 3)
+        images_xml = ""
+        if b.get("has_cover", True):
+            cover_url = f"{base_url}/cover/{bid}"
+            images_xml = f"""
     <link rel="http://opds-spec.org/image" href="{cover_url}" type="image/jpeg" />
-    <link rel="http://opds-spec.org/image/thumbnail" href="{thumb_url}" type="image/webp" />"""
+    <link rel="http://opds-spec.org/image/thumbnail" href="{cover_url}" type="image/jpeg" />
+    <link rel="http://opds-spec.org/cover" href="{cover_url}" type="image/jpeg" />
+    <link rel="http://opds-spec.org/thumbnail" href="{cover_url}" type="image/jpeg" />"""
 
         # Acquisition download links
         acq_links = []
